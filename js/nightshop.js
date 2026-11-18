@@ -3,13 +3,13 @@
    After closing (G.shop === 'night') the serving room's left edge leads out to the night street (G.where = 'street'),
    where Aoi's shop is lit from SHOP_HOURS.open to SHOP_HOURS.close. Inside (G.where = 'store') is one wide room you
    pan around (A / D, the wheel, dragging, or the edge arrows): the counter with Aoi, a specials cabinet, the fresh
-   cooler, pantry shelves and the tools table. Tap a product to inspect it and put packs in your basket; Aoi takes
+   cooler, pantry shelves and the tools table. Tap a product to inspect it and put packs in your cart; Aoi takes
    payment at the counter. Everything sold comes from the shared data: SUPPLY_IDS / SUPPLY_PRICE (packs),
    GEAR (the road's upgrade stops). Packs go straight into the kitchen (G.stock); tools into G.gear.
    Tonight's special is one ingredient at 40% off, shown on its own price tag and in the specials cabinet. */
 const NIGHTSHOP = (() => {
   const { rect, dot, ell, poly, line, shade, mix, text, textC, textW } = PX;
-  const DK = PX.OUTLINE, SW = 2240, FLOOR = 430, CTOP = 330, EDGE = 46;
+  const DK = PX.OUTLINE, SW = 2240, FLOOR = 430, CTOP = 378, EDGE = 46;
   const $ = id => document.getElementById(id);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const inR = (p, r) => p && p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
@@ -54,6 +54,16 @@ const NIGHTSHOP = (() => {
   const salePrice = p => Math.max(1, Math.round(p * 0.6));
   const real = id => id === 'special' ? market().special : id;   // the cabinet shows tonight's special; buying it buys that ingredient
   const lockPlace = node => { const n = nodeFor(node); return n ? n.place + ' (level ' + n.level + ')' : 'a later stop'; };
+  // Item rarity (JRPG-style borders on the icons): everyday staples are common, toppings unlocked on the road are
+  // uncommon, the market crate and tonight's special are rare, kitchen tools are epic and stall kits legendary.
+  const RARITY = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+  function rarity(it) {
+    if (!it) return 0;
+    if (it.kind === 'gear') return it.id.startsWith('stall') ? 4 : 3;
+    if (it.kind === 'crate' || it.sale) return 2;
+    return it.node ? 1 : 0;
+  }
+  const rare = it => ` rar-${rarity(it)}`;
   function item(id) {
     const M = market();
     if (SUPPLY_IDS.includes(id)) {
@@ -85,7 +95,7 @@ const NIGHTSHOP = (() => {
   GEAR.filter(id => id.startsWith('stall')).forEach((id, i) => SLOTS.push({ id, x: 1820 + i * 106, base: 232 }));
   for (const s of SLOTS) s.r = { x: s.x - 40, y: s.base - 54, w: 80, h: 64 };
   const DOOR = { x: 40, y: 168, w: 120, h: FLOOR - 168 };
-  const COUNTER = { x: 222, y: 318, w: 350, h: FLOOR - 318 };
+  const COUNTER = { x: 222, y: CTOP - 12, w: 350, h: FLOOR - CTOP + 12 };
   const REG = { x: 520, y: CTOP };
   // Things that are not for sale still answer when tapped (Aoi has an opinion about everything).
   const PROPS = [
@@ -98,10 +108,10 @@ const NIGHTSHOP = (() => {
   /* ---------- state (G.where / G.stock / G.gear live in the game state; this is just the visit) ---------- */
   const S = {
     cam: 0, camT: 0, pan: 0, drag: null, fade: 0, fadeDir: 0, then: null,
-    door: 0, doorT: 0, sdoor: 0, sdoorT: 0, rdoor: 0,
+    door: 0, doorT: 0, sdoor: 0, sdoorT: 0, rdoor: 0, rdoorT: 0,
     aoi: { x: 400, tx: 400, face: -1, walk: 0, next: 3, hop: 0 }, bubble: null,
     basket: [], ui: null, sel: null, qty: 1, view: 'menu', hover: null, edge: 0, closing: 0,
-    talk: { full: '', shown: 0 }, parts: [], pops: [], bagT: -9, ringT: -9, keys: { l: false, r: false }
+    talk: { full: '', shown: 0 }, parts: [], pops: [], flys: [], cartT: -9, receipt: null, lastSale: null, bagT: -9, ringT: -9, keys: { l: false, r: false }
   };
   const W = p => p && { x: p.x + (G.where === 'store' ? S.cam : 0), y: p.y };
 
@@ -111,7 +121,7 @@ const NIGHTSHOP = (() => {
     if (where === 'street') {
       if (!streetOpen()) return H.say('The street can wait until the shop is closed for the night.');
       H.sfx.whoosh && H.sfx.whoosh();
-      fadeTo(() => { closePanels(); G.where = 'street'; S.sdoor = S.sdoorT = 0; S.rdoor = 1; G.drag = null; });
+      fadeTo(() => { closePanels(); G.where = 'street'; S.sdoor = S.sdoorT = 0; S.rdoor = S.rdoorT = 0; G.drag = null; });
     } else if (where === 'store') {
       if (!storeOpen()) { H.sfx.bad && H.sfx.bad(); return H.say('Kitsune-ya is closed. Open ' + HOURS + '.'); }
       S.sdoorT = 1; H.sfx.slide();
@@ -124,7 +134,7 @@ const NIGHTSHOP = (() => {
   }
   function leaveStore() {
     closePanels(); S.doorT = 1; H.sfx.slide();
-    if (S.basket.length) bubble('I will keep your basket by the till until you come back.');
+    if (S.basket.length) bubble('I will keep your cart by the till until you come back.');
     setTimeout(() => fadeTo(() => { G.where = 'street'; S.sdoor = 1; S.sdoorT = 0; H.sfx.slide(); }), 300);
   }
   function backHome(st = 0) { closePanels(); fadeTo(() => { G.where = null; H.back(st); }); }
@@ -172,7 +182,9 @@ const NIGHTSHOP = (() => {
     if (n <= 0) { H.sfx.bad(); bubble(it.kind === 'gear' ? 'One of those is plenty, chef.' : 'That is all I have of that tonight.'); return false; }
     const b = S.basket.find(b => b.id === id);
     if (b) b.n += n; else S.basket.push({ id, n });
-    H.sfx.add(); S.pops.push({ str: '+' + n, x: COUNTER.x + 90, y: CTOP - 30, c: '#b6e37a', life: 1 });
+    H.sfx.add();
+    const sl = SLOTS.find(q => real(q.id) === id), from = S.ui === 'talk' || !sl ? { x: S.aoi.x, y: CTOP - 60 } : { x: sl.x, y: sl.base - 18 };
+    S.flys.push({ id, x: from.x - S.cam, y: from.y, t: 0, n });
     return true;
   }
   function setBasket(id, n) {
@@ -184,6 +196,8 @@ const NIGHTSHOP = (() => {
     if (!S.basket.length || G.gold < total) { H.sfx.bad(); return false; }
     G.gold -= total;
     const M = market(), names = [];
+    S.lastSale = { total, purse: G.gold, saved: S.basket.reduce((a, b) => { const it = item(b.id); return a + (it.full ? (it.full - it.price) * b.n : 0); }, 0),
+      lines: S.basket.map(b => { const it = item(b.id); return { name: it.name, n: b.n, each: it.price, sale: !!it.sale, gear: it.kind === 'gear' }; }) };
     for (const b of S.basket) {
       const it = item(b.id); names.push(it.name);
       if (it.kind === 'ing') G.stock[b.id] = (G.stock[b.id] || 0) + packSize(b.id) * b.n;
@@ -199,6 +213,112 @@ const NIGHTSHOP = (() => {
     return names;
   }
 
+  // Kitsune-ya's receipt: a slim washi slip in indigo ink, stamped with Aoi's fox seal. Click (or Enter) to tuck it away.
+  function giveReceipt() {
+    closePanels(); G.kitsuneNo = (G.kitsuneNo || 41) + 1;
+    const hr = G.hour || 0, hh = Math.floor(hr) % 24, mm = Math.floor((hr % 1) * 60);
+    S.receipt = { ...S.lastSale, no: G.kitsuneNo, when: 'DAY ' + G.day + '  ' + pad2(hh) + ':' + pad2(mm), t0: G.t, out: 0, stamped: false };
+    S.ui = 'receipt'; S.aoi.tx = REG.x - 20; H.sfx.paper && H.sfx.paper();
+  }
+  function tuckReceipt() { if (S.receipt && !S.receipt.out) { S.receipt.out = G.t; H.sfx.paper && H.sfx.paper(); } }
+  const RCW = 248;
+  function receiptRows(r) {
+    const rows = [];
+    for (const l of r.lines) {
+      rows.push({ l: l.name, r: l.each * l.n + 'G' });
+      rows.push({ l: (l.gear ? '1 piece' : l.n + (l.n === 1 ? ' pack' : ' packs')) + ' x ' + l.each + 'G', small: true, sale: l.sale });
+    }
+    return rows;
+  }
+  function drawReceipt(g) {
+    const r = S.receipt; if (!r) return;
+    const rows = receiptRows(r), H0 = 76, rowsH = rows.length * 17, H1 = H0 + rowsH + (r.saved ? 18 : 0) + 44 + 88;
+    const ap = clamp((G.t - r.t0) / 0.45, 0, 1), ease = 1 - Math.pow(1 - ap, 3);
+    const op = r.out ? clamp((G.t - r.out) / 0.45, 0, 1) : 0;
+    const x0 = Math.round(VW / 2 - RCW / 2), yRest = Math.max(30, Math.round((VH - H1) / 2) - 6);
+    const x = Math.round(x0 + op * op * (CART.x - x0)), y = Math.round(VH + 10 + (yRest - VH - 10) * ease + op * op * (CART.y - yRest)), INK = '#1e3a6a', RED = '#b8302a';
+    g.save();
+    if (op) { const k = 1 - op * 0.8; g.translate(x + RCW / 2, y); g.scale(k, k); g.translate(-x - RCW / 2, -y); g.globalAlpha = 1 - op * 0.6; }
+    if (!op) { g.globalAlpha = ease; g.fillStyle = 'rgba(14,8,20,0.38)'; g.fillRect(0, 0, VW, VH); g.globalAlpha = 1; }
+    // paper: torn (deckled) top and bottom edges, washi fibres, a faint red rule down each side
+    const edge = (yy, dir) => { for (let k = 0; k < RCW; k += 4) { const d = 1 + Math.floor(rnd(k * 3 + dir * 17) * 4); rect(g, x + k, dir < 0 ? yy - d : yy, 4, d, '#f6eedb'); } };
+    rect(g, x + 4, y + 5, RCW, H1, 'rgba(20,10,20,0.3)');
+    rect(g, x - 1, y, RCW + 2, H1, DK); rect(g, x, y, RCW, H1, '#f6eedb'); edge(y, -1); edge(y + H1, 1);
+    for (let k = 0; k < 30; k++) rect(g, x + 6 + Math.floor(rnd(k * 7 + 3) * (RCW - 18)), y + 8 + Math.floor(rnd(k * 11 + 5) * (H1 - 16)), 2 + Math.floor(rnd(k) * 6), 1, '#ebe0c6');
+    rect(g, x + 6, y, 1, H1, '#e8b0a0'); rect(g, x + RCW - 7, y, 1, H1, '#e8b0a0');
+    // header: the indigo noren band with the moon crest
+    rect(g, x + 10, y + 8, RCW - 20, 30, INK); rect(g, x + 10, y + 8, RCW - 20, 2, '#2f6ab0');
+    for (let k = x + 10; k < x + RCW - 10; k += 6) rect(g, k, y + 38, 3, 4, INK);   // noren fringe
+    ell(g, x + 26, y + 23, 9, 9, '#fbf6ea'); ell(g, x + 29, y + 20, 6, 6, INK);
+    textC(g, 'KITSUNE-YA', x + RCW / 2 + 10, y + 16, '#fbf6ea');
+    textC(g, r.when + '   NO.' + String(r.no).padStart(4, '0'), x + RCW / 2, y + 50, '#7a8aa8');
+    let yy = y + H0;
+    const dots = yy2 => { for (let k = x + 12; k < x + RCW - 12; k += 4) rect(g, k, yy2, 2, 1, '#a8b4cc'); };
+    dots(yy - 6);
+    for (const row of rows) {
+      if (row.small) {
+        text(g, row.l, x + 18, yy - 1, '#7a8aa8');
+        if (row.sale) { const w = textW('SALE') + 6, sx = x + RCW - 14 - w; rect(g, sx, yy - 2, w, 13, RED); text(g, 'SALE', sx + 3, yy - 1, '#fbf6ea'); }
+      } else { text(g, row.l, x + 14, yy, INK); text(g, row.r, x + RCW - 14 - textW(row.r), yy, INK); }
+      yy += 17;
+    }
+    if (r.saved) { text(g, 'YOU SAVED', x + 14, yy + 2, RED); text(g, r.saved + 'G', x + RCW - 14 - textW(r.saved + 'G'), yy + 2, RED); yy += 18; }
+    dots(yy + 2); yy += 10;
+    text(g, 'TOTAL', x + 14, yy, INK); text(g, r.total + 'G', x + RCW - 14 - textW(r.total + 'G'), yy, INK);
+    text(g, 'YOUR PURSE', x + 14, yy + 18, '#7a8aa8'); text(g, r.purse + 'G', x + RCW - 14 - textW(r.purse + 'G'), yy + 18, '#7a8aa8');
+    yy += 42; dots(yy - 4);
+    // footer: thanks in ink, then the red fox seal, which thumps down a moment after the slip arrives
+    textC(g, 'ARIGATOU! COME AGAIN', x + RCW / 2, yy + 4, INK);
+    text(g, '- Aoi', x + 18, yy + 30, '#2f6ab0');
+    for (const [px, py] of [[x + 30, yy + 54], [x + 46, yy + 62]]) { ell(g, px, py, 4, 3, '#c8d0e0'); for (const [tx, ty] of [[-4, -5], [0, -7], [4, -5]]) ell(g, px + tx, py + ty, 1, 1, '#c8d0e0'); }   // little paw prints
+    const st = G.t - r.t0 - 0.8;
+    if (st > 0) {
+      if (!r.stamped) { r.stamped = true; H.sfx.stamp && H.sfx.stamp(); }
+      const k = st < 0.12 ? 1.7 - st / 0.12 * 0.7 : 1, sx = x + RCW - 52, sy = yy + 44;
+      g.save(); g.translate(sx, sy); g.rotate(-0.16); g.scale(k, k); g.globalAlpha *= st < 0.12 ? 0.5 + st / 0.24 : 0.92;
+      ell(g, 0, 0, 26, 26, RED); ell(g, 0, 0, 23, 23, '#f6eedb'); ell(g, 0, 0, 21, 21, RED);
+      poly(g, [[-13, -4], [-11, -18], [-4, -9]], '#f6eedb'); poly(g, [[4, -9], [11, -18], [13, -4]], '#f6eedb');   // fox ears
+      ell(g, 0, 2, 12, 10, '#f6eedb'); poly(g, [[-12, 2], [0, 15], [12, 2]], '#f6eedb');
+      rect(g, -6, 0, 3, 2, RED); rect(g, 3, 0, 3, 2, RED); rect(g, -1, 8, 2, 2, RED);
+      g.restore();
+    }
+    g.restore();
+  }
+
+  /* ---------- the cart: a little rattan handcart in the corner of the screen; click it to take it to Aoi ---------- */
+  const CART = { x: VW - 128, y: VH - 92, w: 104, h: 78 };
+  function goCheckout() {
+    if (!S.basket.length) { H.sfx.bad(); bubble('Your cart is empty, chef. Tap anything on the shelves to have a look.'); return; }
+    H.sfx.tap(); S.camT = 0; talk('checkout');
+  }
+  const atCounter = () => S.ui === 'talk' && (S.view === 'checkout' || S.view === 'confirm');
+  function drawCart(g) {
+    const hot = S.hover && S.hover.kind === 'cart', bump = G.t - S.cartT < 0.25 ? Math.round(Math.sin((G.t - S.cartT) / 0.25 * Math.PI) * 4) : 0;
+    const x = CART.x, y = CART.y - bump, n = basketN();
+    // wheels and frame
+    for (const wx of [x + 24, x + 80]) { ell(g, wx, y + 70, 8, 8, DK); ell(g, wx, y + 70, 6, 6, '#5a3a22'); ell(g, wx, y + 70, 2, 2, '#c9962e'); }
+    rect(g, x + 14, y + 60, 78, 4, DK); rect(g, x + 15, y + 61, 76, 2, '#8a5a32');
+    rect(g, x + 88, y + 4, 4, 58, DK); rect(g, x + 89, y + 5, 2, 56, '#a57a4c'); rect(g, x + 84, y + 2, 18, 5, DK); rect(g, x + 85, y + 3, 16, 3, '#c8302a');   // handle
+    // goods poking out of the basket (unloaded onto the counter while you check out)
+    if (!atCounter()) S.basket.slice(0, 5).forEach((b, i) => { g.save(); g.translate(x + 22 + i * 15, y + 25 - (i % 2) * 4); g.scale(0.5, 0.5); drawItem(g, b.id, 0, 0, 1, false); g.restore(); });
+    // the rattan basket
+    poly(g, [[x + 4, y + 22], [x + 90, y + 22], [x + 84, y + 60], [x + 10, y + 60]], DK);
+    poly(g, [[x + 6, y + 24], [x + 88, y + 24], [x + 83, y + 58], [x + 11, y + 58]], hot ? '#e0aa6a' : '#c8925a');
+    for (let k = 0; k < 4; k++) rect(g, x + 8 + k, y + 30 + k * 8, 78 - k * 2, 2, '#a8723a');
+    for (let k = 0; k < 9; k++) rect(g, x + 13 + k * 9, y + 25, 2, 32, '#b07c44');
+    rect(g, x + 4, y + 21, 86, 3, '#8a5a32');
+    // a count badge and the total
+    if (n) { ell(g, x + 8, y + 18, 11, 11, DK); ell(g, x + 8, y + 18, 10, 10, '#c8302a'); textC(g, String(n), x + 8, y + 12, '#fbf6ea'); }
+    if (n) { const t = basketTotal() + 'G', w = textW(t) + 10; rect(g, x + 47 - w / 2, y + 40, w, 15, DK); rect(g, x + 48 - w / 2, y + 41, w - 2, 13, '#fff5e0'); textC(g, t, x + 47, y + 41, '#5a3a22'); }
+  }
+  function drawFlys(g) {
+    for (const f of S.flys) {
+      const e = f.t * f.t * (3 - 2 * f.t), tx = CART.x + 46, ty = CART.y + 30;
+      const fx = f.x + (tx - f.x) * e, fy = f.y + (ty - f.y) * e - Math.sin(f.t * Math.PI) * 70, k = 0.9 - 0.4 * e;
+      g.save(); g.translate(Math.round(fx), Math.round(fy)); g.scale(k, k); drawItem(g, f.id, 0, 0, 1, false); g.restore();
+    }
+  }
+
   /* ---------- HTML: inspect card and the talk / checkout panel ---------- */
   const artPic = {};
   function artURL(id) {
@@ -210,6 +330,7 @@ const NIGHTSHOP = (() => {
     return artPic[key];
   }
   function closePanels() {
+    if (S.ui === 'receipt' && S.receipt) return;
     S.ui = null; S.sel = null;
     for (const id of ['ns-card', 'ns-talk']) { const el = $(id); if (el) el.classList.remove('show'); }
   }
@@ -228,14 +349,14 @@ const NIGHTSHOP = (() => {
     let act;
     if (!it.on) act = `<p class="ns-lock">Unlocks on the Japan road at ${esc(lockPlace(it.node))}.</p>`;
     else if (it.bought) act = `<p class="ns-ok">Installed in your kitchen.</p>`;
-    else if (!room) act = `<p class="ns-lock">${it.left ? 'All of tonight’s stock is in your basket.' : 'Sold out tonight. Fresh stock tomorrow night.'}</p>`;
+    else if (!room) act = `<p class="ns-lock">${it.left ? 'All of tonight’s stock is in your cart.' : 'Sold out tonight. Fresh stock tomorrow night.'}</p>`;
     else act = (it.kind === 'gear' ? '' : `<div class="ns-qty"><button type="button" class="btn" data-q="-1" aria-label="One less">&minus;</button><b>${S.qty}</b><button type="button" class="btn" data-q="1" aria-label="One more">+</button><span>= ${S.qty * it.price}G</span></div>`)
-      + `<button type="button" class="btn ns-add">Add to basket</button>`;
+      + `<button type="button" class="btn ns-add">Add to cart</button>`;
     const bn = basketN();
     el.innerHTML = `<button type="button" class="ns-x" aria-label="Close">&times;</button>
-      <div class="ns-top"><img class="px ns-art" src="${artURL(it.id)}" alt=""><div><b>${esc(it.name)}</b><small>${esc(it.desc)}</small></div></div>
+      <div class="ns-top"><img class="px ns-art${rare(it)}" src="${artURL(it.id)}" alt=""><div><b>${esc(it.name)}</b><span class="ns-rar rar-${rarity(it)}">${RARITY[rarity(it)]}</span><small>${esc(it.desc)}</small></div></div>
       <dl class="ns-facts">${rows}</dl>${act}
-      <div class="ns-bk">${bn ? `Basket: ${bn} item${bn === 1 ? '' : 's'}, ${basketTotal()}G` : 'Your basket is empty'}</div>`;
+      <div class="ns-bk">${bn ? `Cart: ${bn} item${bn === 1 ? '' : 's'}, ${basketTotal()}G` : 'Your cart is empty'}</div>`;
     el.querySelector('.ns-x').onclick = () => { closePanels(); H.sfx.tap(); };
     el.querySelectorAll('[data-q]').forEach(b => { b.onclick = () => { S.qty = clamp(S.qty + +b.dataset.q, 1, room); H.sfx.tap(); renderCard(); }; });
     const add = el.querySelector('.ns-add');
@@ -251,14 +372,14 @@ const NIGHTSHOP = (() => {
     if (msg) say(msg);
     else if (view === 'menu') say(S.basket.length ? 'Ready to pay, chef? Or shall I fetch something from the back?' : pick(['What can I get you?', 'Looking for anything in particular?', 'Mm? Ask away.']));
     else if (view === 'list') say('Tell me what you need and I will fetch it.');
-    else if (view === 'checkout') say(S.basket.length ? 'Let me see what you have...' : 'Your basket is empty, chef.');
+    else if (view === 'checkout') say(S.basket.length ? 'Let me see what you have...' : 'Your cart is empty, chef.');
     renderTalk(); $('ns-talk').classList.add('show');
   }
   function renderTalk() {
     const body = $('ns-body'), ch = $('ns-choices'), total = basketTotal();
     let html = '', choices = [];
     if (S.view === 'menu') {
-      if (S.basket.length) choices.push(['Pay for my basket (' + total + 'G)', () => talk('checkout')]);
+      if (S.basket.length) choices.push(['Pay for my cart (' + total + 'G)', () => talk('checkout')]);
       choices.push(['Could you fetch something?', () => talk('list')]);
       choices.push(["What's the special tonight?", () => { const it = item(market().special); talk('menu', it.left ? 'Tonight it is ' + it.name.toLowerCase() + ', ' + it.price + 'G a pack instead of ' + it.full + 'G. Look for the red SALE tag.' : 'The special is all gone tonight. You have good taste, chef.'); }]);
       choices.push(['Tell me about yourself', () => talk('menu', pick(ABOUT))]);
@@ -266,15 +387,15 @@ const NIGHTSHOP = (() => {
     } else if (S.view === 'list') {
       html = '<div class="ns-list">' + CATALOGUE().map(([sec, ids]) => `<h4>${sec}</h4>` + ids.map(id => {
         const it = item(id), room = it.left - inBasket(id);
-        const why = !it.on ? 'Japan road' : it.bought ? 'Installed' : room <= 0 ? (it.left ? 'In basket' : 'Sold out') : '';
-        return `<div class="ns-row${why ? ' off' : ''}"><img class="px" src="${artURL(id)}" alt=""><span class="ns-nm">${esc(it.name)}${it.sale ? ' <i class="ns-saletag">Sale</i>' : ''}</span><span class="ns-pr">${it.full ? `<s>${it.full}G</s> ` : ''}${it.price}G</span>`
+        const why = !it.on ? 'Japan road' : it.bought ? 'Installed' : room <= 0 ? (it.left ? 'In cart' : 'Sold out') : '';
+        return `<div class="ns-row${why ? ' off' : ''}"><img class="px${rare(it)}" src="${artURL(id)}" alt=""><span class="ns-nm">${esc(it.name)}${it.sale ? ' <i class="ns-saletag">Sale</i>' : ''}</span><span class="ns-pr">${it.full ? `<s>${it.full}G</s> ` : ''}${it.price}G</span>`
           + (why ? `<span class="ns-why">${why}</span>` : `<button type="button" class="btn" data-add="${id}">+1</button>`) + '</div>';
       }).join('')).join('') + '</div>';
       choices.push(['Back', () => talk('menu')]);
       if (S.basket.length) choices.push(['Pay (' + total + 'G)', () => talk('checkout')]);
     } else if (S.view === 'checkout') {
       if (S.basket.length) {
-        html = '<div class="ns-list">' + S.basket.map(b => { const it = item(b.id); return `<div class="ns-row"><img class="px" src="${artURL(b.id)}" alt=""><span class="ns-nm">${esc(it.name)}</span>`
+        html = '<div class="ns-list">' + S.basket.map(b => { const it = item(b.id); return `<div class="ns-row"><img class="px${rare(it)}" src="${artURL(b.id)}" alt=""><span class="ns-nm">${esc(it.name)}</span>`
           + (it.kind === 'gear' ? '<span class="ns-n">1</span>' : `<button type="button" class="btn" data-dec="${b.id}" aria-label="One less">&minus;</button><span class="ns-n">${b.n}</span><button type="button" class="btn" data-inc="${b.id}" aria-label="One more">+</button>`)
           + `<span class="ns-pr">${it.price * b.n}G</span><button type="button" class="ns-del" data-del="${b.id}" aria-label="Remove">&times;</button></div>`; }).join('')
           + `<div class="ns-total"><span>Total</span><b>${total}G</b></div><div class="ns-total sm"><span>Your purse</span><span>${G.gold}G</span></div></div>`;
@@ -283,7 +404,7 @@ const NIGHTSHOP = (() => {
       }
       choices.push(['Keep shopping', () => { closePanels(); H.sfx.tap(); }]);
     } else if (S.view === 'confirm') {
-      choices.push(['Yes, pay ' + total + 'G', () => { const got = pay(); if (got) { talk('done', pick(['Thank you! It is all wrapped. ', 'Pleasure doing business! ', 'Wonderful. '] ) + 'I will have it carried over to your kitchen.'); } else talk('checkout'); }]);
+      choices.push(['Yes, pay ' + total + 'G', () => { const got = pay(); if (got) giveReceipt(); else talk('checkout'); }]);
       choices.push(['Not yet', () => talk('checkout')]);
     } else if (S.view === 'done') {
       choices.push(['Keep shopping', () => { closePanels(); H.sfx.tap(); }]);
@@ -302,7 +423,7 @@ const NIGHTSHOP = (() => {
   function hitStore(w) {
     if (inR(w, DOOR)) return { kind: 'door', x: DOOR.x + DOOR.w / 2, y: DOOR.y - 6, label: 'EXIT TO STREET' };
     const a = S.aoi;
-    if (inR(w, { x: a.x - 42, y: 216, w: 84, h: CTOP - 216 }) || inR(w, COUNTER)) return { kind: 'aoi', x: a.x, y: 196, label: S.basket.length ? 'AOI: PAY' : 'AOI' };
+    if (inR(w, { x: a.x - 46, y: 216, w: 92, h: CTOP - 216 }) || inR(w, COUNTER)) return { kind: 'aoi', x: a.x, y: 196, label: S.basket.length ? 'AOI: PAY' : 'AOI' };
     for (const s of SLOTS) if (inR(w, s.r)) {
       const it = item(s.id);
       const lab = !it.on ? 'LOCKED' : it.bought ? 'IN YOUR KITCHEN' : (it.sale ? 'SALE: ' : '') + it.name.toUpperCase() + ' ' + it.price + 'G';
@@ -329,12 +450,14 @@ const NIGHTSHOP = (() => {
     if (S.fadeDir) return;
     if (G.where === 'street') {
       const h = hitStreet(p); if (!h) return;
-      if (h.kind === 'home') { H.sfx.tap(); return backHome(0); }
+      if (h.kind === 'home') { if (S.rdoorT) return; S.rdoorT = 1; H.sfx.rumble(); setTimeout(() => backHome(0), 420); return; }
       if (h.kind === 'shop') return enter('store');
       if (h.kind === 'cat') { H.sfx.meow(); S.catT = G.t; return; }
       if (h.kind === 'vend') { H.sfx.tap(); return H.say(pick(['Hot corn soup, iced barley tea... and a tiny can of ramen broth. Rude.', 'The machine hums a little tune. Someone left a coin in the slot.'])); }
       return;
     }
+    if (S.ui === 'receipt') return tuckReceipt();
+    if (inR(p, CART)) return goCheckout();
     if (S.ui === 'talk') { closePanels(); return; }
     const e = edgeAt(p);
     if (e) { S.camT = clamp(S.camT + e * 480, 0, SW - VW); H.sfx.tap(); return; }
@@ -350,6 +473,7 @@ const NIGHTSHOP = (() => {
   function wheel(d) { if (G.where === 'store') S.camT = clamp(S.camT + d * 0.9, 0, SW - VW); }
   function key(e) {
     const k = e.key.toLowerCase();
+    if (S.ui === 'receipt') { if ([' ', 'enter', 'escape'].includes(k)) { tuckReceipt(); return true; } return true; }
     if (k === 'escape') { if (S.ui) { closePanels(); return true; } return false; }
     if (G.where !== 'store' || (e.target && e.target.tagName === 'INPUT')) return false;
     if (k === 'a' || k === 'arrowleft') { S.keys.l = true; return true; }
@@ -374,6 +498,7 @@ const NIGHTSHOP = (() => {
     if (S.closing > 0) { S.closing -= dt; if (S.closing <= 0) leaveStore(); }
     S.door += clamp(S.doorT - S.door, -dt * 3.2, dt * 3.2);
     S.sdoor += clamp(S.sdoorT - S.sdoor, -dt * 3.2, dt * 3.2);
+    S.rdoor += clamp(S.rdoorT - S.rdoor, -dt * 2.8, dt * 2.8);
     if (G.where === 'store') {
       const pan = (S.keys.r ? 1 : 0) - (S.keys.l ? 1 : 0);
       if (pan) S.camT = clamp(S.camT + pan * 820 * dt, 0, SW - VW);
@@ -386,11 +511,14 @@ const NIGHTSHOP = (() => {
       if (Math.floor(S.talk.shown) !== before && before % 3 === 0) H.sfx.blip(600);
       const el = $('ns-text'); if (el) el.textContent = S.talk.full.slice(0, Math.floor(S.talk.shown));
     } else if (S.ui === 'talk') { const el = $('ns-text'); if (el && el.textContent !== S.talk.full) el.textContent = S.talk.full; }
+    for (const f of S.flys) { f.t += dt / 0.55; if (f.t >= 1 && !f.done) { f.done = true; S.cartT = G.t; S.pops.push({ str: '+' + f.n, x: CART.x + CART.w / 2 + S.cam, y: CART.y - 6, c: '#b6e37a', life: 1 }); } }
+    S.flys = S.flys.filter(f => f.t < 1);
+    if (S.receipt && S.receipt.out && G.t - S.receipt.out > 0.5) { S.receipt = null; S.ui = null; bubble(pick(['Thank you, chef! The bag will be in your kitchen before you are.', 'Pleasure doing business! Keep the receipt for your books.', 'Arigatou! Cook something lovely tonight.'])); }
     for (const p of S.parts) p.k += dt * 1.6;
     S.parts = S.parts.filter(p => p.k < 1);
     for (const p of S.pops) { p.y -= 26 * dt; p.life -= dt; }
     S.pops = S.pops.filter(p => p.life > 0);
-    S.hover = G.mouse && !S.drag ? (G.where === 'street' ? hitStreet(G.mouse) : (edgeAt(G.mouse) ? null : hitStore(W(G.mouse)))) : null;
+    S.hover = G.mouse && !S.drag ? (G.where === 'street' ? hitStreet(G.mouse) : S.ui === 'receipt' ? null : inR(G.mouse, CART) ? { kind: 'cart' } : (edgeAt(G.mouse) ? null : hitStore(W(G.mouse)))) : null;
     S.edge = edgeAt(G.mouse);
   }
 
@@ -561,8 +689,8 @@ const NIGHTSHOP = (() => {
     // counter: hinoki top, slatted front, a little fabric skirt
     rect(f, COUNTER.x - 1, CTOP - 5, COUNTER.w + 2, 12, DK); rect(f, COUNTER.x, CTOP - 4, COUNTER.w, 10, '#dcae70'); rect(f, COUNTER.x, CTOP - 4, COUNTER.w, 2, '#f2cc90'); rect(f, COUNTER.x, CTOP + 5, COUNTER.w, 1, '#a87a44');
     rect(f, COUNTER.x + 6, CTOP + 7, COUNTER.w - 12, FLOOR - CTOP - 7, DK); SCENE.wood(f, COUNTER.x + 7, CTOP + 7, COUNTER.w - 14, FLOOR - CTOP - 7, '#6e4428', 14, true, 331);
-    rect(f, COUNTER.x + 7, CTOP + 7, COUNTER.w - 14, 22, '#2f3f78'); for (let x = COUNTER.x + 50; x < COUNTER.x + COUNTER.w - 20; x += 64) rect(f, x, CTOP + 7, 2, 22, '#1e2a58');
-    for (let k = 0; k < 4; k++) { const cx = COUNTER.x + 40 + k * 90; ell(f, cx, CTOP + 18, 6, 6, '#e8dcc0'); ell(f, cx, CTOP + 18, 4, 4, '#2f3f78'); }
+    rect(f, COUNTER.x + 7, CTOP + 7, COUNTER.w - 14, 18, '#2f3f78'); for (let x = COUNTER.x + 50; x < COUNTER.x + COUNTER.w - 20; x += 64) rect(f, x, CTOP + 7, 2, 18, '#1e2a58');
+    for (let k = 0; k < 4; k++) { const cx = COUNTER.x + 40 + k * 90; ell(f, cx, CTOP + 16, 5, 5, '#e8dcc0'); ell(f, cx, CTOP + 16, 3, 3, '#2f3f78'); }
     // cabinet glass and frame
     f.fillStyle = 'rgba(200,236,255,0.16)'; f.fillRect(616, 178, 208, 214);
     for (const [x, y] of [[630, 186], [700, 186], [760, 280]]) { f.fillStyle = 'rgba(255,255,255,0.28)'; for (let k = 0; k < 40; k++) f.fillRect(x + k, y + 40 - k, 3, 1); }
@@ -603,7 +731,7 @@ const NIGHTSHOP = (() => {
     rect(g, rx + 6, CTOP - 54, 28, 14, DK); rect(g, rx + 7, CTOP - 53, 26, 12, '#2a3a2a'); text(g, ring < 2 ? 'OK' : '00', rx + 12, CTOP - 50, '#9fe07a');
     for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) rect(g, rx + 5 + c * 8, CTOP - 34 + r * 9, 6, 6, '#fbf6ea');
     // the basket on the counter
-    if (S.basket.length) {
+    if (S.basket.length && atCounter()) {
       const bx = 330, n = S.basket.length;
       S.basket.slice(0, 6).forEach((b, i) => { g.save(); g.translate(bx - 34 + (i % 3) * 22, CTOP - 14 - Math.floor(i / 3) * 8); g.scale(0.5, 0.5); drawItem(g, b.id, 0, 0, 1, false); g.restore(); });
       rect(g, bx - 44, CTOP - 14, 88, 14, DK); rect(g, bx - 43, CTOP - 13, 86, 12, '#c8925a'); for (let k = 0; k < 86; k += 6) rect(g, bx - 43 + k, CTOP - 13, 3, 12, '#a8723a');
@@ -621,13 +749,15 @@ const NIGHTSHOP = (() => {
   function lanterns(g, xs, y, c = '#c8302a') { for (const [i, x] of xs.entries()) SCENE.lantern(g, Math.round(x + Math.sin(G.t * 1.3 + i) * 1.2), y, 12, c); }
   function dim(g, x0, w, lamps, f = 0.58, cool = []) {   // warm indoor night light: dark room, lamp pools cut out
     const buf = dim.buf || (dim.buf = PX.mk(VW, VH)), s = buf.getContext('2d'), flick = 0.95 + 0.05 * Math.sin(G.t * 7.3) * Math.sin(G.t * 3.1);
-    s.clearRect(0, 0, VW, VH); s.fillStyle = `rgba(16,10,34,${f})`; s.fillRect(0, 0, VW, VH);
+    s.clearRect(0, 0, VW, VH); s.fillStyle = `rgba(18,22,44,${f})`; s.fillRect(0, 0, VW, VH);
     s.globalCompositeOperation = 'destination-out';
-    for (const [x, y, rx, ry] of lamps.concat(cool)) for (const k of [1.3, 1.12, 0.95, 0.8, 0.65, 0.5]) ell(s, Math.round(x - x0), y, Math.round(rx * k * flick), Math.round(ry * k * flick), 'rgba(0,0,0,0.19)');
+    for (const [x, y, rx, ry] of lamps.concat(cool)) SCENE.soft(s, x - x0, y, rx * 1.3 * flick, ry * 1.3 * flick, 0.95);
     s.globalCompositeOperation = 'source-over';
     g.drawImage(buf, x0, 0);
-    for (const [x, y, rx, ry] of lamps) for (const k of [0.9, 0.55]) ell(g, x, y, Math.round(rx * k * flick), Math.round(ry * k * flick), 'rgba(255,176,90,0.05)');
-    for (const [x, y, rx, ry] of cool) ell(g, x, y, Math.round(rx * 0.8), Math.round(ry * 0.8), 'rgba(170,220,255,0.06)');
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (const [x, y, rx, ry] of lamps) SCENE.soft(g, x, y, rx * 0.9 * flick, ry * 0.9 * flick, 0.08, '255,169,87');
+    for (const [x, y, rx, ry] of cool) SCENE.soft(g, x, y, rx * 0.8, ry * 0.8, 0.06, '170,220,255');
+    g.restore();
   }
   const LANTERNS = [116, 560, 990, 1160, 1380, 1620, 1830, 2110];
   function drawStore(g) {
@@ -679,6 +809,10 @@ const NIGHTSHOP = (() => {
     drawBubble(g, cam);
     g.restore();
     edges(g);
+    if (S.ui !== 'receipt' || (S.receipt && S.receipt.out)) drawCart(g);
+    drawFlys(g);
+    drawReceipt(g);
+    if (S.hover && S.hover.kind === 'cart' && S.ui !== 'talk') SCENE.label(g, basketN() ? 'CART: ' + basketN() + ' ITEM' + (basketN() === 1 ? '' : 'S') + ', ' + basketTotal() + 'G' : 'CART IS EMPTY', CART.x + 20, CART.y - 14);
   }
   function wrap(s, maxW) {
     const out = []; let cur = '';
@@ -727,8 +861,6 @@ const NIGHTSHOP = (() => {
     for (let k = 0; k < 4; k++) { rect(g, RDOOR.x + 12 + k * 42, RDOOR.y + 60, 30, 100, '#d8904a'); rect(g, RDOOR.x + 12 + k * 42, RDOOR.y + 60, 30, 6, '#b87a3a'); }
     rect(g, RDOOR.x, RDOOR.y + 150, RDOOR.w, 10, '#a86a30');
     border(g, RDOOR.x, RDOOR.y, RDOOR.w, RDOOR.h, '#5a3a22', 6);
-    for (let k = 0; k < 4; k++) { const nx = RDOOR.x + k * 45; rect(g, nx, RDOOR.y, 44, 52, DK); rect(g, nx + 1, RDOOR.y + 1, 42, 50, '#2f3f78'); rect(g, nx + 1, RDOOR.y + 1, 42, 4, '#1e2a58'); }
-    poly(g, [[200, 240], [222, 240], [217, 248], [205, 248]], '#e8dcc0'); rect(g, 207, 248, 9, 2, '#e8dcc0'); line(g, 204, 228, 218, 237, '#e8dcc0', 1);
     // Kitsune-ya (right): pale plaster, a tiled eave, a big sign, the shop window and the glass door
     poly(g, [[540, 150], [580, 104], [960, 104], [980, 150]], DK); poly(g, [[544, 147], [582, 107], [960, 107], [976, 147]], '#3a4a6a');
     for (let x = 550; x < 960; x += 12) rect(g, x, 140, 8, 6, '#2a3a5a');
@@ -757,6 +889,21 @@ const NIGHTSHOP = (() => {
     SCENE.sky(g, G, { x: 0, y: 0, w: VW, h: 340 });
     g.drawImage(ST, 0, 0);
     const open = storeOpen();
+    // Cozy Ramen's double doors: lattice and warm glass, parting into the wall on both sides
+    const rx = Math.round(S.rdoor * 80), ix = RDOOR.x + 6, iw = RDOOR.w - 12, hw = iw / 2, iy = RDOOR.y + 6, ih = RDOOR.h - 6;
+    g.save(); g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
+    for (const px of [ix - rx, ix + hw + rx]) {
+      rect(g, px, iy, hw, ih, DK); rect(g, px + 1, iy, hw - 2, ih, '#6e4428');
+      g.fillStyle = 'rgba(255,214,140,0.62)'; g.fillRect(px + 8, iy + 46, hw - 16, ih - 96);
+      for (let k = 1; k < 3; k++) rect(g, px + 8 + Math.round(k * (hw - 16) / 3), iy + 46, 2, ih - 96, '#6e4428');
+      for (let y = iy + 68; y < iy + ih - 52; y += 22) rect(g, px + 8, y, hw - 16, 2, '#6e4428');
+      rect(g, px + 8, iy + ih - 44, hw - 16, 36, '#4e3220'); rect(g, px + 8, iy + ih - 44, hw - 16, 2, '#8a623c');
+    }
+    rect(g, ix + hw - 1 - rx, iy + 110, 2, 20, DK); rect(g, ix + hw + 3 + rx, iy + 110, 2, 20, DK);   // finger pulls
+    g.restore();
+    const rf = S.rdoor > 0.03 && S.rdoor < 0.97 ? Math.sin(G.t * 10) * 3 : Math.sin(G.t * 1.4) * 1;
+    for (let k = 0; k < 4; k++) { const nx = RDOOR.x + k * 45; poly(g, [[nx, RDOOR.y], [nx + 44, RDOOR.y], [nx + 44 + rf, RDOOR.y + 52], [nx + rf, RDOOR.y + 52]], DK); poly(g, [[nx + 1, RDOOR.y + 1], [nx + 43, RDOOR.y + 1], [nx + 43 + rf, RDOOR.y + 50], [nx + 1 + rf, RDOOR.y + 50]], '#2f3f78'); rect(g, nx + 1, RDOOR.y + 1, 42, 4, '#1e2a58'); }
+    poly(g, [[200, 240], [222, 240], [217, 248], [205, 248]], '#e8dcc0'); rect(g, 207, 248, 9, 2, '#e8dcc0'); line(g, 204, 228, 218, 237, '#e8dcc0', 1);
     // Kitsune-ya's door slides open; shutters come down outside opening hours
     const dx = Math.round(S.sdoor * 120);
     rect(g, SDOOR.x - 1 + dx, SDOOR.y, SDOOR.w + 2 - dx, SDOOR.h, DK);
@@ -818,6 +965,8 @@ const NIGHTSHOP = (() => {
     // jump straight in (for ?shot= screenshots and tests)
     visit: (where, cam = 0) => { G.where = where; S.cam = S.camT = clamp(cam, 0, SW - VW); S.fade = 0; S.fadeDir = 0; S.door = 0; S.doorT = 0; if (where === 'store') { S.aoi.x = S.aoi.tx = 420; greet(); } },
     streetOpen, storeOpen, item, market, addToBasket, pay, inspect, talk, closePanels, hours: HOURS,
+    receipt: () => S.receipt, tuckReceipt, giveReceipt, goCheckout, cart: () => ({ ...CART }),
+    setDoors: (r, sd) => { S.rdoor = S.rdoorT = r; S.sdoor = S.sdoorT = sd; },
     state: () => ({ cam: S.cam, camT: S.camT, fade: S.fade, ui: S.ui, view: S.view, sel: S.sel, basket: S.basket.map(b => ({ ...b })), aoi: { ...S.aoi }, bubble: S.bubble && S.bubble.msg, door: S.door, sdoor: S.sdoor, hover: S.hover, closing: S.closing }),
     slots: () => SLOTS.map(s => ({ id: s.id, x: s.x, base: s.base, r: { ...s.r } })), DOOR, SDOOR, RDOOR, COUNTER
   };

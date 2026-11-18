@@ -149,17 +149,24 @@ const KITCHEN = (() => {
     const P = KL.PASS;
     ao(g, P.x + P.w + 9, P.y - 8, 14, P.h + 16, 'left', 12, 0.4);
     frameRect(g, P.x, P.y, P.w, P.h, '#5a3820', 8);
-    rect(g, P.x, P.y, P.w, P.h, '#2e2222');
-    for (let y = P.y; y < P.y + P.h; y += 2) { g.globalAlpha = 0.28 * (y - P.y) / P.h; rect(g, P.x, y, P.w, 2, '#ffbe6e'); }
-    g.globalAlpha = 1;
+    // through the window: the warm, dim serving room (a glimpse of a blind and a pendant lamp)
+    rect(g, P.x, P.y, P.w, P.h, '#3a2620');
+    for (let y = P.y + 46; y < P.y + 170; y += 3) { rect(g, P.x + 10, y, P.w - 20, 2, '#8a6a42'); rect(g, P.x + 10, y + 2, P.w - 20, 1, '#4a3022'); }
+    for (const px of [P.x + 6, P.x + P.w - 12]) { rect(g, px, P.y + 46, 6, 130, '#2a1a14'); rect(g, px, P.y + 46, 1, 130, '#5a3a24'); }
+    rect(g, P.x + P.w / 2, P.y + 46, 1, 16, '#1a1010'); poly(g, [[P.x + P.w / 2 - 5, P.y + 62], [P.x + P.w / 2 + 6, P.y + 62], [P.x + P.w / 2 + 12, P.y + 72], [P.x + P.w / 2 - 11, P.y + 72]], '#8a4a24');
+    rect(g, P.x + P.w / 2 - 10, P.y + 72, 21, 2, '#ffd890');
     for (let k = 0; k < 3; k++) {
       const x = P.x + 2 + k * 54; rect(g, x, P.y, 52, 46, C.indigo); rect(g, x + 44, P.y, 8, 46, C.indigoLo); rect(g, x, P.y, 52, 5, '#1a2244');
       poly(g, [[x + 16, P.y + 25], [x + 37, P.y + 25], [x + 32, P.y + 34], [x + 21, P.y + 34]], '#e8dcc0');   // bowl crest
       rect(g, x + 22, P.y + 34, 9, 2, '#e8dcc0'); line(g, x + 20, P.y + 14, x + 34, P.y + 23, '#e8dcc0', 1); line(g, x + 23, P.y + 13, x + 36, P.y + 21, '#e8dcc0', 1);
     }
-    textC(g, 'PASS', P.x + P.w / 2, P.y + 60, '#f4efe6');
-    textC(g, 'TO SERVING', P.x + P.w / 2, P.y + 82, '#c9a468');
-    for (const y of [P.y + 178, P.y + 240]) { rect(g, P.x, y - 1, P.w, 10, DK); wood(g, P.x, y, P.w, 8, '#e8c08a', 8, false, y); rect(g, P.x, y, P.w, 1, '#fff0cf'); }
+    // the sill: a thick hinoki ledge, and a lacquered serving tray waiting on it (bowls go on the tray)
+    const SY = P.y + 176;
+    rect(g, P.x - 10, SY - 1, P.w + 20, 70, DK); wood(g, P.x - 9, SY, P.w + 18, 68, '#e8c08a', 17, false, 177); rect(g, P.x - 9, SY, P.w + 18, 2, '#fff0cf'); rect(g, P.x - 9, SY + 66, P.w + 18, 2, '#a8763e');
+    tray(g, P.x + P.w / 2, SY + 34, 150, 62);
+    // the order-up bell on the corner of the sill
+    const bx = P.x + P.w + 2, by = SY - 2;
+    ell(g, bx, by, 9, 3, DK); ell(g, bx, by - 1, 8, 2, '#8a6a42'); lathe(g, bx, [[by - 12, 2], [by - 9, 6], [by - 3, 8]], DK); lathe(g, bx, [[by - 11, 1], [by - 9, 5], [by - 3, 7]], PAL.brass); rect(g, bx - 3, by - 9, 2, 5, '#ffe08a'); rect(g, bx - 1, by - 15, 2, 3, DK);
     // menu board on the prep wall: one row per ramen on the menu today (the board is rebuilt when a recipe unlocks)
     const dishes = Object.keys(MENU).filter(menuOn), rows = Math.ceil(dishes.length / 2);
     const MBX = 598, MBY = 48, MBW = 346, MBH = 32 + rows * 18 + 22;
@@ -226,6 +233,113 @@ const KITCHEN = (() => {
     return c;
   }
 
+  /* ---------- liquids: shaded surfaces, highlights, bubbles and steam ----------
+     t[0] is the thin darker line where the liquid meets the pot wall; t[1..4] run from the shaded rim to the lit middle.
+     Light comes from the upper left (the lanterns), so highlights sit up-left of centre. */
+  const LIQ = {
+    pork:    { t: ['#6e5236', '#a2805a', '#c0a074', '#d6ba8e', '#e4cca2'], hi: '#f8ecd2', look: 'cloudy' },   // opaque, warm beige, fat droplets
+    chicken: { t: ['#7e5a1c', '#b0822a', '#cc9e3c', '#e0b652', '#ecc86a'], hi: '#fff4c4', look: 'clear' },
+    dashi:   { t: ['#56391c', '#826038', '#a07c4c', '#b69462', '#c8a878'], hi: '#f6e2b0', look: 'clear' },
+    miso:    { t: ['#664024', '#885e38', '#9c7046', '#ac8052', '#b88c5e'], hi: null, look: 'matte' },        // thick, matte, no sharp glints
+    shoyu:   { t: ['#120604', '#22100a', '#30180e', '#3c2014', '#48281a'], hi: '#c89a78', look: 'glossy' },
+    shio:    { t: ['#928670', '#b0a48a', '#c6baa0', '#d6ccb4', '#e2dac6'], hi: '#ffffff', look: 'clear' },
+    water:   { t: ['#304a56', '#4a6874', '#668692', '#82a0aa', '#9cb8c0'], hi: '#eef8fa', look: 'boil' }      // clear blue-grey, foamy middle
+  };
+  const BAYER = [[0, 2], [3, 1]];
+  const surfCache = {};
+  function surface(key, rx, ry) {   // the static shaded surface, cached per liquid and size (no outline: the pot rim is the edge)
+    const id = key + rx + 'x' + ry; if (surfCache[id]) return surfCache[id];
+    const L = LIQ[key], c = mk(2 * rx + 1, 2 * ry + 1), g = c.getContext('2d');
+    const inside = (x, y) => (x / (rx + 0.5)) ** 2 + (y / (ry + 0.5)) ** 2 <= 1;
+    for (let y = -ry; y <= ry; y++) for (let x = -rx; x <= rx; x++) {
+      if (!inside(x, y)) continue;
+      let col;
+      if (!inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1)) col = L.t[0];
+      else {
+        const dx = x / rx, dy = y / ry, d = Math.sqrt(dx * dx + dy * dy);
+        let v = 1 - d - (dy < 0 ? -dy * 0.22 : 0);                    // the far wall shades the back of the surface more
+        if (L.look === 'boil') v += Math.max(0, 0.35 - d) * 0.8;       // lighter, foamy middle
+        const b = (BAYER[(y + ry) & 1][(x + rx) & 1] + 0.5) / 4 - 0.5;
+        col = L.t[1 + Math.max(0, Math.min(3, Math.floor(v * 3.4 + b * 0.7)))];
+      }
+      g.fillStyle = col; g.fillRect(x + rx, y + ry, 1, 1);
+    }
+    if (L.look === 'matte') for (let k = 0; k < 10; k++) {   // a little body texture, no shine
+      const a = rnd(k * 5 + 1) * Math.PI * 2, r = Math.sqrt(rnd(k * 9 + 2)) * 0.6;
+      g.fillStyle = k % 2 ? L.t[2] : L.t[4]; g.fillRect(Math.round(rx + Math.cos(a) * r * rx), Math.round(ry + Math.sin(a) * r * ry), 2, 1);
+    }
+    return (surfCache[id] = c);
+  }
+  // A point inside the surface from two 0..1 numbers (kept away from the edge by m).
+  const spot = (cx, cy, rx, ry, u, v, m = 0.75) => { const a = u * Math.PI * 2, r = Math.sqrt(v) * m; return [Math.round(cx + Math.cos(a) * r * rx), Math.round(cy + Math.sin(a) * r * ry)]; };
+  // boil: 0 still (crocks), 1 gentle simmer (pots over the fire), 2 rolling boil (the noodle boiler)
+  function liquid(g, key, cx, cy, rx, ry, t, boil, seed = 0) {
+    const L = LIQ[key];
+    g.drawImage(surface(key, rx, ry), cx - rx, cy - ry);
+    const fr = Math.floor(t * 2.6 + seed) % 4;                      // slow 4-frame shimmer
+    if (L.look === 'cloudy') {                                       // fat droplets drifting on the broth, catching the light
+      for (let k = 0; k < 6; k++) {
+        const [x, y] = spot(cx, cy, rx, ry, rnd(seed * 17 + k * 3), rnd(seed * 23 + k * 7), 0.7);
+        const xx = x + Math.round(Math.sin(t * 0.35 + k * 1.7) * 1.5);
+        rect(g, xx, y, k % 3 ? 2 : 3, 1, L.t[4]); if ((k + fr) % 3 !== 0) dot(g, xx, y, L.hi);
+      }
+    }
+    if (L.hi && L.look !== 'cloudy') {                                // a short curved streak up-left, and a couple of bright pixels
+      const sx = Math.round(cx - rx * 0.42) + (fr === 1 || fr === 3 ? 1 : 0), sy = Math.round(cy - ry * 0.4), n = fr === 2 ? 3 : 5;
+      for (let i = 0; i < n; i++) dot(g, sx + i, sy + (i === 0 || i === n - 1 ? 1 : 0), i === 2 ? L.hi : mix(L.hi, L.t[4], 0.35));
+      if (fr < 2) { dot(g, Math.round(cx - rx * 0.12), Math.round(cy - ry * 0.62), L.hi); dot(g, Math.round(cx - rx * 0.12) + 2, Math.round(cy - ry * 0.62), mix(L.hi, L.t[4], 0.5)); }
+    } else if (L.look === 'cloudy') {                                 // a soft, wide sheen on the opaque broth
+      const sx = Math.round(cx - rx * 0.4), sy = Math.round(cy - ry * 0.42);
+      rect(g, sx + (fr & 1), sy, 4, 1, mix(L.hi, L.t[4], 0.5)); if (fr !== 2) dot(g, sx + 1 + (fr & 1), sy, L.hi);
+    }
+    if (boil === 2) {                                                 // foam churning in the middle
+      const ff = Math.floor(t * 9);
+      for (let k = 0; k < 14; k++) { const [x, y] = spot(cx, cy, rx, ry, rnd(ff * 31 + k * 5), rnd(ff * 17 + k * 11), 0.32); rect(g, x, y, k % 3 ? 1 : 2, 1, k % 2 ? '#d6e6ea' : '#f4fbfc'); }
+    }
+    if (boil) {                                                       // bubbles rise, swell and pop, then appear somewhere new
+      const nB = boil === 2 ? 16 : 2, rate = boil === 2 ? 1.6 : 0.32, m = boil === 2 ? 0.8 : 0.6;
+      for (let k = 0; k < nB; k++) {
+        const cyc = t * rate * (0.8 + rnd(k * 3 + seed) * 0.4) + k * 0.618 + seed, n = Math.floor(cyc), p = cyc - n;
+        const [x, y] = spot(cx, cy, rx, ry, rnd(n * 13 + k * 7 + seed), rnd(n * 29 + k * 3 + seed), m);
+        if (p < 0.72) {
+          const r = p < 0.3 ? 1 : 2, lite = boil === 2 ? '#c4dce2' : L.t[4];
+          rect(g, x - r + 1, y, 2 * r - 1 || 1, 1, lite); dot(g, x - r + 1, y - (r > 1 ? 1 : 0), boil === 2 ? '#ffffff' : mix(L.hi || L.t[4], L.t[4], 0.4));
+          if (r > 1) dot(g, x + r - 1, y + 1, L.t[1]);
+        } else if (p < 0.84) {                                        // pop: a tiny ring for a frame or two
+          const c = boil === 2 ? '#e6f4f6' : L.t[4];
+          dot(g, x - 2, y, c); dot(g, x + 2, y, c); dot(g, x, y - 1, c); dot(g, x, y + 1, c);
+        }
+      }
+    }
+  }
+  // A small ripple ring where something breaks the surface; it slowly breathes.
+  function ripple(g, x, y, t, seed, lite, dark) {
+    const r = 3 + Math.round((Math.sin(t * 2.4 + seed) + 1) * 0.8);
+    for (let a = 0; a < 12; a++) { const th = a / 12 * Math.PI * 2; dot(g, Math.round(x + Math.cos(th) * r), Math.round(y + Math.sin(th) * r * 0.4), th > Math.PI ? lite : dark); }
+  }
+  // Steam wisps: thin trails that rise, sway and fade as they climb.
+  function steam(g, cx, y0, spread, t, n, a = 0.5, h = 60, seed = 0) {
+    for (let k = 0; k < n; k++) {
+      const p = (t * (0.22 + rnd(seed + k) * 0.1) + k / n + rnd(seed * 7 + k)) % 1;
+      const ox = (rnd(seed * 3 + k * 5) - 0.5) * 2 * spread;
+      for (let j = 0; j < 4; j++) {
+        const q = p - j * 0.035; if (q <= 0) continue;
+        const y = Math.round(y0 - q * h), x = Math.round(cx + ox + Math.sin(t * 1.4 + k * 2.1 + q * 5) * 5 * q);
+        g.globalAlpha = a * (1 - q) * Math.min(1, q / 0.12) * (1 - j * 0.22);
+        rect(g, x, y, j ? 1 : 2, 2, '#f4f0ea');
+      }
+    }
+    g.globalAlpha = 1;
+  }
+  // A lacquered serving tray seen from slightly above: a red-black rim, a darker inner floor, a lit near edge.
+  function tray(g, cx, cy, w, h) {
+    const x = Math.round(cx - w / 2), y = Math.round(cy - h / 2);
+    rect(g, x + 3, y + h, w - 6, 3, 'rgba(30,14,10,0.35)');
+    rect(g, x, y, w, h, DK); rect(g, x + 1, y + 1, w - 2, h - 2, '#7a2018'); rect(g, x + 1, y + 1, w - 2, 2, '#a83a2a');
+    rect(g, x + 6, y + 6, w - 12, h - 12, '#3a1210'); rect(g, x + 6, y + 6, w - 12, 2, '#2a0c0a'); rect(g, x + 6, y + h - 8, w - 12, 2, '#5a1c16');
+    rect(g, x + 1, y + h - 4, w - 2, 3, '#5a1410'); rect(g, x + 1, y + h - 4, w - 2, 1, '#c8503a');
+    for (const hx of [x + 4, x + w - 14]) rect(g, hx, y + 2, 10, 2, '#d8a050');   // gold-leaf corners
+  }
   const bar = (g, x, y, w, p, c) => { const f = Math.round(w * Math.max(0, Math.min(1, p))); rect(g, x - 1, y - 1, w + 2, 8, DK); rect(g, x, y, w, 6, '#4a3f4a'); rect(g, x, y, f, 6, c); rect(g, x, y, f, 2, shade(c, 1.3)); };
   const plus = (g, x, y) => { ell(g, x, y + 1, 10, 10, 'rgba(20,8,12,0.4)'); ell(g, x, y, 10, 10, DK); ell(g, x, y, 9, 9, '#3d8a3a'); ell(g, x - 1, y - 1, 8, 8, '#6fbf4a'); rect(g, x - 5, y - 1, 11, 3, '#ffffff'); rect(g, x - 1, y - 5, 3, 11, '#ffffff'); };
   function badge() {}   // (restocking happens at Kitsune-ya now: no buttons in the kitchen)
@@ -351,26 +465,33 @@ const KITCHEN = (() => {
     for (let x = cx - rx + 8; x < cx + rx; x += 14) { dot(g, x, cy + 14, C.copperHi); dot(g, x, cy + 98, C.copperHi); }
     label(g, 'BOILER', cx, cy + 50);
     ell(g, cx, cy, rx + 1, 19, DK); ell(g, cx, cy, rx, 18, C.copperHi); ell(g, cx, cy + 1, rx - 3, 15, C.copperLo);
-    ell(g, cx, cy + 1, rx - 5, 13, '#7fb4c8'); ell(g, cx - 4, cy - 1, rx - 14, 9, '#9fcadb'); ell(g, cx - 18, cy - 3, 18, 3, '#c6e6f0');
-    for (let k = 0; k < 11; k++) if (Math.sin(G.t * 6 + k * 1.9) > 0.1) { const bx = cx - 54 + k * 11, by = cy - 4 + (k % 4) * 3, r = 1 + (k % 2); ell(g, bx, by, r + 1, r, '#e6f6fb'); }
+    ell(g, cx, cy + 1, rx - 3, 15, '#5a2a14');                                     // the inner wall, in shadow
+    liquid(g, 'water', cx, cy + 2, rx - 5, 12, G.t, 2, 5);
     KL.basketX.forEach((bx, j) => {
       const b = G.baskets[j];
-      if (G.drag && G.drag.kind === 'basket' && G.drag.j === j) { ell(g, bx, cy - 1, 18, 5, '#5d8fa2'); return; }
-      const by = cy - 1;
-      line(g, bx + 12, by - 4, bx + 28, by - 42, DK, 5); line(g, bx + 13, by - 4, bx + 29, by - 42, '#9a6a3a', 3); line(g, bx + 13, by - 5, bx + 29, by - 43, '#c08a52', 1);
-      ell(g, bx, by, 20, 8, DK); ell(g, bx, by, 19, 7, PAL.brass); ell(g, bx, by, 17, 5, '#5d8fa2'); rect(g, bx - 13, by - 6, 9, 1, PAL.brassHi);
+      if (G.drag && G.drag.kind === 'basket' && G.drag.j === j) return;   // lifted out: just water
+      const by = cy + 1;
+      // the basket sits under the surface: its rim and mesh show through the water, tinted by it
+      if (b.t >= 0) {   // the noodle nest, seen through the water
+        const ready = b.t >= cookTime(), c = mix(ready ? '#f6e19a' : '#fff3c9', '#82a0aa', 0.45), cd = shade(c, 0.86);
+        for (let r = -2; r <= 2; r++) { const w = 11 - Math.abs(r) * 2; rect(g, bx - w, by + r, 2 * w, 1, (r + j) & 1 ? c : cd); }
+      }
+      for (let a = 0; a < 64; a++) { const th = a / 64 * Math.PI * 2; if (th < Math.PI) continue; dot(g, Math.round(bx + Math.cos(th) * 17), Math.round(by + Math.sin(th) * 5), '#7c8a6a'); }   // far side of the rim, just under the surface
+      // the handle rises out of the water, with a small ripple ring where it breaks the surface
+      const hx = bx + 14, hy = by - 3;
+      ripple(g, hx, hy, G.t, j * 2, '#a6c0c8', '#d6e6ea');
+      line(g, hx, hy, bx + 28, by - 44, DK, 5); line(g, hx + 1, hy, bx + 29, by - 44, '#9a6a3a', 3); line(g, hx + 1, hy - 1, bx + 29, by - 45, '#c08a52', 1);
       if (b.t >= 0) {
-        const ready = b.t >= cookTime(), c = ready ? '#f6e19a' : '#fff3c9';
-        ell(g, bx, by, 14, 4, shade(c, 0.8)); ell(g, bx - 1, by - 1, 12, 3, c);
-        for (let k = -11; k <= 11; k += 3) dot(g, bx + k, by + Math.round(Math.sin(k) * 1.5), shade(c, 0.75));
+        const ready = b.t >= cookTime();
         if (ready) {
           const yy = cy - 70 - (j % 2) * 22 + Math.round(Math.sin(G.t * 4 + j) * 3);
           rect(g, bx - 33, yy - 1, 66, 18, DK); rect(g, bx - 32, yy, 64, 16, '#3d8a3a'); rect(g, bx - 32, yy, 64, 2, '#8fd86a');
           textC(g, 'READY', bx + 1, yy + 3, '#ffffff');
           poly(g, [[bx - 5, yy + 17], [bx + 6, yy + 17], [bx + 0.5, yy + 22]], DK);
         } else bar(g, bx - 20, cy - 62 - (j % 2) * 12, 40, b.t / cookTime(), '#f2a22a');
-      } else for (let k = -12; k <= 12; k += 4) dot(g, bx + k, by, '#7b8494');
+      }
     });
+    steam(g, cx, cy - 6, rx - 16, G.t, 9, 0.55, 74, 3);   // a rolling boil: plenty of steam
   }
 
   // Copper stock pots on the brick hearth, one per BROTH_SLOTS entry. A locked slot has a lidded pot over a cold mouth.
@@ -389,12 +510,15 @@ const KITCHEN = (() => {
         lock(g, cx, cy + 24);
         return;
       }
-      ell(g, cx, cy, rx + 1, 12, DK); ell(g, cx, cy, rx, 11, C.copperHi); ell(g, cx, cy + 1, rx - 4, 8, n > 0 ? def.dark : '#3a2a22');
-      if (n > 0) {
-        ell(g, cx - 2, cy, rx - 8, 6, def.c); ell(g, cx - 12, cy - 2, 10, 2, def.light);
-        for (let k = 0; k < 5; k++) if (Math.sin(G.t * 4 + k * 2.3 + i) > 0.3) { const bx = cx - 20 + k * 10, by = cy - 2 + (k % 3) * 2; ell(g, bx, by, 2, 1, def.light); dot(g, bx - 1, by - 1, '#fff2c8'); }
+      ell(g, cx, cy, rx + 1, 12, DK); ell(g, cx, cy, rx, 11, C.copperHi); ell(g, cx, cy + 1, rx - 4, 8, '#5a2a14');
+      if (n > 0) { liquid(g, kind, cx, cy + 2, rx - 5, 6, G.t, 1, i * 3 + 1); steam(g, cx, cy - 4, rx - 12, G.t, 3, 0.35, 48, i * 11 + 2); }
+      else ell(g, cx, cy + 2, rx - 5, 6, '#3a2a22');
+      if (!held(G, 'broth', kind)) {
+        const L = LIQ[kind] || LIQ.pork, hx = cx + 12, hy = cy + 1;
+        if (n > 0) ripple(g, hx, hy, G.t, i, L.t[3], L.t[4]);
+        line(g, hx, hy, cx + 22, cy - 16, DK, 4); line(g, hx + 1, hy, cx + 23, cy - 16, PAL.copper, 2);
+        line(g, cx + 22, cy - 16, cx + 38, cy - 44, DK, 5); line(g, cx + 23, cy - 16, cx + 39, cy - 44, '#9a6a3a', 3); line(g, cx + 23, cy - 17, cx + 39, cy - 45, '#c08a52', 1);
       }
-      if (!held(G, 'broth', kind)) ladle(g, cx + 8, cy - 2, false, G.t);
       plate(g, def.short, cx, cy + 16);
       chip(g, n, cx, cy + 36);
       badge(g, G, id);
@@ -419,9 +543,14 @@ const KITCHEN = (() => {
         lock(g, cx, y + 28);
         return;
       }
-      ell(g, cx, y + 4, 15, 5, DK); ell(g, cx, y + 4, 13, 4, n > 0 ? def.c : '#3a2a22');
-      if (n > 0) { ell(g, cx - 3, y + 3, 6, 1, shade(def.c, 1.35)); dot(g, cx + 5, y + 5, shade(def.c, 1.2)); }
-      if (!held(G, 'tare', kind)) spoon(g, cx + 6, y + 4, false);
+      ell(g, cx, y + 4, 15, 5, DK); ell(g, cx, y + 4, 14, 4, '#3a2016');
+      if (n > 0) liquid(g, kind, cx, y + 5, 12, 3, G.t, 0, i * 5 + 7); else ell(g, cx, y + 5, 12, 3, '#2a1a12');
+      if (!held(G, 'tare', kind)) {   // the wooden spoon stands in the tare: only its handle shows
+        const L = LIQ[kind], hx = cx + 6, hy = y + 4;
+        if (n > 0) { if (L.look === 'matte') { dot(g, hx - 2, hy + 1, L.t[1]); dot(g, hx + 2, hy + 1, L.t[4]); } else ripple(g, hx, hy + 1, G.t, i * 3, L.t[3], L.t[4]); }
+        line(g, hx, hy, cx + 22, y - 28, DK, 5); line(g, hx + 1, hy, cx + 23, y - 28, '#d8b07a', 3); line(g, hx + 1, hy - 1, cx + 23, y - 29, '#f2d6a2', 1);
+        line(g, cx + 20, y - 23, cx + 22, y - 28, '#7a1e18', 3);
+      }
       chip(g, n, cx, y + 26);
       plate(g, def.short, cx, y + 62);
       badge(g, G, id);

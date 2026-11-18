@@ -27,7 +27,7 @@
   const zeroes = () => Object.fromEntries(Object.keys(MENU).map(k => [k, 0]));
   const newStats = () => ({ served: 0, perfect: 0, earned: 0, sales: 0, tips: 0, declined: 0, sold: zeroes(), rev: zeroes() });
   const fresh = () => ({
-    mode: 'title', met: [], level: 1, xp: 0, owned: [], gear: [], where: null, aoiMet: false, region: 0, life: { served: 0, perfect: 0, sold: {}, bestDay: 0, days: 0 },
+    mode: 'title', met: [], aff: {}, level: 1, xp: 0, owned: [], gear: [], where: null, aoiMet: false, region: 0, life: { served: 0, perfect: 0, sold: {}, bestDay: 0, days: 0 },
     t: 0, time: 0, day: 1, gold: 0, paused: false, ui: null, nightF: 0, duskF: 0, rain: 0, wx: null, quest: null,
     shop: 'morning', signT: -9, signWas: 'morning', receipt: null,   // shop: morning (closed, waiting for the sign) | open | night
     st: 0, cam: 0, kcam: 960, scam: 0, pan: 0, edge: 0, edgeSide: 0,
@@ -49,7 +49,7 @@
   const SETTINGS = Object.assign({ music: 6, sfx: 8, textSpeed: 1, snap: true, blindClick: false, hints: false }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; } })());
   function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS)); } catch (e) { /* storage may be blocked */ } }
   // Continue always resumes at the start of a morning: `day` is the morning to resume on.
-  function saveGame(day) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned, quest: G.quest, gear: G.gear, aoiMet: G.aoiMet, region: G.region, life: G.life })); } catch (e) { /* storage may be blocked */ } }
+  function saveGame(day) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, aff: G.aff, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned, quest: G.quest, gear: G.gear, aoiMet: G.aoiMet, region: G.region, life: G.life })); } catch (e) { /* storage may be blocked */ } }
   function loadSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.day ? s : null; } catch (e) { return null; } }
   function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage may be blocked */ } }
 
@@ -152,6 +152,12 @@
     chime: () => { tone(1568, 0.5, 'sine', 0.04); tone(2093, 0.6, 'sine', 0.03, 0, 0.12); tone(1760, 0.7, 'sine', 0.025, 0, 0.26); },
     ring: () => { tone(1320, 0.08, 'square', 0.03, 0, 0.05); tone(2640, 0.3, 'triangle', 0.05, 0, 0.12); noise(0.1, 600, 0.4, 0.02); },
     meow: () => tone(700, 0.3, 'triangle', 0.05, 520),
+    // the staff door: latch, a hinge creak while it swings, a locked rattle; the shop front's double sliding doors
+    latch: () => { tone(1100, 0.025, 'square', 0.035); noise(0.03, 2600, 0.35, 0.01); },
+    creak: () => { tone(170, 0.32, 'sawtooth', 0.016, 250, 0.06); tone(240, 0.22, 'sawtooth', 0.012, 190, 0.34); tone(205, 0.16, 'sawtooth', 0.01, 230, 0.52); },
+    rattle: () => { for (let i = 0; i < 4; i++) { noise(0.03, 900, 0.5, i * 0.07); tone(150, 0.03, 'square', 0.025, 0, i * 0.07); } },
+    stamp: () => { noise(0.05, 260, 0.8); tone(95, 0.09, 'sine', 0.09, 60); },
+    rumble: () => { noise(0.36, 420, 0.34); noise(0.3, 900, 0.12, 0.03); noise(0.05, 1300, 0.32, 0.36); tone(130, 0.06, 'square', 0.03, 0, 0.37); },
     blip: pitch => tone((pitch || 620) * (0.94 + Math.random() * 0.12), 0.03, 'square', 0.015)
   };
 
@@ -192,12 +198,22 @@
   const lockedSay = node => { const n = nodeFor(node); say('Unlocks on the Japan road at ' + (n ? n.place + ', level ' + n.level : 'a later stop') + '.'); };
   const passRect = { x: K(KL.PASS.x), y: KL.PASS.y, w: KL.PASS.w, h: KL.PASS.h };
   const passSlot = i => { const [x, y] = KL.passPos(i); return { x: K(x) - 32, y: y - 14, w: 64, h: 40 }; };
-  const pickSlot = i => ({ x: SL.X0 + SL.pickX(i) - 32, y: SL.SHELF_Y - 22, w: 64, h: 44 });
-  const shelfRect = { x: SL.X0 + SL.OX + 180, y: SL.SHELF_Y - 40, w: 580, h: 64 };
+  // The tray you carry into the serving room: fixed to the bottom of the screen, bowls in a row (screen coords + cam).
+  const TRAY = { x: 330, y: 470, w: 300, h: 40 };
+  const carrying = () => !G.where && G.cam < 480;
+  const trayPos = i => [TRAY.x + 46 + i * 70, TRAY.y + 14];
+  const pickSlot = i => { if (!carrying()) return { x: -9999, y: 0, w: 0, h: 0 }; const [x, y] = trayPos(i); return { x: G.cam + x - 32, y: y - 26, w: 64, h: 44 }; };
   const doorRect = { x: SL.X0 + SL.DOOR.x - 6, y: SL.DOOR.y - 36, w: SL.DOOR.w + 12, h: SL.DOOR.h + 36 };   // the staff door
+  // the staff door: locked while the shop is open (it rattles); after closing it swings open onto the night street
+  function openStaffDoor() {
+    if (!NIGHTSHOP.streetOpen()) { G.doorShake = 0.32; SFX.rattle(); return NIGHTSHOP.enter('street'); }
+    if (G.staffT) return;
+    G.staffT = 1; SFX.latch(); SFX.creak();
+    setTimeout(() => NIGHTSHOP.enter('street'), 560);
+  }
   const lockedStall = i => { const n = nodeFor('stall' + (i + 1)); say(owns(n.id) ? 'Stall ' + (i + 1) + ' is on sale at Kitsune-ya (' + n.cost + 'G).' : 'Stall ' + (i + 1) + ' unlocks on the Japan road at ' + n.place + ', level ' + n.level + '.'); };
   const stallRect = i => ({ x: SL.X0 + SL.stallX(i) + 6, y: SL.BLIND_TOP, w: SL.STALL_W - 12, h: SL.COUNTER_Y - SL.BLIND_TOP + 140 });
-  const menuCardRect = i => ({ x: SL.X0 + SL.stallX(i) + SL.STALL_W - 58, y: SL.COUNTER_Y - 40, w: 44, h: 44 });
+  const menuCardRect = i => SERVING.menuRect(i);
   const trashRect = { x: K(KL.TRASH.x) - 6, y: KL.TRASH.y - 6, w: KL.TRASH.w + 12, h: KL.TRASH.h + 12 };
   function jobPos(id) { const [x, y] = KL.badge(id); return [K(x), y - 22]; }
 
@@ -252,11 +268,10 @@
       const toPass = () => {
         if (d.pass) return;
         if (d.bowl.s < 3) return say('A bowl needs tare, broth and noodles before it goes out.');
-        if (G.pass.length >= MAX_PASS) return say('The pass is full. Serve a few bowls first.');
-        takeBowl(d); d.bowl.age = 0; G.pass.push(d.bowl); SFX.whoosh(); pop('ORDER UP', K(KL.PASS.x) + 83, KL.PASS.y + 130, '#b6e37a');
+        if (G.pass.length >= MAX_PASS) return say('The tray is full. Serve a few bowls first.');
+        takeBowl(d); d.bowl.age = 0; G.pass.push(d.bowl); SFX.drop(); SFX.bell(); pop('ORDER UP', K(KL.PASS.x) + 83, KL.PASS.y + 150, '#b6e37a');
       };
       t.push({ r: passRect, ok: canPass, drop: toPass });
-      t.push({ r: shelfRect, ok: canPass, drop: toPass });
       for (let i = 0; i < SL.NSTALL; i++) if (stallOpen(i)) t.push({ r: stallRect(i), ok: () => { const st = G.stalls[i], gu = st.guest; return gu && gu.state === 'wait' && st.blind < 0.05 && d.bowl.s >= 3; }, drop: () => serve(i, d) });
       t.push({ r: trashRect, ok: () => true, drop: () => { takeBowl(d); SFX.drop(); pop('BINNED', K(KL.TRASH.x) + 23, KL.TRASH.y - 10, '#c9d1dd'); } });
     }
@@ -345,7 +360,7 @@
     }
     takeBowl(d);
     const q = grade(d.bowl, gu.order), perfect = q > 0.99;
-    gu.q = q; gu.sale = Math.round(gu.order.price * q); gu.pay = gu.sale + (perfect ? perfectTip() : 0) + (gu.trusted && perfect ? 3 : 0);
+    gu.q = q; gu.sale = Math.round(gu.order.price * q); gu.pay = gu.sale + (perfect ? perfectTip() + affLevel(G.aff[gu.gt.id]) : 0) + (gu.trusted && perfect ? 3 : 0);
     st.bowl = d.bowl; st.target = 0; gu.state = 'served'; gu.t = 0; gu.keepOpen = Math.random() < 0.5;
     G.slips = G.slips.filter(s => s.guest !== gu);
     SFX.blind();
@@ -441,6 +456,8 @@
             S.sales += gu.sale; S.tips += gu.pay - gu.sale; S.sold[type]++; S.rev[type] += gu.sale;
             const L = G.life; L.served++; if (perfect) L.perfect++; L.sold[type] = (L.sold[type] || 0) + 1;
             if (!G.met.includes(gu.gt.id)) G.met.push(gu.gt.id);
+            { const id = gu.gt.id, was = affLevel(G.aff[id]); G.aff[id] = (G.aff[id] || 0) + (perfect ? 2 : 1); const now = affLevel(G.aff[id]);
+              if (now > was) { hearts(cx, 150, 10); SFX.ding(); toast(gu.gt.name + ' is now a ' + AFFINITY[now].name.toLowerCase() + ' of the shop! (affinity ' + (now + 1) + ')'); } }
             pop('+' + gu.pay + 'G', cx, 220);
             gainXP(Math.round(6 + 10 * gu.q), cx);
             for (let k = 0; k < 5; k++) G.parts.push({ type: 'coin', x: cx, y: 290, x0: cx + rand(-20, 20), y0: 290, k: -k * 0.12, life: 2, max: 2 });
@@ -585,7 +602,7 @@
   const bookSound = n => ({ lift: SFX.bookLift, land: SFX.bookLand, open: SFX.bookOpen, close: SFX.bookClose, down: SFX.bookDown, flip: SFX.flip, settle: SFX.pageSettle, tap: SFX.tap }[n] || (() => {}))();
   const metList = () => (G.mode === 'play' ? G.met : ((loadSave() || {}).met || []));
   COOKBOOK.init({ sound: bookSound, close: () => closeUI() });
-  GUESTBOOK.init({ sound: bookSound, close: () => closeUI(), img: id => IMG[id], met: metList });
+  GUESTBOOK.init({ sound: bookSound, close: () => closeUI(), img: id => IMG[id], met: metList, aff: () => (G.mode === 'play' ? G.aff : ((loadSave() || {}).aff || {})) });
   // Where a book is picked up from: the open cookbook lying on the kitchen counter (when it is on screen), else a HUD button.
   function counterBookRect() {
     const r = canvas.getBoundingClientRect(), k = r.width / VW, B = KL.BOOK, x = K(B.x) - G.cam;
@@ -728,7 +745,7 @@
   NIGHTSHOP.init({
     sfx: SFX, say, toast, img: IMG.aoi,
     save: () => saveGame(G.shop === 'night' ? G.day + 1 : G.day),
-    back: st => { G.where = null; G.drag = null; G.st = st; G.cam = camTarget(); SFX.whoosh(); STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === st)); }
+    back: st => { G.where = null; G.drag = null; G.staffT = G.staffDoor = 0; G.st = st; G.cam = camTarget(); SFX.whoosh(); STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === st)); }
   });
   JOURNEY.init({
     claim: claimStop, close: () => closeUI(), sound: n => (n === 'tap' ? SFX.tap() : null),
@@ -845,12 +862,10 @@
     G.steamT -= dt;
     if (G.steamT <= 0 && G.cam > 480) {
       G.steamT = 0.05;
-      const src = [[K(KL.BOIL.cx), KL.BOIL.cy - 8, 60], [K(KL.BOIL.cx), KL.BOIL.cy - 8, 60]];
-      BROTH_SLOTS.forEach((type, i) => { if (type && G.stock[brothKey(type)] > 0) { const pt = KL.pot(i); src.push([K(pt.cx), pt.cy - 8, 24]); } });
+      const src = [];   // (pots and the boiler draw their own steam wisps)
       G.bowls.forEach((b, k) => { if (b.broth) src.push([K(KL.bowlX[k]), KL.BOWL_Y - 6, 32]); });
-      G.baskets.forEach((b, j) => { if (b.t >= cookTime()) src.push([K(KL.basketX[j]), KL.BOIL.cy - 10, 14]); });
-      const [x, y, w] = pick(src);
-      G.parts.push({ type: 'steam', x: x + rand(-w, w), y, vx: 0, vy: rand(-32, -14), life: rand(0.8, 1.7), max: 1.7 });
+      const [x, y, w] = src.length ? pick(src) : [0, 0, 0];
+      if (src.length) G.parts.push({ type: 'steam', x: x + rand(-w, w), y, vx: 0, vy: rand(-32, -14), life: rand(0.8, 1.7), max: 1.7 });
     }
     for (const p of G.parts) {
       if (p.type === 'coin') {
@@ -881,7 +896,7 @@
     // the pass is a doorway: walk through it to the serving room (bowls waiting in it are still picked up as usual)
     const wm = world(G.mouse);
     if (!G.pass.some((b, i) => inR(wm, passSlot(i)))) c.push({ r: passRect, fn: () => go(0) });
-    c.push({ r: doorRect, fn: () => NIGHTSHOP.enter('street') });
+    c.push({ r: doorRect, fn: openStaffDoor });
     for (let i = 0; i < SL.NSTALL; i++) {
       if (!stallOpen(i)) { c.push({ r: stallRect(i), fn: () => lockedStall(i) }); continue; }
       c.push({ r: menuCardRect(i), fn: () => openUI('menu') });
@@ -997,7 +1012,7 @@
       <li><b>Serving.</b> Guests slip into a stall behind the bamboo blind. When one calls, pull the red cord on their blind up to chat and take the order. Can't make it? Politely decline. To serve, pull a waiting guest's blind up and drop the bowl in (tap them to chat or cancel).</li>
       <li><b>Kitchen.</b> Drag the tare spoon into a bowl, then the ladle of broth, then a basket of READY noodles.</li>
       <li><b>Toppings.</b> Drag on the toppings from the order slip, then drag the bowl into the pass.</li>
-      <li><b>Serve.</b> Drag the bowl from the pickup shelf onto the guest's stall.</li>
+      <li><b>Serve.</b> Walk into the serving room carrying the tray, and drag the bowl onto the guest's stall.</li>
     </ol>
     <p>Use the tabs at the bottom or the edge arrows to move between Serving and the Kitchen. In the kitchen, hold A / D (or scroll the mouse wheel) to look left and right, even while carrying something. Nobody is in a hurry.</p>`;
   function modal(html, btn) {
@@ -1024,7 +1039,7 @@
     if (G.shop === 'night' && id === 'serving' && !G.stalls.some(s => s.guest)) return 'Closed for the night. Kitsune-ya across the street is open: out through the staff door on the far left. Or tap the sign to skip to morning.';
     if (id === 'serving') {
       if (G.stalls.some(s => s.guest && s.guest.state === 'call')) return SETTINGS.blindClick ? 'A guest is calling. Click their blind to raise it and take the order.' : 'A guest is calling. Pull the red cord on their blind up to take the order.';
-      if (G.pass.length && G.stalls.some(s => s.guest && s.guest.state === 'wait')) return 'Drag a bowl from the pickup shelf onto the right stall.';
+      if (G.pass.length && G.stalls.some(s => s.guest && s.guest.state === 'wait')) return 'Drag a bowl from your tray onto the right stall.';
       if (G.slips.length) return 'Orders are on the ticket rail. Head right to cook.';
       return 'All calm. Guests will call when they are ready to order.';
     }
@@ -1076,7 +1091,7 @@
     canvas.style.cursor = G.drag ? 'grabbing' : pointer ? 'pointer' : (G.hover || overPaper) ? 'grab' : 'default';
   }
 
-  function bowlAt(w) {   // a started bowl on the mat, or a finished one in the pass / on the pickup shelf
+  function bowlAt(w) {   // a started bowl on the mat, or a finished one on the tray (in the pass window, or carried)
     for (let k = 0; k < KL.bowlX.length; k++) if (G.bowls[k].s > 0 && inR(w, bowlRect(k))) return G.bowls[k];
     for (let i = 0; i < G.pass.length; i++) if (inR(w, passSlot(i)) || inR(w, pickSlot(i))) return G.pass[i];
     return null;
@@ -1098,11 +1113,11 @@
         if (!mods.length) lines.push(['AS ON THE MENU', FADED]);
       }
     }
-    const w = Math.max(...lines.map(l => PX.textW(l[0]))) + 14, h = lines.length * 16 + 4;
+    const LH = 17, w = Math.max(...lines.map(l => PX.textW(l[0]))) + 20, h = lines.length * LH + 10;   // 10px side and 5px top/bottom padding
     const x = Math.round(Math.min(VW - w - 4, G.mouse.x + 16)), y = Math.round(Math.max(4, Math.min(VH - h - 4, G.mouse.y - h - 6)));
     PX.rect(g, x + 3, y + 3, w, h, 'rgba(40,20,10,0.3)');
     PX.rect(g, x - 1, y - 1, w + 2, h + 2, PX.OUTLINE); PX.rect(g, x, y, w, h, '#fbf6ea'); PX.rect(g, x, y, w, 2, '#e8dcc0');
-    lines.forEach(([t, c], i) => PX.text(g, t, x + 7, y + 11 + i * 16, c));
+    lines.forEach(([t, c], i) => PX.text(g, t, x + 10, y + 7 + i * LH, c));
   }
 
   /* ---------- blinds: pull the red cord ---------- */
@@ -1123,7 +1138,7 @@
   }
 
   /* ---------- the open / closed sign (hangs on the serving counter) ---------- */
-  const signRect = { x: SL.X0 + SL.OX + 22, y: 424, w: 128, h: 44 };
+  const signRect = SERVING.SIGN;   // under the counter's right end, by the kitchen
   function drawSign(g) {
     const S = signRect, cx = S.x + S.w / 2, p = clamp((G.t - G.signT) / 0.45, 0, 1);
     const state = p < 0.5 ? G.signWas : G.shop, open = state === 'open';
@@ -1225,6 +1240,36 @@
     else if (d.kind === 'top') { PX.ell(g, x + 3, y + 14, 10, 3, 'rgba(40,20,10,0.25)'); ART.top(g, d.id, x, y); }
     else if (d.kind === 'bowl') { if (d.pass || G.cam < 480) ART.smallBowl(g, x, y - 6, d.bowl); else ART.bigBowl(g, x, y - 10, d.bowl, false, G.t); }
   }
+  // The one button style for clickable things drawn on the canvas: a dark outline, a raised walnut face with a brass
+  // rim, a cream arrow; hovered, the face warms up and lifts by 2px.
+  function edgeButton(g, x, y, hot, dir) {
+    const w = 32, h = 40, lift = hot ? 2 : 0, R = PX.rect, DK = PX.OUTLINE;
+    R(g, x + 2, y + 4, w, h, 'rgba(20,8,12,0.35)');
+    R(g, x, y - lift, w, h, DK); R(g, x + 1, y + 1 - lift, w - 2, h - 2, '#c9962e'); R(g, x + 3, y + 3 - lift, w - 6, h - 6, DK);
+    R(g, x + 4, y + 4 - lift, w - 8, h - 8, hot ? '#8a5a32' : '#6e4428'); R(g, x + 4, y + 4 - lift, w - 8, 2, hot ? '#a8784a' : '#8a5a32'); R(g, x + 4, y + h - 6 - lift, w - 8, 2, '#4a2e1a');
+    const cx = x + w / 2, cy = y + h / 2 - lift;
+    PX.poly(g, dir < 0 ? [[cx + 5, cy - 8], [cx - 6, cy], [cx + 5, cy + 8]] : [[cx - 5, cy - 8], [cx + 6, cy], [cx - 5, cy + 8]], hot ? '#fff6dc' : '#f6e6c0');
+  }
+  // Your arms holding the serving tray at the bottom of the screen, with the finished bowls on it.
+  function drawCarried(g) {
+    if (!carrying() || G.mode !== 'play') return;
+    const T = TRAY, R = PX.rect, DK = PX.OUTLINE, sway = Math.round(Math.sin(G.t * 2) * 1), y = T.y + sway;
+    for (const [ax, dir] of [[T.x - 6, -1], [T.x + T.w - 26, 1]]) {   // the chef's indigo sleeves rising from below, cream cuffs, hands on the rim
+      PX.poly(g, [[ax + 3, y + 24], [ax + 29, y + 24], [ax + 33 + dir * 10, VH], [ax - 1 + dir * 10, VH]], DK);
+      PX.poly(g, [[ax + 4, y + 25], [ax + 28, y + 25], [ax + 32 + dir * 10, VH], [ax + dir * 10, VH]], '#3a3f62');
+      PX.poly(g, [[ax + 4 + (dir < 0 ? 0 : 18), y + 25], [ax + 10 + (dir < 0 ? 0 : 18), y + 25], [ax + 14 + (dir < 0 ? 0 : 18) + dir * 10, VH], [ax + 4 + (dir < 0 ? 0 : 18) + dir * 10, VH]], '#4a5078');
+      R(g, ax + 3, y + 19, 26, 7, DK); R(g, ax + 4, y + 20, 24, 5, '#f2ead8'); R(g, ax + 4, y + 24, 24, 1, '#c8bca4');
+      R(g, ax + 5, y + 8, 22, 14, DK); R(g, ax + 6, y + 9, 20, 12, '#f0c8a0'); R(g, ax + 6, y + 9, 20, 2, '#ffe0c0'); R(g, ax + 6, y + 19, 20, 2, '#d8a880');
+    }
+    R(g, T.x + 4, y + T.h, T.w - 8, 4, 'rgba(30,14,10,0.35)');
+    R(g, T.x, y, T.w, T.h, DK); R(g, T.x + 1, y + 1, T.w - 2, T.h - 2, '#7a2018'); R(g, T.x + 1, y + 1, T.w - 2, 2, '#a83a2a');
+    R(g, T.x + 7, y + 6, T.w - 14, T.h - 14, '#3a1210'); R(g, T.x + 7, y + 6, T.w - 14, 2, '#2a0c0a');
+    R(g, T.x + 1, y + T.h - 5, T.w - 2, 4, '#5a1410'); R(g, T.x + 1, y + T.h - 5, T.w - 2, 1, '#c8503a');
+    for (const hx of [T.x + 4, T.x + T.w - 16]) R(g, hx, y + 2, 12, 2, '#d8a050');
+    // the arms go over the rim, so redraw the hands on top
+    for (const ax of [T.x - 6, T.x + T.w - 26]) { R(g, ax + 5, y + 8, 22, 14, DK); R(g, ax + 6, y + 9, 20, 12, '#f0c8a0'); R(g, ax + 6, y + 9, 20, 2, '#ffe0c0'); for (let k = 1; k < 4; k++) R(g, ax + 6 + k * 5, y + 11, 1, 8, '#d8a880'); }
+    G.pass.forEach((b, i) => { if (b === G.dragBowl) return; const [x, by] = trayPos(i); ART.smallBowl(g, x, by + sway, b); });
+  }
   function render() {
     const cam = Math.round(G.cam);
     ctx.imageSmoothingEnabled = false;
@@ -1235,6 +1280,7 @@
     if (cam + VW > KL.X0) { ctx.save(); ctx.translate(KL.X0, 0); KITCHEN.frame(ctx, G); ctx.restore(); }
     drawSign(ctx);
     const w = world(G.mouse);
+    ctx.restore(); drawCarried(ctx); ctx.save(); ctx.translate(-cam, 0);
     if (G.drag) {
       const pulse = 0.5 + 0.5 * Math.sin(G.t * 8);
       for (const t of targets(G.drag)) if (t.ok()) SCENE.brackets(ctx, t.r, inR(w, t.r) ? '#ffffff' : PX.mix('#ffd76a', '#fff6d0', pulse), inR(w, t.r));
@@ -1269,15 +1315,8 @@
       if (ni < 0 || ni >= STATIONS.length || G.ui) continue;
       // a round walnut-and-brass button; the station name shows on a tag only while the edge is hovered
       const hot = G.edgeSide === side;
-      if (hot) for (let k = 0; k < EDGE; k += 2) { ctx.globalAlpha = 0.3 * (1 - k / EDGE); ctx.fillStyle = '#2a1a26'; ctx.fillRect(side < 0 ? k : VW - k - 2, 0, 2, VH); }
-      const cx = side < 0 ? 20 : VW - 20, cy = VH / 2, bob = hot ? Math.round(Math.sin(G.t * 8) * 1.5) * side : 0;
-      ctx.globalAlpha = hot ? 1 : 0.8;
-      PX.ell(ctx, cx, cy + 2, 13, 13, 'rgba(20,8,12,0.45)');
-      PX.ell(ctx, cx, cy, 13, 13, PX.OUTLINE); PX.ell(ctx, cx, cy, 12, 12, hot ? '#ffe08a' : '#e0b040'); PX.ell(ctx, cx, cy, 10, 10, '#5a3a22'); PX.ell(ctx, cx, cy - 2, 8, 6, '#7a5230');
-      const ax = cx + bob;
-      PX.poly(ctx, side < 0 ? [[ax + 4, cy - 7], [ax - 5, cy], [ax + 4, cy + 7]] : [[ax - 4, cy - 7], [ax + 5, cy], [ax - 4, cy + 7]], '#f6e6c0');
-      ctx.globalAlpha = 1;
-      if (hot) { const name = STATIONS[ni].name.toUpperCase(), w = PX.textW(name) + 12; SCENE.label(ctx, name, side < 0 ? cx + 18 + w / 2 : cx - 18 - w / 2, cy - 7); }
+      edgeButton(ctx, side < 0 ? 8 : VW - 40, VH / 2 - 20, hot, side);
+      if (hot) { const name = STATIONS[ni].name.toUpperCase(), w = PX.textW(name) + 12; SCENE.label(ctx, name, side < 0 ? 48 + w / 2 : VW - 48 - w / 2, VH / 2 - 7); }
     }
     drawTip(ctx);
     NIGHTSHOP.draw(ctx);   // only the fade, while heading out to the street
@@ -1297,6 +1336,8 @@
     if (G.mode === 'title') { TITLE.update(dt); TITLE.draw(ctx); }
     else {
       update(dt); hud(dt); render();
+      G.staffDoor = (G.staffDoor || 0) + clamp((G.staffT || 0) - (G.staffDoor || 0), -dt * 2.4, dt * 2.4);
+      if (G.doorShake > 0) G.doorShake -= dt;
       if (G.ui === 'pause') { TITLE.update(dt); TITLE.draw(ctx); }
     }
     requestAnimationFrame(loop);
@@ -1329,6 +1370,7 @@
     G.gear = (s.gear || G.owned.filter(id => GEAR.includes(id))).filter(id => GEAR.includes(id));
     if (s.pantry) for (const id in s.pantry) if (id in G.stock) G.stock[id] += (s.pantry[id] || 0) * STOCK[id].add;   // saves from the pantry days: packs go in the bins
     G.aoiMet = !!s.aoiMet;
+    G.aff = s.aff || {};
     G.quest = s.quest && s.quest.day === s.day ? s.quest : null;
     unlockReached();   // older saves: stops that were waiting on an objective unlock now
     const st = { ...(s.stock || {}) };
@@ -1359,6 +1401,8 @@
   function shot(kind) {
     $('modal').classList.remove('show'); G.paused = false; G.ui = null; G.shop = 'open'; G.mode = 'play'; document.body.classList.remove('title');
     if (kind === 'night' || kind === 'nightkitchen') G.time = PHASE * 1.3;
+    if (kind.startsWith('evening')) G.time = PHASE * 0.93;
+    if (kind === 'kitchenall') { G.owned = STOPS.filter(n => n.kind !== 'start').map(n => n.id); KITCHEN.refresh(); }   // ?shot=kitchenall: every pot and crock unlocked   // ?shot=evening: still open, lamps lit
     if (kind.includes('rain')) { G.wx = { day: G.day, from: -1, to: -1 }; G.forceRain = 1; G.rain = 1; }
     updateClock(0);
     const full = { ...newBowl(), s: 3, tare: true, broth: true, fill: 1, noodles: 'perfect', items: ['chashu', 'egg', 'nori', 'scallion', 'menma', 'chili'], age: 1 };
@@ -1374,9 +1418,10 @@
     G.bowls[1] = { ...newBowl(), s: 2, tare: true, broth: true, fill: 1, age: 1 };
     G.baskets[0].t = 9; G.baskets[2].t = 2;
     G.waiting = 1;
-    const at = Math.max(0, STATIONS.findIndex(s => s.id === ({ servingleft: 'serving', dialog: 'serving', night: 'serving', drag: 'kitchen', toppings: 'kitchen', nightkitchen: 'kitchen', rainkitchen: 'kitchen' }[kind] || kind)));
-    G.kcam = kind === 'kitchen' || kind === 'nightkitchen' ? STATIONS[1].camMax : STATIONS[1].cam;
-    G.scam = kind === 'servingleft' ? STATIONS[0].cam : 0;   // ?shot=servingleft: the far end of the serving room
+    const at = Math.max(0, STATIONS.findIndex(s => s.id === ({ kitchenall: 'kitchen', evening: 'serving', eveningrain: 'serving', servingleft: 'serving', servingleftdoor: 'serving', dialog: 'serving', night: 'serving', drag: 'kitchen', toppings: 'kitchen', nightkitchen: 'kitchen', rainkitchen: 'kitchen' }[kind] || kind)));
+    G.kcam = kind === 'kitchen' || kind === 'kitchenall' || kind === 'nightkitchen' ? STATIONS[1].camMax : STATIONS[1].cam;
+    G.scam = kind.startsWith('servingleft') ? STATIONS[0].cam : 0;
+    if (kind === 'servingleftdoor') G.staffDoor = G.staffT = 0.5;   // ?shot=servingleft: the far end of the serving room
     G.st = at; G.cam = camTarget(); STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === at));
     if (kind === 'dialog') { g3.asksRec = true; takeOrder(g3); DLG.i = 1; showStep(); DLG.chars = 999; revealChoices(); }
     if (kind === 'drag') { G.drag = { kind: 'top', id: 'chashu' }; G.mouse = { x: K(KL.bowlX[0]) - G.cam + 10, y: KL.BOWL_Y - 8 }; }
@@ -1388,6 +1433,9 @@
       NIGHTSHOP.visit(kind.startsWith('street') ? 'street' : 'store', (+kind.slice(5) || 0) * 640);
       if (kind === 'storecard') NIGHTSHOP.inspect('chashu');
       if (kind === 'storelist') NIGHTSHOP.talk('list');
+      if (kind === 'storecart') { NIGHTSHOP.addToBasket('chashu', 3); NIGHTSHOP.addToBasket('egg', 2); NIGHTSHOP.addToBasket('special', 1); }
+      if (kind === 'storereceipt') { G.gold = 400; NIGHTSHOP.addToBasket('chashu', 3); NIGHTSHOP.addToBasket('special', 1); NIGHTSHOP.addToBasket('quick', 1); if (NIGHTSHOP.pay()) NIGHTSHOP.giveReceipt(); }
+      if (kind === 'streetdoor') NIGHTSHOP.setDoors(0.55, 0.5);
       if (kind === 'streetdawn') { G.time = 256; updateClock(0); }
       if (kind === 'storetalk') { NIGHTSHOP.addToBasket('chashu', 3); NIGHTSHOP.addToBasket('special', 1); NIGHTSHOP.addToBasket('quick', 1); NIGHTSHOP.talk('checkout'); }
     }

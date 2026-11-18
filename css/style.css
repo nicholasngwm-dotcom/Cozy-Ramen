@@ -725,3 +725,62 @@ img.ns-art { width: calc(52 * var(--u)); flex: none; background: #f4e6c4; box-sh
 .ns-sale { font-weight: normal; color: var(--lacquer); }
 .ns-saletag { display: inline-block; padding: 0 calc(2 * var(--u)); background: var(--lacquer); color: var(--washi); font-style: normal; font-size: calc(5 * var(--u)); line-height: 1.4; vertical-align: middle; }
 .ns-pr s { color: #a8967a; }
+
+/* guest affinity: a row of five small pixel hearts in the guest book */
+.aff { display: inline-flex; gap: calc(1 * var(--u)); vertical-align: middle; }
+.aff-h { display: inline-block; width: calc(5 * var(--u)); height: calc(5 * var(--u)); background: #d8c8b0;
+  clip-path: polygon(0 20%, 20% 0, 50% 20%, 80% 0, 100% 20%, 100% 50%, 50% 100%, 0 50%); }
+.aff-h.on { background: #d8443a; }
+.aff-to { color: #9a8a78; font-size: calc(5 * var(--u)); }
+
+/* ---------- JRPG frames: dialogue, Aoi's panels, the item card, notices ----------
+   A deep plum-indigo window with a cream double rule, notched pixel corners and small gold studs. Menu choices are
+   rows with a gold cursor that appears on hover. Warm, not a battle screen: the colours stay soft. */
+.jrpg, #modal .panel {
+  background: #2c2440 !important; color: #f6ecd8 !important;
+  box-shadow:
+    inset 0 0 0 var(--u) #12101e, inset 0 0 0 calc(2 * var(--u)) #f2e2c0, inset 0 0 0 calc(3 * var(--u)) #6a5a8a,
+    inset 0 0 0 calc(4 * var(--u)) #12101e, 0 0 0 var(--u) #12101e, var(--drop) !important;
+  clip-path: polygon(calc(2 * var(--u)) 0, calc(100% - 2 * var(--u)) 0, 100% calc(2 * var(--u)), 100% calc(100% - 2 * var(--u)), calc(100% - 2 * var(--u)) 100%, calc(2 * var(--u)) 100%, 0 calc(100% - 2 * var(--u)), 0 calc(2 * var(--u)));
+}
+.jrpg::before, .jrpg::after { content: ''; position: absolute; width: calc(3 * var(--u)); height: calc(3 * var(--u)); background: #e0b040; box-shadow: 0 0 0 var(--u) #12101e; pointer-events: none; }
+.jrpg::before { left: calc(5 * var(--u)); top: calc(5 * var(--u)); }
+.jrpg::after { right: calc(5 * var(--u)); bottom: calc(5 * var(--u)); }
+#dialog.jrpg, .ns-talk.jrpg { padding: calc(8 * var(--u)); }
+.ns-card.jrpg { padding: calc(8 * var(--u)) calc(9 * var(--u)); }
+#toast.jrpg { padding: calc(5 * var(--u)) calc(10 * var(--u)); }
+#modal .panel { padding: calc(10 * var(--u)) calc(14 * var(--u)); }
+/* text inside the windows */
+.jrpg #dlg-title, .jrpg .ns-title { color: #c8b8e0; }
+#modal .panel h1, #modal .panel h2 { color: #ffd76a; }
+#modal .panel .sub, .jrpg .ns-top small, .jrpg .ns-facts dt, .jrpg .ns-bk, .jrpg .ns-qty span, .jrpg .ns-facts s, .jrpg .ns-pr s { color: #b8a8d0; }
+.jrpg .ns-top b { color: #ffd76a; }
+.jrpg .ns-pr, .jrpg .jr-price { color: #f0c060; }
+.jrpg .ns-lock { color: #ff9a86; }
+.jrpg .ns-ok { color: #a6e07a; }
+.jrpg .ns-list h4 { color: #ffd76a; }
+.jrpg .ns-row, .jrpg .ns-bk { border-color: #4a3e66; }
+.jrpg .ns-row.off { color: #8a7aa8; }
+.jrpg .ns-x { color: #f2e2c0; }
+.jrpg .ns-total b { color: #ffd76a; }
+.jrpg .ns-total.sm { color: #b8a8d0; }
+.jrpg .ns-sale { color: #ff8a7a; }
+.jrpg img.ns-art { background: #3e3458; }
+/* menu choices: plain rows with a gold cursor on hover */
+.jrpg .choice, #modal .panel .choice {
+  background: transparent; color: #f6ecd8; box-shadow: none; padding: calc(2 * var(--u)) calc(6 * var(--u)) calc(2 * var(--u)) calc(9 * var(--u)); position: relative;
+}
+.jrpg .choice:hover { background: #3e3458; color: #fff6dc; }
+.jrpg .choice:hover::before { content: ''; position: absolute; left: calc(2 * var(--u)); top: 50%; transform: translateY(-50%);
+  border-left: calc(4 * var(--u)) solid #ffd76a; border-top: calc(3 * var(--u)) solid transparent; border-bottom: calc(3 * var(--u)) solid transparent; }
+.jrpg .choice.rec { color: #ffd76a; }
+.jrpg .choice.off { color: #7a6a98; }
+/* item rarity: coloured borders on icons, and a tag on the item card */
+img.rar-0 { box-shadow: 0 0 0 var(--u) #12101e, 0 0 0 calc(2 * var(--u)) #a89a88; }
+img.rar-1 { box-shadow: 0 0 0 var(--u) #12101e, 0 0 0 calc(2 * var(--u)) #6fbf4a; }
+img.rar-2 { box-shadow: 0 0 0 var(--u) #12101e, 0 0 0 calc(2 * var(--u)) #4a9ae8; }
+img.rar-3 { box-shadow: 0 0 0 var(--u) #12101e, 0 0 0 calc(2 * var(--u)) #b06ae0; }
+img.rar-4 { box-shadow: 0 0 0 var(--u) #12101e, 0 0 0 calc(2 * var(--u)) #f0b030, 0 0 0 calc(3 * var(--u)) #12101e; }
+.ns-row img[class*="rar-"] { margin: calc(2 * var(--u)); }
+.ns-rar { display: inline-block; margin: var(--u) 0 calc(2 * var(--u)); padding: 0 calc(3 * var(--u)); font-size: calc(5 * var(--u)); line-height: 1.5; color: #12101e; }
+.ns-rar.rar-0 { background: #a89a88; } .ns-rar.rar-1 { background: #6fbf4a; } .ns-rar.rar-2 { background: #4a9ae8; } .ns-rar.rar-3 { background: #b06ae0; } .ns-rar.rar-4 { background: #f0b030; }

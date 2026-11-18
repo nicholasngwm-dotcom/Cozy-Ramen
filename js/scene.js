@@ -220,6 +220,15 @@ const SCENE = (() => {
   // Evening and night light. At dusk a warm amber wash; at night real darkness with stepped pools cut out
   // around each lamp [x, y, rx, ry] (lanterns, andon lamps, the hearth), then a soft warm glow added back on top.
   let shadeBuf = null;
+  // A soft elliptical light: a radial gradient from alpha a at the centre to nothing at the rim (no visible steps).
+  // Used with destination-out to cut darkness away, or with 'lighter' (and an rgb string) to add a warm glow.
+  function soft(g, x, y, rx, ry, a, rgb = '0,0,0') {
+    if (rx < 1 || ry < 1 || a <= 0) return;
+    g.save(); g.translate(x, y); g.scale(1, ry / rx);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx);
+    gr.addColorStop(0, `rgba(${rgb},${a})`); gr.addColorStop(0.45, `rgba(${rgb},${a * 0.55})`); gr.addColorStop(0.75, `rgba(${rgb},${a * 0.18})`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = gr; g.fillRect(-rx, -rx, rx * 2, rx * 2); g.restore();
+  }
   function night(g, G, x0, w, lamps) {
     if (G.duskF > 0.01) { g.fillStyle = `rgba(255,140,60,${0.07 * G.duskF})`; g.fillRect(x0, 0, w, VH); }
     if (G.nightF < 0.01) return;
@@ -227,12 +236,14 @@ const SCENE = (() => {
     if (!shadeBuf || shadeBuf.width < w) shadeBuf = PX.mk(w, VH);
     const s = shadeBuf.getContext('2d');
     s.clearRect(0, 0, shadeBuf.width, VH);
-    s.fillStyle = `rgba(14,12,44,${0.62 * f})`; s.fillRect(0, 0, w, VH);
+    s.fillStyle = `rgba(18,24,46,${0.64 * f})`; s.fillRect(0, 0, w, VH);   // cool blue-grey ambient
     s.globalCompositeOperation = 'destination-out';
-    for (const [x, y, rx, ry] of lamps) for (const k of [1.25, 1, 0.74, 0.5]) ell(s, x - x0, y, Math.round(rx * k * flick), Math.round(ry * k * flick), 'rgba(0,0,0,0.26)');
+    for (const [x, y, rx, ry] of lamps) soft(s, x - x0, y, rx * 1.25 * flick, ry * 1.25 * flick, 0.92);
     s.globalCompositeOperation = 'source-over';
     g.drawImage(shadeBuf, 0, 0, w, VH, x0, 0, w, VH);
-    for (const [x, y, rx, ry] of lamps) for (const k of [0.9, 0.6]) ell(g, x, y, Math.round(rx * k * flick), Math.round(ry * k * flick), `rgba(255,180,96,${0.05 * f})`);
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (const [x, y, rx, ry] of lamps) soft(g, x, y, rx * 0.9 * flick, ry * 0.9 * flick, 0.09 * f, '255,169,87');   // warm 2700K key
+    g.restore();
   }
 
 
@@ -304,5 +315,5 @@ const SCENE = (() => {
     }
   }
 
-  return { rain, wood, plaster, tiles, ao, pool, contact, frameRect, lantern, label, tag, tagInk, chip, sky, clock, part, emote, brackets, night, rnd, view };
+  return { soft, rain, wood, plaster, tiles, ao, pool, contact, frameRect, lantern, label, tag, tagInk, chip, sky, clock, part, emote, brackets, night, rnd, view };
 })();

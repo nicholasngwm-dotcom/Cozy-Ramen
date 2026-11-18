@@ -5,7 +5,7 @@
 const GUESTBOOK = (() => {
   const esc = s => BOOKFILTER.esc(s);
   const PER_GRID = 12, TILT = [-2, 1.5, -1, 2, 0.5, -1.5];
-  let hooks = { sound: () => {}, close: () => {}, img: () => null, met: () => [] };
+  let hooks = { sound: () => {}, close: () => {}, img: () => null, met: () => [], aff: () => ({}) };
 
   /* A crop of each guest's head and shoulders: [x, y, size] of a square in the PNG's own pixels. The sprites are
      drawn at different scales, so each crop was measured from the sprite's pixels (head band and width), then
@@ -80,9 +80,16 @@ const GUESTBOOK = (() => {
           <dt>Favourite</dt><dd>${pref ? `<i class="dot" style="background:${pref.c}"></i>${esc(pref.name)}` : 'Anything warm'}</dd>
           ${likes.length ? `<dt>Likes</dt><dd>${likes.map(id => (gt.taste.tops[id] ? 'extra ' : 'no ') + esc(TOP_NAME[id].toLowerCase())).join(', ')}</dd>` : ''}
           ${gt.taste.night ? '<dt>Visits</dt><dd>Only at night</dd>' : ''}
+          <dt>Affinity</dt><dd>${affRow(gt.id)}</dd>
         </dl>
         <p class="gb-quote">&ldquo;${esc(gt.hi)}&rdquo;</p>
       </div></div>${num(p)}`;
+  }
+  // Five hearts (filled up to the guest's rank), the rank's name, and how far it is to the next one.
+  function affRow(id) {
+    const pts = (hooks.aff() || {})[id] || 0, l = affLevel(pts), next = affNext(pts);
+    const hearts = AFFINITY.map((a, i) => `<i class="aff-h${i <= l ? ' on' : ''}"></i>`).join('');
+    return `<span class="aff">${hearts}</span> ${esc(AFFINITY[l].name)}${next ? ` <small class="aff-to">${next - pts} to go</small>` : ''}`;
   }
   function grid(list, k, pageOf, p, total, met, st) {
     const rows = list.slice(k * PER_GRID, (k + 1) * PER_GRID);

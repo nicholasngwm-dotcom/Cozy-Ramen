@@ -147,6 +147,13 @@ const STOCK = {
 for (const k in TARES) STOCK[tareKey(k)] = { cap: 16, add: 8, time: 7, label: TARES[k].short, ...TARES[k].stock };
 for (const k in BROTHS) STOCK[brothKey(k)] = { cap: 16, add: 8, time: 12, label: BROTHS[k].short, ...BROTHS[k].stock };
 const MAX_PASS = 4;
+// Guest affinity: every bowl you serve someone earns points (a perfect one earns double). Five ranks; from the second
+// rank up, a guest adds a little extra to the tip for a perfect bowl (+1G per rank above the first).
+const AFFINITY = [
+  { at: 0, name: 'Stranger' }, { at: 3, name: 'Regular' }, { at: 8, name: 'Friend' }, { at: 15, name: 'Close friend' }, { at: 25, name: 'Family' }
+];
+const affLevel = pts => { let l = 0; AFFINITY.forEach((a, i) => { if ((pts || 0) >= a.at) l = i; }); return l; };   // 0-based
+const affNext = pts => { const l = affLevel(pts); return l >= AFFINITY.length - 1 ? null : AFFINITY[l + 1].at; };
 
 /* Stock comes from Aoi's night supply shop across the street (js/nightshop.js), open SHOP_HOURS after closing:
    a pack bought there goes straight into the kitchen's bin, crock, pot or noodle tray (packSize portions, no cap).
@@ -185,7 +192,7 @@ const EDGE = 46;          // width of the screen-edge zones that pan to the next
 const KL = {
   X0: 960, W: 1520,
   PASS: { x: 50, y: 52, w: 166, h: 244 },
-  passPos: i => [92 + (i % 2) * 82, 214 + Math.floor(i / 2) * 64],
+  passPos: i => [96 + (i % 2) * 74, 240 + Math.floor(i / 2) * 24],   // on the serving tray in the pass window
   BOOK: { x: 286, y: 352, w: 116, h: 74 },
   TRASH: { x: 470, y: 440, w: 46, h: 58 },
   // stepped steel topping unit: two rows of four bins right above the bowls
@@ -211,10 +218,11 @@ const KL = {
 // Serving room: two screens wide (local x 0-1920, drawn at world x -960). Stalls 1-4 fill the right half, where the
 // room always was (world 0-960); stalls 5-8 continue to the left, and the staff door is on the far left wall.
 const SL = {
-  X0: -960, W: 1920, OX: 960, BEAM_Y: 40, BLIND_TOP: 62, COUNTER_Y: 300, NSTALL: 8, STALL_W: 206,
-  stallX: i => (i < 4 ? 1028 + 206 * i : 1028 - 206 * (i - 3)),
-  stallCX: i => SL.stallX(i) + 103,
-  LEFT: 1028 - 206 * 4, RIGHT: 1028 + 206 * 4,       // the outer edges of the stall row
-  DOOR: { x: 40, y: 92, w: 112, h: 208 },             // the staff door (local)
-  SHELF_Y: 470, pickX: i => 1620 - 120 * i
+  // (every value is a multiple of 3: the room is drawn on the 320x180 grid, 1 lo pixel = 3 of these units)
+  X0: -960, W: 1920, OX: 960, BEAM_Y: 39, BLIND_TOP: 63, COUNTER_Y: 300, NSTALL: 8, STALL_W: 204,
+  stallX: i => (i < 4 ? 1029 + 204 * i : 1029 - 204 * (i - 3)),
+  stallCX: i => SL.stallX(i) + 102,
+  LEFT: 1029 - 204 * 4, RIGHT: 1029 + 204 * 4,       // the outer edges of the stall row
+  DOOR: { x: 42, y: 93, w: 111, h: 207 },             // the staff door (local)
+  SHELF_Y: 471, pickX: i => 1620 - 120 * i
 };

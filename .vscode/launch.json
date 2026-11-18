@@ -1,0 +1,21 @@
+{
+    // Press F5 to play. "Open game file" needs no server.
+    // "Play on localhost" starts a local server on port 8080 first.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Open game file",
+            "file": "${workspaceFolder}/index.html"
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Play on localhost",
+            "url": "http://localhost:8080",
+            "webRoot": "${workspaceFolder}",
+            "preLaunchTask": "Start local server"
+        }
+    ]
+}

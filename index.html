@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cozy Ramen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game" width="960" height="540"></canvas>
+
+    <div id="hud">
+      <div class="plaque" id="status">
+        <span id="sky" data-icon="sun"></span>
+        <span id="day"></span>
+        <span class="sep"></span>
+        <span id="clock"></span>
+        <span id="shopstate" class="pill"></span>
+        <span class="sep"></span>
+        <span class="coin" data-icon="coin"></span><span id="gold"></span>
+        <span class="sep"></span>
+        <button id="lvl" class="lvlbtn" type="button" title="Level road" aria-label="Level road"><span id="lvnum">Lv 1</span><span class="xpbar"><i id="xpfill"></i></span></button>
+      </div>
+      <span class="grow"></span>
+      <div class="btnrow">
+        <button id="btn-menu" class="ibtn" type="button" title="Menu" aria-label="Menu" data-icon="menu"></button>
+        <button id="btn-book" class="ibtn" type="button" title="Recipe book" aria-label="Recipe book" data-icon="book"></button>
+        <button id="btn-guests" class="ibtn" type="button" title="Guest book" aria-label="Guest book" data-icon="guests"></button>
+        <button id="mute" class="ibtn" type="button" title="Sound on (M)" aria-label="Sound on" data-icon="sound"></button>
+        <button id="help" class="ibtn" type="button" title="How to play" aria-label="How to play" data-icon="help"></button>
+        <button id="pause" class="ibtn" type="button" title="Pause (Esc)" aria-label="Pause" data-icon="pause"></button>
+      </div>
+    </div>
+
+    <div id="bubbles">
+      <div class="bubble" id="bubble-0"></div>
+      <div class="bubble" id="bubble-1"></div>
+      <div class="bubble" id="bubble-2"></div>
+      <div class="bubble" id="bubble-3"></div>
+    </div>
+
+    <div id="toast"></div>
+
+    <div id="dialog" class="framed">
+      <div class="dlg-face"><canvas id="dlg-face" width="112" height="112"></canvas></div>
+      <div class="dlg-main">
+        <div class="dlg-head"><span id="dlg-name"></span><span id="dlg-title"></span></div>
+        <div id="dlg-text"></div>
+        <div id="dlg-choices"></div>
+        <div id="dlg-next">&#9660;</div>
+      </div>
+    </div>
+
+    <div id="bar">
+      <button id="tab-serving" class="tag on" type="button"><span class="ti" data-icon="serving"></span>Serving<span class="badge" id="badge-serving"></span></button>
+      <button id="tab-kitchen" class="tag" type="button"><span class="ti" data-icon="kitchen"></span>Kitchen<span class="badge" id="badge-kitchen"></span></button>
+      <span id="hint"></span>
+    </div>
+
+    <div id="menu" class="overlay">
+      <div class="paper menu-paper framed">
+        <div id="menu-body"></div>
+        <button id="menu-close" class="close" type="button">Close</button>
+      </div>
+    </div>
+
+    <!-- the two physical books: js/pbook.js builds what is inside -->
+    <div id="book" class="overlay pbook" aria-label="Recipe book"></div>
+    <div id="guests" class="overlay pbook" aria-label="Guest book"></div>
+
+    <div id="road" class="overlay">
+      <div class="paper road-paper framed">
+        <h2>Level Road</h2>
+        <div id="road-head"></div>
+        <div id="road-body"></div>
+        <button id="road-close" class="close" type="button">Close</button>
+      </div>
+    </div>
+
+    <div id="modal">
+      <div class="panel framed">
+        <div id="modal-body"></div>
+        <button id="modal-btn" type="button"></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/ui.js"></script>
+  <script src="js/px.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/guests.js"></script>
+  <script src="js/personas.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/kitchen.js"></script>
+  <script src="js/serving.js"></script>
+  <script src="js/title.js"></script>
+  <script src="js/pbook.js"></script>
+  <script src="js/bookfilter.js"></script>
+  <script src="js/cookbook.js"></script>
+  <script src="js/guestbook.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

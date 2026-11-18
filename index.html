@@ -4,9 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cozy Ramen</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+  <link rel="preload" href="assets/fonts/PixelifySans-Regular.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -23,6 +21,10 @@
         <span class="sep"></span>
         <span class="coin" data-icon="coin"></span><span id="gold"></span>
         <span class="sep"></span>
+        <span class="sep"></span>
+        <span id="quest" tabindex="0" aria-label="Daily quest"><span class="q-ico"></span><span id="quest-n"></span>
+          <span class="q-pop washi"><span class="q-tag">Daily quest</span><span id="quest-text"></span><span class="q-bar"><i id="quest-fill"></i></span><span id="quest-reward"></span></span>
+        </span>
         <button id="lvl" class="lvlbtn" type="button" title="Level road" aria-label="Level road"><span id="lvnum">Lv 1</span><span class="xpbar"><i id="xpfill"></i></span></button>
       </div>
       <span class="grow"></span>
@@ -41,6 +43,10 @@
       <div class="bubble" id="bubble-1"></div>
       <div class="bubble" id="bubble-2"></div>
       <div class="bubble" id="bubble-3"></div>
+      <div class="bubble" id="bubble-4"></div>
+      <div class="bubble" id="bubble-5"></div>
+      <div class="bubble" id="bubble-6"></div>
+      <div class="bubble" id="bubble-7"></div>
     </div>
 
     <div id="toast"></div>
@@ -58,6 +64,7 @@
     <div id="bar">
       <button id="tab-serving" class="tag on" type="button"><span class="ti" data-icon="serving"></span>Serving<span class="badge" id="badge-serving"></span></button>
       <button id="tab-kitchen" class="tag" type="button"><span class="ti" data-icon="kitchen"></span>Kitchen<span class="badge" id="badge-kitchen"></span></button>
+      <button id="tab-street" class="tag gone" type="button" title="Night street: Aoi's supply shop"><span class="ti" data-icon="street"></span>Street</button>
       <span id="hint"></span>
     </div>
 
@@ -72,12 +79,29 @@
     <div id="book" class="overlay pbook" aria-label="Recipe book"></div>
     <div id="guests" class="overlay pbook" aria-label="Guest book"></div>
 
-    <div id="road" class="overlay">
-      <div class="paper road-paper framed">
-        <h2>Level Road</h2>
-        <div id="road-head"></div>
-        <div id="road-body"></div>
+    <div id="road" class="overlay journey" aria-label="Japan road">
+      <canvas id="map" width="960" height="540"></canvas>
+      <div class="jr-top">
+        <div class="jr-title wood"><b>Japan Road</b><span id="jr-count"></span></div>
+        <div class="jr-stats wood"><span id="jr-lv" class="lvchip"></span><span class="xpbar"><i id="jr-xp"></i></span><span id="jr-xptext"></span><span id="jr-gold" class="jr-gold"></span></div>
         <button id="road-close" class="close" type="button">Close</button>
+      </div>
+      <div class="jr-shop washi"><span>Shop location</span><div id="jr-regions"></div></div>
+      <div id="jr-card" class="jr-card washi"></div>
+    </div>
+    </div>
+
+    <!-- Kitsune-ya, the night supply shop (js/nightshop.js): the inspect card and the talk / checkout panel -->
+    <div id="nshop">
+      <div id="ns-card" class="ns-card washi" aria-live="polite"></div>
+      <div id="ns-talk" class="ns-talk washi framed">
+        <div class="ns-face" role="img" aria-label="Aoi"></div>
+        <div class="ns-main">
+          <div class="dlg-head"><span class="ns-name">Aoi</span><span class="ns-title">Kitsune shopkeeper</span></div>
+          <div id="ns-text"></div>
+          <div id="ns-body"></div>
+          <div id="ns-choices"></div>
+        </div>
       </div>
     </div>
 
@@ -103,6 +127,8 @@
   <script src="js/bookfilter.js"></script>
   <script src="js/cookbook.js"></script>
   <script src="js/guestbook.js"></script>
+  <script src="js/journey.js"></script>
+  <script src="js/nightshop.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>

@@ -135,15 +135,27 @@ const SCENE = (() => {
     const n = G.nightF, d = G.duskF;
     let top = mix('#9fd4e6', '#151a3a', n), bot = mix('#f4ecc8', '#2c3160', n);
     top = mix(top, '#e58a5c', d * 0.45); bot = mix(bot, '#f6b56a', d * 0.7);
+    const wet = G.rain || 0;   // rain: a low grey overcast
+    if (wet > 0) { top = mix(top, mix('#68707e', '#181c28', n), wet * 0.8); bot = mix(bot, mix('#9aa0aa', '#262a36', n), wet * 0.75); }
     const bands = 8;
     for (let i = 0; i < bands; i++) rect(g, r.x, r.y + Math.floor(i * r.h / bands), r.w, Math.ceil(r.h / bands) + 1, mix(top, bot, i / (bands - 1)));
     // sun by day, moon by night, arcing across the window as the hours pass
     const h = G.hour === undefined ? 12 : G.hour, day = h >= 6 && h < 18, p = day ? (h - 6) / 12 : ((h + 6) % 24) / 12;
     const big = r.w > 300, R = big ? 11 : Math.max(4, Math.round(Math.min(r.w, r.h) / 9));
     const bx = Math.round(r.x + R + 2 + p * (r.w - 2 * R - 4)), by = Math.round(r.y + r.h - R - 2 - Math.sin(p * Math.PI) * (r.h - 2 * R - 6));
+    g.globalAlpha = Math.max(0, 1 - wet * 1.2);
     if (day) { ell(g, bx, by, R + 2, R + 2, mix('#fff2a0', bot, 0.5)); ell(g, bx, by, R, R, '#ffe066'); ell(g, bx - 1, by - 1, R - 2, R - 2, '#fff6b8'); }
     else { ell(g, bx, by, R, R, '#fff6d0'); ell(g, bx + Math.ceil(R / 2), by - Math.ceil(R / 3), R - 1, R - 1, mix(top, bot, 0.3)); }
-    if (n > 0.3) {
+    g.globalAlpha = 1;
+    if (wet > 0.05) {   // heavy rain clouds drifting low
+      g.globalAlpha = Math.min(1, wet * 1.3);
+      const cc = mix('#8a909c', '#2a2e3c', n), cd = mix('#6a707c', '#1e2230', n);
+      for (let i = 0; i < Math.ceil(r.w / 70) + 2; i++) {
+        const cx = Math.round(r.x + ((i * 83 + G.t * 6) % (r.w + 120)) - 60), cy = r.y + 6 + (i * 29) % Math.max(8, Math.round(r.h * 0.35));
+        ell(g, cx, cy + 3, 34, 9, cd); ell(g, cx, cy, 30, 9, cc); ell(g, cx + 12, cy - 6, 16, 8, cc); ell(g, cx - 12, cy - 3, 12, 6, cc);
+      }
+      g.globalAlpha = 1;
+    } else if (n > 0.3) {
       g.globalAlpha = (n - 0.3) / 0.7;
       for (let i = 0; i < Math.floor(r.w / 14); i++) if (Math.sin(G.t * 1.5 + i * 2.1) > -0.6) dot(g, r.x + (i * 137) % r.w, r.y + 4 + (i * 53) % Math.max(1, r.h - 8), '#fff6d0');
       g.globalAlpha = 1;
@@ -223,5 +235,74 @@ const SCENE = (() => {
     for (const [x, y, rx, ry] of lamps) for (const k of [0.9, 0.6]) ell(g, x, y, Math.round(rx * k * flick), Math.round(ry * k * flick), `rgba(255,180,96,${0.05 * f})`);
   }
 
-  return { wood, plaster, tiles, ao, pool, contact, frameRect, lantern, label, tag, tagInk, chip, sky, clock, part, emote, brackets, night, rnd };
+
+  /* What you see through the shop's windows: the region the shop is set up in (G.region). Drawn over the sky,
+     clipped to the window, dimmed at night. r = the window rect; everything scales with its height. */
+  function view(g, G, r, region) {
+    const k = r.h / 60, by = r.y + r.h, nf = G.nightF || 0, t = G.t || 0;
+    const C = c => mix(c, '#141832', nf * 0.65);
+    const X = f => Math.round(r.x + f * r.w);
+    g.save(); g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip();
+    const ridge = (amp, base, f1, f2, ph, c) => { for (let x = r.x; x < r.x + r.w; x += 2) { const hh = Math.round((base + amp * (Math.sin((x + ph) * f1) * 0.6 + Math.sin((x + ph) * f2) * 0.4)) * k); rect(g, x, by - hh, 2, hh, c); } };
+    if (region === 0) {          // Sakura Countryside: Mount Fuji, green hills, blossom
+      const fx = X(0.62), fw = Math.round(46 * k), fh = Math.round(30 * k);
+      poly(g, [[fx - fw, by], [fx - 6 * k, by - fh], [fx + 6 * k, by - fh], [fx + fw, by]], C('#7a8ab8'));
+      poly(g, [[fx - 15 * k, by - fh + 9 * k], [fx - 6 * k, by - fh], [fx + 6 * k, by - fh], [fx + 15 * k, by - fh + 9 * k], [fx + 6 * k, by - fh + 6 * k], [fx, by - fh + 10 * k]], C('#f4f6ff'));
+      ridge(4, 9, 0.021, 0.057, 0, C('#8fbf6a'));
+      for (let i = 0; i < Math.ceil(r.w / 40); i++) { const x = r.x + 10 + i * 40 + Math.round(rnd(i * 7) * 20), y = by - Math.round((9 + rnd(i) * 5) * k); ell(g, x, y, Math.round(7 * k), Math.round(5 * k), C('#f2a6c0')); ell(g, x - 2, y - 2, Math.round(4 * k), Math.round(3 * k), C('#ffd0e0')); }
+      ridge(2, 4, 0.04, 0.09, 30, C('#6fa84e'));
+    } else if (region === 1) {   // Kyoto: wooded hills, a pagoda and temple roofs
+      ridge(6, 14, 0.017, 0.043, 50, C('#5a7a4a'));
+      const px = X(0.3);
+      for (let i = 0; i < 5; i++) { const w = Math.round((20 - i * 3) * k), y = by - Math.round((6 + i * 7) * k); poly(g, [[px - w, y], [px + w, y], [px + w - 4 * k, y - 3 * k], [px - w + 4 * k, y - 3 * k]], C('#3a2a32')); rect(g, px - Math.round(w * 0.45), y, Math.round(w * 0.9), Math.round(4 * k), C('#8a3a2a')); }
+      rect(g, px - 1, by - Math.round(46 * k), 2, Math.round(9 * k), C('#3a2a32'));
+      for (const f of [0.08, 0.55, 0.78]) { const x = X(f), w = Math.round(22 * k); poly(g, [[x - w, by - 8 * k], [x + w, by - 8 * k], [x + w - 6 * k, by - 14 * k], [x - w + 6 * k, by - 14 * k]], C('#3a2a32')); rect(g, x - w + 4, by - Math.round(8 * k), 2 * w - 8, Math.round(8 * k), C('#a8846a')); }
+      const tx = X(0.9); rect(g, tx - Math.round(8 * k), by - Math.round(14 * k), 2, Math.round(14 * k), C('#c8443a')); rect(g, tx + Math.round(7 * k), by - Math.round(14 * k), 2, Math.round(14 * k), C('#c8443a')); rect(g, tx - Math.round(11 * k), by - Math.round(15 * k), Math.round(22 * k), 2, C('#c8443a'));
+    } else if (region === 2) {   // Osaka: a row of shop roofs with lanterns, the castle beyond
+      const cx = X(0.7);
+      rect(g, cx - Math.round(14 * k), by - Math.round(26 * k), Math.round(28 * k), Math.round(26 * k), C('#f0ece0'));
+      for (let i = 0; i < 3; i++) { const w = Math.round((22 - i * 6) * k), y = by - Math.round((24 + i * 8) * k); poly(g, [[cx - w, y], [cx + w, y], [cx + w - 4 * k, y - 4 * k], [cx - w + 4 * k, y - 4 * k]], C('#3a7a6a')); }
+      rect(g, cx - 1, by - Math.round(44 * k), 2, Math.round(3 * k), C('#e0b040'));
+      for (let x = r.x, i = 0; x < r.x + r.w; i++) { const w = Math.round((22 + rnd(i * 3) * 18) * k), h = Math.round((10 + rnd(i * 5) * 8) * k); rect(g, x, by - h, w - 1, h, C(['#7a5a42', '#8a6a4a', '#6a4a3a'][i % 3])); rect(g, x - 1, by - h - Math.round(3 * k), w + 1, Math.round(3 * k), C('#3a3038')); if (i % 2 === 0) { const lx = x + Math.round(w / 2); ell(g, lx, by - h + Math.round(4 * k), Math.max(2, Math.round(2 * k)), Math.max(2, Math.round(3 * k)), mix('#e8443a', '#ff8a5a', 0.4 + 0.3 * Math.sin(t * 3 + i))); } x += w; }
+    } else if (region === 3) {   // Tokyo: towers with lit windows, the red tower
+      const tx = X(0.4), th = Math.round(54 * k);
+      poly(g, [[tx - 9 * k, by], [tx - 1, by - th], [tx + 1, by - th], [tx + 9 * k, by]], C('#d8442a'));
+      for (let i = 1; i < 5; i++) rect(g, tx - Math.round((9 - i * 1.8) * k), by - Math.round(i * th / 5), Math.round((18 - i * 3.6) * k), 2, C('#f4f0e8'));
+      for (let x = r.x, i = 0; x < r.x + r.w; i++) {
+        const w = Math.round((12 + rnd(i * 11) * 14) * k), h = Math.round((14 + rnd(i * 13) * 30) * k);
+        if (Math.abs(x + w / 2 - tx) < 12 * k) { x += w; continue; }
+        rect(g, x, by - h, w - 2, h, C(['#4a4a6a', '#3a3a5a', '#5a5a7a'][i % 3]));
+        for (let wy = by - h + 3; wy < by - 2; wy += Math.max(3, Math.round(4 * k))) for (let wx = x + 2; wx < x + w - 4; wx += Math.max(3, Math.round(4 * k))) if (rnd(wx * 3 + wy) < 0.3 + nf * 0.4) dot(g, wx, wy, nf > 0.4 ? '#ffe08a' : C('#cfe0f0'));
+        x += w;
+      }
+    } else {                     // Coastal Japan: the sea, a fishing boat, the lighthouse
+      const sy = by - Math.round(18 * k);
+      rect(g, r.x, sy, r.w, by - sy, C('#3a7ab0')); rect(g, r.x, sy, r.w, 1, C('#8ac0e0'));
+      for (let i = 0; i < Math.ceil(r.w / 18); i++) { const x = r.x + ((i * 37 + Math.round(t * 6)) % r.w), y = sy + 3 + (i * 7) % Math.max(1, by - sy - 4); rect(g, x, y, 4, 1, C('#cfe8f8')); }
+      const bx = X(0.25) + Math.round(Math.sin(t * 0.3) * 6), bob = Math.round(Math.sin(t * 1.6));
+      poly(g, [[bx - 10 * k, sy + 4 * k + bob], [bx + 10 * k, sy + 4 * k + bob], [bx + 7 * k, sy + 8 * k + bob], [bx - 7 * k, sy + 8 * k + bob]], C('#6a3a2a'));
+      rect(g, bx, sy - Math.round(8 * k) + bob, 1, Math.round(12 * k), C('#3a2a2a')); poly(g, [[bx + 1, sy - 8 * k + bob], [bx + 8 * k, sy + 2 * k + bob], [bx + 1, sy + 2 * k + bob]], C('#f0e8d8'));
+      const lx = X(0.85);
+      poly(g, [[lx - 14 * k, by], [lx - 8 * k, sy - 2], [lx + 10 * k, sy - 2], [lx + 16 * k, by]], C('#5a5a52'));
+      rect(g, lx - Math.round(3 * k), sy - Math.round(26 * k), Math.round(6 * k), Math.round(26 * k), C('#f4f0e8'));
+      for (let i = 0; i < 3; i++) rect(g, lx - Math.round(3 * k), sy - Math.round((22 - i * 8) * k), Math.round(6 * k), Math.round(3 * k), C('#c8443a'));
+      rect(g, lx - Math.round(4 * k), sy - Math.round(30 * k), Math.round(8 * k), Math.round(4 * k), nf > 0.3 ? '#ffe680' : C('#3a3a3a'));
+    }
+    if (G.rain > 0.02) rain(g, G, r, k);
+    g.restore();
+  }
+  // Falling rain over a rect (a window, or the whole street): a grey wash and slanted streaks. k scales streak length.
+  function rain(g, G, r, k = 1, wash = 0.22) {
+    const a = G.rain || 0; if (a <= 0.02) return;
+    g.fillStyle = `rgba(60,70,92,${wash * a})`; g.fillRect(r.x, r.y, r.w, r.h);
+    const n = Math.round(r.w * r.h / 700 * a), len = Math.max(3, Math.round(9 * k)), t = G.t || 0, sp = 420 * Math.max(0.4, k);
+    g.fillStyle = 'rgba(205,220,245,0.55)';
+    for (let i = 0; i < n; i++) {
+      const y = r.y + ((rnd(i * 3 + 1) * (r.h + len) + t * sp * (0.8 + rnd(i) * 0.4)) % (r.h + len)) - len;
+      const x = r.x + ((rnd(i * 7 + 2) * r.w - (y - r.y) * 0.25) % r.w + r.w) % r.w;
+      for (let s = 0; s < len; s++) { const yy = Math.round(y + s); if (yy >= r.y && yy < r.y + r.h) g.fillRect(Math.round(x + s * 0.25), yy, 1, 1); }
+    }
+  }
+
+  return { rain, wood, plaster, tiles, ao, pool, contact, frameRect, lantern, label, tag, tagInk, chip, sky, clock, part, emote, brackets, night, rnd, view };
 })();

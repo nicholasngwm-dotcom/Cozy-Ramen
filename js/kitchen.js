@@ -228,12 +228,7 @@ const KITCHEN = (() => {
 
   const bar = (g, x, y, w, p, c) => { const f = Math.round(w * Math.max(0, Math.min(1, p))); rect(g, x - 1, y - 1, w + 2, 8, DK); rect(g, x, y, w, 6, '#4a3f4a'); rect(g, x, y, f, 6, c); rect(g, x, y, f, 2, shade(c, 1.3)); };
   const plus = (g, x, y) => { ell(g, x, y + 1, 10, 10, 'rgba(20,8,12,0.4)'); ell(g, x, y, 10, 10, DK); ell(g, x, y, 9, 9, '#3d8a3a'); ell(g, x - 1, y - 1, 8, 8, '#6fbf4a'); rect(g, x - 5, y - 1, 11, 3, '#ffffff'); rect(g, x - 1, y - 5, 3, 11, '#ffffff'); };
-  // The restock "+" (or a progress bar while that stock is being prepped), at the spot KL.badge gives the game's click area.
-  function badge(g, G, id) {
-    const [x, y] = KL.badge(id), job = G.jobs.find(j => j.id === id);
-    if (job) bar(g, x - 22, y - 3, 44, job.t / job.dur, '#f2a22a');
-    else if (G.stock[id] < capOf(id)) plus(g, x, y + Math.round(Math.sin(G.t * 3 + x) * 0.6));
-  }
+  function badge() {}   // (restocking happens at Kitsune-ya now: no buttons in the kitchen)
   const countC = n => n > 2 ? '#4a3226' : '#c8302a';
   const held = (G, kind, type) => G.drag && G.drag.kind === kind && G.drag.type === type;
   const plate = (g, s, cx, y, c) => tag(g, s, cx, y, c, 8, 40);
@@ -495,7 +490,7 @@ const KITCHEN = (() => {
 
   function frame(g, G) {
     if (!back) back = buildBack();
-    sky(g, G, WIN);
+    sky(g, G, WIN); SCENE.view(g, G, WIN, G.region || 0);
     g.drawImage(back, 0, 0);
     for (const [lx, ly, r, c] of LANTERNS) lantern(g, lx + Math.round(Math.sin(G.t * 1.3 + lx) * 1.2), ly, r, c);
     maneki(g, 506, 266, G.t);

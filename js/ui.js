@@ -26,6 +26,7 @@ const UI = (() => {
   const MAPS = {
     coin: ['..kkkkk..', '.kgggggk.', 'kgyGGGggk', 'kgGgggGgk', 'kgGgggGgk', 'kgGgggGgk', 'kggGGGGgk', '.kgggggk.', '..kkkkk..'],
     sun: ['....g....', '.g.....g.', '...ggg...', '..gyyyg..', 'g.gyyyg.g', '..gyyyg..', '...ggg...', '.g.....g.', '....g....'],
+    rain: ['..ccccc....', '.cccccccc..', 'ccccccccccc', 'ccccccccccc', '.ccccccccc.', '...........', '.b..b..b...', 'b..b..b..b.', '...........', '..b..b..b..', '.b..b..b...'],
     moon: ['..ccccc..', '.cccyy...', 'cccy.....', 'ccy......', 'ccy......', 'ccy....y.', 'cccy.....', '.cccyy...', '..ccccc..'],
     menu: ['.kkkkkkkkk.', '.kRRRRRRRk.', '.kRRRRRRRk.', '.kwwwwwwwk.', '.kwowpppwk.', '.kwwwwwwwk.', '.kwrwpppwk.', '.kwwwwwwwk.', '.kwjwpppwk.', '.kwwwwwwwk.', '.kkkkkkkkk.'],
     book: ['...........', '.kkkk.kkkk.', 'kwwwwkwwwwk', 'kwppwkwppwk', 'kwwwwkwwwwk', 'kwppwkwppwk', 'kwwwwkwwwwk', 'kwppwkwppwk', 'kRRRRkRRRRk', '.kkkkkkkkk.', '...........'],
@@ -36,6 +37,7 @@ const UI = (() => {
     serving: ['...c...c...', '....c...c..', '...c...c...', '...........', 'kkkkkkkkkkk', 'krrrrrrrrrk', '.krrrrrrrk.', '..kRRRRRk..', '...kkkkk...', '....kkk....', '...........'],
     toppings: ['...........', '..kk...kk..', '.kRRk.kjjk.', '.kRRk.kjjk.', '..kk...kk..', '...........', '..kk...kk..', '.kook.kwwk.', '.kook.kwwk.', '..kk...kk..', '...........'],
     guests: ['...........', '....kkk....', '...kccck...', '...kccck...', '....kkk....', '...........', '..kkkkkkk..', '.kbbbbbbbk.', '.kbbbbbbbk.', '.kkkkkkkkk.', '...........'],
+    street: ['....kkk....', '...kRRRk...', '..krrrrrk..', '.krryrrrrk.', '.krrrrrrrk.', '.kRRRRRRRk.', '.krrrrrrrk.', '..krrrrrk..', '...kRRRk...', '....kkk....', '.....g.....'],
     kitchen: ['....c.c....', '...c.c.....', '....c.c....', '.kkkkkkkkk.', 'kNnnnnnnnNk', '.kNnnnnnNk.', '.kNnnnnnNk.', '..kNnnnNk..', '...kkkkk...', '..r.o.r.o..', '...........']
   };
   const cache = {};

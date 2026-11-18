@@ -12,9 +12,11 @@ const SERVING = (() => {
     indigo: PAL.indigo, indigoLo: PAL.indigoLo, indigoHi: PAL.indigoHi, washi: '#fbf6ea', cork: PAL.cork,
     copper: PAL.copper, copperHi: PAL.copperHi, copperLo: PAL.copperLo, brass: PAL.brass, brassLo: PAL.brassLo
   };
-  const WIN = { x: 80, y: 84, w: 800, h: 60 };
-  const PORT = { cx: 31, cy: 206, r: 20 };   // round window in the left wall
+  const SW = SL.W, OX = SL.OX, LEFT = SL.LEFT, RIGHT = SL.RIGHT;   // room width; OX = where the original room starts
+  const WIN = { x: LEFT + 12, y: 84, w: RIGHT - LEFT - 24, h: 60 };
+  const PORT = { cx: SW - 31, cy: 206, r: 20 };   // round window, now in the right wall
   const PORT_R = { x: PORT.cx - PORT.r, y: PORT.cy - PORT.r, w: 2 * PORT.r, h: 2 * PORT.r };
+  const D = SL.DOOR;
   const BOARD_Y = CY + 48, BOARD_H = 84, BOARD_W = 120;   // quest-notice board under each stall
   let back = null, front = null;
 
@@ -62,10 +64,10 @@ const SERVING = (() => {
   }
 
   function buildBack() {
-    const c = mk(VW, VH), g = c.getContext('2d');
-    wood(g, 0, 0, VW, 30, C.beam, 10, false, 205); rect(g, 0, 29, VW, 2, DK);
-    plaster(g, 0, 31, VW, 210, C.plaster, 209);
-    ao(g, 0, 31, VW, 210, 'top', 22, 0.45);
+    const c = mk(SW, VH), g = c.getContext('2d');
+    wood(g, 0, 0, SW, 30, C.beam, 10, false, 205); rect(g, 0, 29, SW, 2, DK);
+    plaster(g, 0, 31, SW, 210, C.plaster, 209);
+    ao(g, 0, 31, SW, 210, 'top', 22, 0.45);
     // long lattice window behind the stalls (only seen when a blind is up)
     frameRect(g, WIN.x, WIN.y, WIN.w, WIN.h, '#5a3820', 7);
     g.clearRect(WIN.x, WIN.y, WIN.w, WIN.h);
@@ -74,9 +76,9 @@ const SERVING = (() => {
     rect(g, WIN.x - 8, WIN.y + WIN.h + 7, WIN.w + 16, 2, shade('#5a3820', 0.55));
     ao(g, WIN.x - 8, WIN.y + WIN.h + 9, WIN.w + 16, 10, 'top', 8, 0.3);
     // chair rail and dark wainscot inside the stalls
-    rect(g, 0, 240, VW, 8, DK); rect(g, 0, 241, VW, 6, '#6e4428'); rect(g, 0, 241, VW, 1, '#a57a4c'); rect(g, 0, 246, VW, 1, '#4a2e1a');
-    wood(g, 0, 248, VW, 60, '#5a3a22', 24, true, 211);
-    ao(g, 0, 248, VW, 60, 'top', 8, 0.5);
+    rect(g, 0, 240, SW, 8, DK); rect(g, 0, 241, SW, 6, '#6e4428'); rect(g, 0, 241, SW, 1, '#a57a4c'); rect(g, 0, 246, SW, 1, '#4a2e1a');
+    wood(g, 0, 248, SW, 60, '#5a3a22', 24, true, 211);
+    ao(g, 0, 248, SW, 60, 'top', 8, 0.5);
     for (let i = 0; i < SL.NSTALL; i++) {
       const sx = SL.stallX(i), cx = SL.stallCX(i), x0 = sx + 6, w = SL.STALL_W - 12, top = SL.BLIND_TOP, h = CY - top;
       // booth interior: the posts and the blind roll throw stepped shadow, so a guest sits *inside* the stall
@@ -94,16 +96,31 @@ const SERVING = (() => {
     return c;
   }
 
+  // The staff door in the left wall: a dark wooden door with a small window, a brass handle and a STAFF ONLY plate.
+  function staffDoor(g) {
+    rect(g, D.x - 7, D.y - 7, D.w + 14, D.h + 7, DK); wood(g, D.x - 6, D.y - 6, D.w + 12, D.h + 6, '#4a2e1a', 8, true, 61);
+    rect(g, D.x - 1, D.y - 1, D.w + 2, D.h + 1, DK); wood(g, D.x, D.y, D.w, D.h, '#7a5230', 14, true, 63);
+    rect(g, D.x, D.y, D.w, 2, '#a57a4c'); ao(g, D.x, D.y, D.w, D.h, 'top', 10, 0.35);
+    for (const [px, py, pw, ph] of [[10, 52, D.w - 20, 60], [10, 124, D.w - 20, 70]]) { rect(g, D.x + px - 1, D.y + py - 1, pw + 2, ph + 2, '#4a2e1a'); rect(g, D.x + px, D.y + py, pw, ph, '#6e4428'); rect(g, D.x + px, D.y + py, pw, 1, '#8a623c'); }
+    rect(g, D.x + 22, D.y + 12, D.w - 44, 30, DK); rect(g, D.x + 23, D.y + 13, D.w - 46, 28, '#1e2440'); rect(g, D.x + D.w / 2 - 1, D.y + 13, 2, 28, DK); rect(g, D.x + 23, D.y + 26, D.w - 46, 2, DK);
+    rect(g, D.x + 25, D.y + 15, 8, 3, 'rgba(200,220,255,0.4)');
+    rect(g, D.x + D.w - 20, D.y + 112, 8, 14, DK); rect(g, D.x + D.w - 19, D.y + 113, 6, 12, C.brass); rect(g, D.x + D.w - 19, D.y + 113, 2, 12, C.copperHi);
+    const pw = textW('STAFF ONLY') + 14, px = Math.round(D.x + D.w / 2 - pw / 2), py = D.y - 34;
+    rect(g, px - 1, py - 1, pw + 2, 22, DK); rect(g, px, py, pw, 20, '#7a1e18'); rect(g, px, py, pw, 1, '#b8302a'); rect(g, px, py + 18, pw, 2, '#4a0e0a');
+    dot(g, px + 3, py + 3, C.brass); dot(g, px + pw - 4, py + 3, C.brass);
+    textC(g, 'STAFF ONLY', D.x + D.w / 2, py + 4, '#f6e6c0');
+  }
   function buildFront() {
-    const c = mk(VW, VH), g = c.getContext('2d');
-    const x0 = SL.stallX(0), x1 = SL.stallX(SL.NSTALL);
-    // side walls (the screen edges also hold the station arrows)
-    for (const [x, w, inner] of [[0, x0 - 6, 'right'], [x1 + 6, VW - x1 - 6, 'left']]) {
+    const c = mk(SW, VH), g = c.getContext('2d');
+    const x0 = LEFT, x1 = RIGHT;
+    // side walls: the left one is wide (the staff door), the right one keeps the window, clock and quest board
+    for (const [x, w, inner] of [[0, x0 - 6, 'right'], [x1 + 6, SW - x1 - 6, 'left']]) {
       wood(g, x, 31, w, CY - 31, C.wall, 20, true, x + 3);
       ao(g, x, 31, w, CY - 31, 'top', 18, 0.5);
       ao(g, x, 31, w, CY - 31, inner, 12, 0.45);
     }
-    pool(g, 34, 118, 64, 72, '#ffb060', 0.07); pool(g, VW - 34, 118, 64, 72, '#ffb060', 0.07);
+    staffDoor(g);
+    pool(g, 172, 118, 50, 72, '#ffb060', 0.07); pool(g, SW - 34, 118, 64, 72, '#ffb060', 0.07);
     // round window: frame, then punch the glass out so the sky drawn behind shows through
     ell(g, PORT.cx, PORT.cy, PORT.r + 5, PORT.r + 5, DK); ell(g, PORT.cx, PORT.cy, PORT.r + 4, PORT.r + 4, '#6e4428'); ell(g, PORT.cx - 1, PORT.cy - 1, PORT.r + 2, PORT.r + 2, '#a57a4c'); ell(g, PORT.cx + 1, PORT.cy + 1, PORT.r + 1, PORT.r + 1, '#4a2e1a');
     ell(g, PORT.cx, PORT.cy, PORT.r + 1, PORT.r + 1, DK);
@@ -111,10 +128,11 @@ const SERVING = (() => {
     rect(g, PORT.cx - 1, PORT.cy - PORT.r, 3, 2 * PORT.r + 1, DK); rect(g, PORT.cx, PORT.cy - PORT.r, 1, 2 * PORT.r + 1, '#6e4428');
     rect(g, PORT.cx - PORT.r, PORT.cy - 1, 2 * PORT.r + 1, 3, DK); rect(g, PORT.cx - PORT.r, PORT.cy, 2 * PORT.r + 1, 1, '#6e4428');
     // adventurers' corner: a shield over crossed swords on the left wall, a quest board on the right wall
-    shield(g, 31, 266);
-    questBoard(g, VW - 54, 196, 46, 44);
-    // stall posts
-    for (let i = 0; i <= SL.NSTALL; i++) post(g, SL.stallX(i) - 7, SL.BLIND_TOP, 14, CY - SL.BLIND_TOP, C.post);
+    shield(g, 176, 266);
+    questBoard(g, 158, 150, 40, 44);   // beside the staff door (the right wall's edge holds the station arrow)
+    // stall posts: one at the left edge of every stall, and one closing the row on the right
+    for (let i = 0; i < SL.NSTALL; i++) post(g, SL.stallX(i) - 7, SL.BLIND_TOP, 14, CY - SL.BLIND_TOP, C.post);
+    post(g, RIGHT - 7, SL.BLIND_TOP, 14, CY - SL.BLIND_TOP, C.post);
     // beam with seat plaques (cream wood, brass nails)
     rect(g, x0 - 12, SL.BEAM_Y - 1, x1 - x0 + 24, 24, DK);
     wood(g, x0 - 11, SL.BEAM_Y, x1 - x0 + 22, 22, C.beam, 11, false, 231);
@@ -127,24 +145,24 @@ const SERVING = (() => {
       textC(g, String(i + 1), cx + 1, SL.BEAM_Y + 6, '#6a2414');
     }
     // counter: thick hinoki slab with a lit top edge and a bevelled front lip
-    rect(g, 0, CY - 1, VW, VH - CY + 1, DK);
-    wood(g, 0, CY, VW, 14, C.hinoki, 7, false, 251);
-    rect(g, 0, CY, VW, 1, '#fff0c8'); rect(g, 0, CY + 1, VW, 1, '#f0c88a');
-    rect(g, 0, CY + 11, VW, 3, '#a8763e'); rect(g, 0, CY + 14, VW, 2, '#6e4826'); rect(g, 0, CY + 16, VW, 1, DK);
+    rect(g, 0, CY - 1, SW, VH - CY + 1, DK);
+    wood(g, 0, CY, SW, 14, C.hinoki, 7, false, 251);
+    rect(g, 0, CY, SW, 1, '#fff0c8'); rect(g, 0, CY + 1, SW, 1, '#f0c88a');
+    rect(g, 0, CY + 11, SW, 3, '#a8763e'); rect(g, 0, CY + 14, SW, 2, '#6e4826'); rect(g, 0, CY + 16, SW, 1, DK);
     // indigo noren skirt under the lip, split into panels, a cream crest on each stall
     const NY = CY + 17, NH = 24;
-    rect(g, 0, NY, VW, NH, C.indigo);
-    for (let x = 0; x < VW; x += 3) rect(g, x, NY, 1, NH, (x / 3) % 2 ? C.indigo : shade(C.indigo, 0.94));
-    rect(g, 0, NY, VW, 2, C.indigoLo);
-    for (let x = 68; x < VW; x += 103) { rect(g, x, NY + 4, 1, NH - 4, C.indigoLo); rect(g, x + 1, NY + 4, 1, NH - 4, C.indigoHi); }
+    rect(g, 0, NY, SW, NH, C.indigo);
+    for (let x = 0; x < SW; x += 3) rect(g, x, NY, 1, NH, (x / 3) % 2 ? C.indigo : shade(C.indigo, 0.94));
+    rect(g, 0, NY, SW, 2, C.indigoLo);
+    for (let x = LEFT; x < SW; x += 103) { rect(g, x, NY + 4, 1, NH - 4, C.indigoLo); rect(g, x + 1, NY + 4, 1, NH - 4, C.indigoHi); }
     for (let i = 0; i < SL.NSTALL; i++) crest(g, SL.stallCX(i) - 54, NY + 12);   // off-centre, clear of the pull-cord
-    rect(g, 0, NY + NH, VW, 1, DK);
+    rect(g, 0, NY + NH, SW, 1, DK);
     // below it: dark vertical slats (koshi) on our side of the counter
     const LY = NY + NH + 1;
-    wood(g, 0, LY, VW, VH - LY, '#4e3220', 12, true, 253);
-    for (let x = 6; x < VW; x += 12) { rect(g, x, LY, 1, VH - LY, '#2e1c12'); rect(g, x + 1, LY, 1, VH - LY, '#6e4a2c'); }
-    ao(g, 0, LY, VW, 40, 'top', 18, 0.6);
-    ao(g, 0, LY, VW, VH - LY, 'bottom', 46, 0.35);
+    wood(g, 0, LY, SW, VH - LY, '#4e3220', 12, true, 253);
+    for (let x = 6; x < SW; x += 12) { rect(g, x, LY, 1, VH - LY, '#2e1c12'); rect(g, x + 1, LY, 1, VH - LY, '#6e4a2c'); }
+    ao(g, 0, LY, SW, 40, 'top', 18, 0.6);
+    ao(g, 0, LY, SW, VH - LY, 'bottom', 46, 0.35);
     for (let i = 0; i < SL.NSTALL; i++) {
       const sx = SL.stallX(i), cx = SL.stallCX(i);
       // quest-notice board for this stall's ticket
@@ -173,15 +191,15 @@ const SERVING = (() => {
       rect(g, mx + 1, CY - 6, 34, 2, '#dccaa4');
     }
     // copper-topped warming shelf on our side, with brass rail posts
-    const Y = SL.SHELF_Y;
-    ao(g, 181, Y + 22, 578, 14, 'top', 12, 0.55);
-    rect(g, 180, Y - 1, 580, 24, DK);
-    wood(g, 181, Y + 6, 578, 16, C.hinoki, 16, false, 271);
-    for (let x = 181; x < 759; x++) { const k = (x - 181) % 48; rect(g, x, Y, 1, 6, k < 2 ? C.copperLo : k < 10 ? C.copperHi : C.copper); }
-    rect(g, 181, Y, 578, 1, C.copperHi); rect(g, 181, Y + 5, 578, 1, C.copperLo); rect(g, 181, Y + 20, 578, 2, '#6e4826');
-    for (const px of [184, 752]) { rect(g, px - 1, Y - 16, 6, 18, DK); rect(g, px, Y - 15, 4, 16, C.brass); rect(g, px, Y - 15, 1, 16, '#ffe08a'); }
-    rect(g, 184, Y - 17, 572, 3, DK); rect(g, 185, Y - 16, 570, 1, C.brass);
-    tag(g, 'PICKUP', 822, Y + 4);
+    const Y = SL.SHELF_Y, S0 = OX + 180;
+    ao(g, S0 + 1, Y + 22, 578, 14, 'top', 12, 0.55);
+    rect(g, S0, Y - 1, 580, 24, DK);
+    wood(g, S0 + 1, Y + 6, 578, 16, C.hinoki, 16, false, 271);
+    for (let x = S0 + 1; x < S0 + 579; x++) { const k = (x - S0 - 1) % 48; rect(g, x, Y, 1, 6, k < 2 ? C.copperLo : k < 10 ? C.copperHi : C.copper); }
+    rect(g, S0 + 1, Y, 578, 1, C.copperHi); rect(g, S0 + 1, Y + 5, 578, 1, C.copperLo); rect(g, S0 + 1, Y + 20, 578, 2, '#6e4826');
+    for (const px of [S0 + 4, S0 + 572]) { rect(g, px - 1, Y - 16, 6, 18, DK); rect(g, px, Y - 15, 4, 16, C.brass); rect(g, px, Y - 15, 1, 16, '#ffe08a'); }
+    rect(g, S0 + 4, Y - 17, 572, 3, DK); rect(g, S0 + 5, Y - 16, 570, 1, C.brass);
+    tag(g, 'PICKUP', OX + 822, Y + 4);
     return c;
   }
 
@@ -275,12 +293,12 @@ const SERVING = (() => {
     if (gu.state === 'wait') emote(g, 'dots', cx, 150, G.t);
   }
 
-  // Guests waiting for a stall sit on a little bench between the first two boards: one figure per guest (at most MAX_WAIT).
+  // Guests waiting for a stall sit on a little bench between the first two boards: one figure per guest (at most maxWait()).
   function drawQueue(g, G) {
-    const n = Math.min(G.waiting, MAX_WAIT), bx = 236, by = SL.SHELF_Y - 30;
+    const n = Math.min(G.waiting, maxWait()), bx = OX + 236, by = SL.SHELF_Y - 30, gap = n > 3 ? 15 : 26;
     contact(g, bx + 38, by + 9, 42, 3);
     for (let k = 0; k < n; k++) {
-      const fx = bx + 14 + k * 26, bob = Math.sin(G.t * 2 + k * 1.7) > 0.6 ? 1 : 0;
+      const fx = bx + 9 + k * gap + (n > 3 ? 0 : 5), bob = Math.sin(G.t * 2 + k * 1.7) > 0.6 ? 1 : 0;
       ell(g, fx, by - 20 + bob, 6, 6, DK); ell(g, fx, by - 20 + bob, 5, 5, '#3a2a36');
       lathe(g, fx, [[by - 13 + bob, 5], [by - 4, 9]], DK); lathe(g, fx, [[by - 12 + bob, 4], [by - 4, 8]], '#3a2a36');
       dot(g, fx - 2, by - 22 + bob, '#5a4a56');
@@ -289,9 +307,52 @@ const SERVING = (() => {
     for (const lx of [bx + 5, bx + 67]) { rect(g, lx - 1, by + 2, 5, 8, DK); rect(g, lx, by + 2, 3, 7, '#6e4428'); }
   }
 
+
+  /* Region decorations: a landmark's reward hangs on one of the five stall posts (cord, then the keepsake). */
+  const DECO_X = [0, 1, 2, 3].map(i => SL.stallX(i)).concat(RIGHT);
+  function deco(g, G, n, t) {
+    const x = DECO_X[n], y = 168, sw = Math.round(Math.sin(t * 1.3 + n) * 1);
+    rect(g, x, y - 26, 1, 20, '#5a3a22');                         // cord from the beam
+    const cx = x + sw;
+    if (n === 0) {          // sakura branch in a bamboo vase
+      rect(g, cx - 5, y - 4, 10, 18, DK); rect(g, cx - 4, y - 3, 8, 16, '#8aa848'); rect(g, cx - 4, y + 4, 8, 1, '#5a7a30'); rect(g, cx - 3, y - 3, 2, 16, '#b8d070');
+      line(g, cx, y - 4, cx - 7, y - 16, '#5a3a2a'); line(g, cx, y - 4, cx + 6, y - 14, '#5a3a2a');
+      for (const [bx, by] of [[-8, -17], [-5, -12], [6, -15], [3, -9], [-2, -15]]) { ell(g, cx + bx, y + by, 2, 2, '#f2a6c0'); dot(g, cx + bx, y + by, '#fff0f6'); }
+    } else if (n === 1) {   // red paper chochin lantern, glowing
+      g.globalAlpha = 0.18 + 0.06 * Math.sin(t * 3); ell(g, cx, y + 6, 14, 14, '#ffb070'); g.globalAlpha = 1;
+      rect(g, cx - 3, y - 6, 6, 3, DK); ell(g, cx, y + 6, 7, 10, DK); ell(g, cx, y + 6, 6, 9, '#d8443a'); ell(g, cx - 2, y + 3, 2, 5, '#f07a5a');
+      for (const dy of [0, 5, 10]) rect(g, cx - 5, y + 1 + dy, 10, 1, '#9a2a24');
+      rect(g, cx - 3, y + 15, 6, 3, DK);
+    } else if (n === 2) {   // nobori food banner
+      rect(g, cx - 1, y - 6, 2, 28, DK); rect(g, cx - 7, y - 6, 14, 2, DK);
+      rect(g, cx - 6, y - 4, 12, 22, DK); rect(g, cx - 5, y - 3, 10, 20, '#e8902a'); rect(g, cx - 5, y - 3, 10, 3, '#c8443a');
+      ell(g, cx, y + 8, 3, 3, '#fff2d8'); dot(g, cx, y + 8, '#c8443a'); rect(g, cx - 5, y + 14, 10, 1, '#fff2d8');
+    } else if (n === 3) {   // neon "ramen" sign: a glowing bowl
+      const on = Math.sin(t * 7 + Math.sin(t * 2.3) * 3) > -0.85;
+      rect(g, cx - 9, y - 4, 18, 16, DK); rect(g, cx - 8, y - 3, 16, 14, '#1a1a2a');
+      const c1 = on ? '#ff6ad8' : '#7a3a6a', c2 = on ? '#6ae8ff' : '#2a5a6a';
+      if (on) { g.globalAlpha = 0.22; ell(g, cx, y + 4, 13, 10, '#ff8ae8'); g.globalAlpha = 1; }
+      rect(g, cx - 6, y + 4, 12, 1, c1); line(g, cx - 6, y + 4, cx - 3, y + 8, c1); line(g, cx + 6, y + 4, cx + 3, y + 8, c1); rect(g, cx - 3, y + 8, 6, 1, c1);
+      line(g, cx - 2, y + 2, cx + 1, y - 1, c2); line(g, cx + 1, y + 2, cx + 4, y - 1, c2);
+    } else {                // glass fishing float in a rope net
+      ell(g, cx, y + 6, 8, 8, DK); ell(g, cx, y + 6, 7, 7, '#5ab8a8'); ell(g, cx - 2, y + 3, 3, 3, '#a8e8d8'); dot(g, cx - 3, y + 2, '#ffffff');
+      for (const d of [-4, 0, 4]) { line(g, cx + d, y - 1, cx + d, y + 13, '#c8a870'); }
+      line(g, cx - 7, y + 6, cx + 7, y + 6, '#c8a870');
+    }
+  }
+
+  // A stall that is not open yet: its blind stays down, a little darker, with a padlocked wooden plaque on it.
+  function closedStall(g, i) {
+    const x = SL.stallX(i) + 6, w = SL.STALL_W - 12, cx = SL.stallCX(i);
+    g.globalAlpha = 0.28; rect(g, x, SL.BLIND_TOP + 14, w, CY - SL.BLIND_TOP - 14, '#1a0e10'); g.globalAlpha = 1;
+    line(g, cx - 18, 118, cx, 104, '#5a3416'); line(g, cx + 18, 118, cx, 104, '#5a3416'); rect(g, cx - 2, 102, 4, 4, C.brass);
+    rect(g, cx - 25, 117, 50, 40, DK); wood(g, cx - 24, 118, 48, 38, '#8a5a32', 38, false, 40 + i); rect(g, cx - 24, 118, 48, 1, '#c08a52');
+    rect(g, cx - 7, 126, 14, 4, DK); rect(g, cx - 7, 126, 4, 9, DK); rect(g, cx + 3, 126, 4, 9, DK); rect(g, cx - 6, 127, 2, 8, '#c9d1dd'); rect(g, cx + 4, 127, 2, 8, '#c9d1dd'); rect(g, cx - 6, 127, 12, 2, '#c9d1dd');
+    rect(g, cx - 10, 134, 20, 16, DK); rect(g, cx - 9, 135, 18, 14, C.brass); rect(g, cx - 9, 135, 18, 2, '#ffe08a'); rect(g, cx - 1, 139, 3, 6, DK);
+  }
   function frame(g, G) {
     if (!back) { back = buildBack(); front = buildFront(); }
-    sky(g, G, WIN);
+    sky(g, G, WIN); SCENE.view(g, G, WIN, G.region || 0);
     g.drawImage(back, 0, 0);
     for (let i = 0; i < SL.NSTALL; i++) {
       const st = G.stalls[i];
@@ -303,13 +364,15 @@ const SERVING = (() => {
           g.globalAlpha = 0.35 * (1 - p); rect(g, wx, CY - 32 - Math.round(p * 26), 2, 4, '#fff6e6'); g.globalAlpha = 1;
         }
       }
-      blind(g, SL.stallX(i) + 6, SL.STALL_W - 12, st.blind);
+      blind(g, SL.stallX(i) + 6, SL.STALL_W - 12, stallOpen(i) ? st.blind : 1);
+      if (!stallOpen(i)) closedStall(g, i);
     }
-    sky(g, G, PORT_R);
+    sky(g, G, PORT_R); SCENE.view(g, G, PORT_R, G.region || 0);
     g.drawImage(front, 0, 0);
-    for (const [lx, side] of [[34, 0], [VW - 34, 1]]) lantern(g, lx + Math.round(Math.sin(G.t * 1.2 + side * 2) * 1.2), 92, 13, '#c8443a');
-    SCENE.clock(g, G, VW - 31, 152, 17);
-    for (let i = 0; i < SL.NSTALL; i++) drawFrontInfo(g, G, i);
+    for (const st of STOPS) if (st.deco !== undefined && owns(st.id)) deco(g, G, st.deco, G.t);
+    for (const [lx, side] of [[176, 0], [SW - 34, 1]]) lantern(g, lx + Math.round(Math.sin(G.t * 1.2 + side * 2) * 1.2), 92, 13, '#c8443a');
+    SCENE.clock(g, G, SW - 31, 152, 17);
+    for (let i = 0; i < SL.NSTALL; i++) if (stallOpen(i)) drawFrontInfo(g, G, i);
     G.pass.forEach((b, i) => {
       if (b === G.dragBowl) return;
       const s = Math.min(1, b.age / 0.25), px = SL.pickX(i);
@@ -317,8 +380,8 @@ const SERVING = (() => {
       ART.smallBowl(g, px, SL.SHELF_Y - 6 - Math.round((1 - s) * 12), b);
     });
     if (G.waiting > 0) drawQueue(g, G);
-    SCENE.night(g, G, 0, VW, [[34, 120, 70, 70], [VW - 34, 120, 70, 70], [480, 300, 420, 120], ...[0, 1, 2, 3].map(i => [SL.stallCX(i) + 69, 182, 60, 50])]);
+    SCENE.night(g, G, 0, SW, [[176, 120, 70, 70], [SW - 34, 120, 70, 70], [OX + 480, 300, 420, 120], [D.x + D.w / 2, 300, 120, 110], ...[0, 1, 2, 3, 4, 5, 6, 7].map(i => [SL.stallCX(i) + 69, 182, 60, 50])]);
   }
 
-  return { frame, silhouette, seatY, cordAt, downFor };
+  return { frame, silhouette, seatY, cordAt, downFor, DOOR: D };
 })();

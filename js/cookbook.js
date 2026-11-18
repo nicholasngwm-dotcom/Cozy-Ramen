@@ -70,7 +70,7 @@ const COOKBOOK = (() => {
 
   /* ---------- page templates ---------- */
   const num = p => `<span class="cb-num">${p + 1}</span>`;
-  const unlockText = node => { const n = nodeFor(node); return n ? `Level road, level ${n.level}: buy <b>${esc(n.name)}</b> (${n.cost}G).` : 'Available from day one.'; };
+  const unlockText = node => { const n = nodeFor(node); return n ? `Japan road: <b>${esc(n.place)}</b>, level ${n.level}.` : 'Available from day one.'; };
   function chip(s) {
     if (s.locked) return '<span class="cb-chip lock">Locked</span>';
     if (s.cook) return '<span class="cb-chip ok">Ready to cook</span>';
@@ -94,11 +94,11 @@ const COOKBOOK = (() => {
     const right = `
       <div class="cb-chap">Method</div>
       <p class="cb-quote">&ldquo;${esc(m.desc)}&rdquo;</p>
-      <h4>Preparation</h4>
+      <h4>Stocking up</h4>
       <ul class="cb-prep">
-        <li>${ico(tk, 'sm')}<span><b>${esc(TARES[m.tare].name)}</b>: prep at its crock, ${STOCK[tk].add} at a time (${STOCK[tk].time}s).</span></li>
-        <li>${ico(bk, 'sm')}<span><b>${esc(BROTHS[m.broth].name)}</b>: prep at its pot, ${STOCK[bk].add} at a time (${STOCK[bk].time}s).</span></li>
-        <li>${ico(Object.keys(m.tops)[0], 'sm')}<span><b>Toppings</b>: prep at each bin, ${STOCK.chashu.add} at a time.</span></li>
+        <li>${ico(tk, 'sm')}<span><b>${esc(TARES[m.tare].name)}</b>: ${packSize(tk)} spoons a jar at Kitsune-ya (${SUPPLY_PRICE[tk]}G).</span></li>
+        <li>${ico(bk, 'sm')}<span><b>${esc(BROTHS[m.broth].name)}</b>: ${packSize(bk)} ladles a pack at Kitsune-ya (${SUPPLY_PRICE[bk]}G).</span></li>
+        <li>${ico(Object.keys(m.tops)[0], 'sm')}<span><b>Toppings</b>: packs of ${packSize('chashu')} at Kitsune-ya, straight into the bins.</span></li>
       </ul>
       <h4>Cooking</h4>
       <ol class="cb-steps">
@@ -108,7 +108,7 @@ const COOKBOOK = (() => {
         <li>Add ${tops}.</li>
         <li>Pass it, then serve it at the stall.</li>
       </ol>
-      <dl class="cb-facts"><dt>Cook time</dt><dd>${cookTime()}s noodles, ${maxJobs()} preps at once</dd><dt>Needs</dt><dd>${unlockText(m.node)}</dd></dl>${num(p + 1)}`;
+      <dl class="cb-facts"><dt>Cook time</dt><dd>${cookTime()}s noodles</dd><dt>Needs</dt><dd>${unlockText(m.node)}</dd></dl>${num(p + 1)}`;
     return [left, right];
   }
   function itemPage(e, p, pageOf) {
@@ -123,8 +123,8 @@ const COOKBOOK = (() => {
       <div class="cb-line">${chip(s)}</div>
       <p class="cb-quote">${esc(NOTE[id] || TOP_DESC[id] || '')}</p>
       <dl class="cb-facts">
-        <dt>In stock</dt><dd>${have(id)} / ${capOf(id)}</dd>
-        <dt>Prep</dt><dd>${def.add} at a time at ${where} (${def.time}s)</dd>
+        <dt>In the kitchen</dt><dd>${have(id)} in ${where}</dd>
+        <dt>Restock</dt><dd>${packSize(id)} a pack, ${SUPPLY_PRICE[id]}G at Kitsune-ya</dd>
         ${e.kind === 'noodle' ? `<dt>Boil</dt><dd>${cookTime()}s in a basket; ready noodles never overcook</dd>` : ''}
         <dt>Needs</dt><dd>${unlockText(e.node)}</dd>
       </dl>
@@ -168,7 +168,9 @@ const COOKBOOK = (() => {
       <li>Noodles wait in the basket once they are ready, so nothing overcooks.</li>
       <li>If a guest asks for a recommendation, the Miso Ramen is the chef's pick.</li>
       <li>The kitchen is one long counter: hold A / D or scroll the mouse wheel to look along it.</li>
-      <li>No one is in a hurry here. Take your time.</li></ul>${num(p)}`;
+      <li>Restock at Kitsune-ya, through the staff door at the far left of the serving room, from ${pad(SHOP_HOURS.open)}:00 to ${pad(SHOP_HOURS.close)}:00. Packs go straight into the kitchen; it sells road-unlocked tools too.</li>
+      <li>No one is in a hurry here.</li></ul>${num(p)}`;
+  const pad = n => String(n).padStart(2, '0');
 
   // Lay the results out: title, contents, then entries (a ramen's spread always starts on a left page).
   function layout(list, st, filters) {

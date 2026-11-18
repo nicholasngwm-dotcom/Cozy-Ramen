@@ -329,6 +329,7 @@ const TITLE = (() => {
       { label: 'TEXT SPEED', type: 'choice', opts: ['SLOW', 'NORMAL', 'FAST'], get: () => st.textSpeed, set: v => { st.textSpeed = v; H.applySettings(); } },
       { label: 'FULLSCREEN', type: 'toggle', get: () => !!document.fullscreenElement, set: () => H.toggleFullscreen() },
       { label: 'PIXEL SNAP', type: 'toggle', get: () => st.snap, set: v => { st.snap = v; H.applySettings(); } },
+      { label: 'HINTS', type: 'toggle', get: () => !!st.hints, set: v => { st.hints = v; H.applySettings(); } },
       { label: 'BLINDS', type: 'choice', opts: ['DRAG', 'CLICK'], get: () => (st.blindClick ? 1 : 0), set: v => { st.blindClick = v === 1; H.applySettings(); } },
       { label: 'BACK', act: backOut }
     ];

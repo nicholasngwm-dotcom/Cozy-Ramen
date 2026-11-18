@@ -27,16 +27,16 @@
   const zeroes = () => Object.fromEntries(Object.keys(MENU).map(k => [k, 0]));
   const newStats = () => ({ served: 0, perfect: 0, earned: 0, sales: 0, tips: 0, declined: 0, sold: zeroes(), rev: zeroes() });
   const fresh = () => ({
-    mode: 'title', met: [], level: 1, xp: 0, owned: [],
-    t: 0, time: 0, day: 1, gold: 0, paused: false, ui: null, nightF: 0, duskF: 0,
+    mode: 'title', met: [], level: 1, xp: 0, owned: [], gear: [], where: null, aoiMet: false, region: 0, life: { served: 0, perfect: 0, sold: {}, bestDay: 0, days: 0 },
+    t: 0, time: 0, day: 1, gold: 0, paused: false, ui: null, nightF: 0, duskF: 0, rain: 0, wx: null, quest: null,
     shop: 'morning', signT: -9, signWas: 'morning', receipt: null,   // shop: morning (closed, waiting for the sign) | open | night
-    st: 0, cam: 0, kcam: 960, pan: 0, edge: 0, edgeSide: 0,
+    st: 0, cam: 0, kcam: 960, scam: 0, pan: 0, edge: 0, edgeSide: 0,
     stalls: Array.from({ length: SL.NSTALL }, () => ({ guest: null, blind: 1, target: 1, bowl: null })),
     waiting: 0, spawnT: 3, seatCD: 0, nextNum: 1,
     slips: [], pass: [], bowls: [newBowl(), newBowl()],
     baskets: [0, 1, 2].map(() => ({ t: -1 })),
-    stock: { noodle: 10, ...Object.fromEntries([...Object.keys(TARES).map(tareKey), ...Object.keys(BROTHS).map(brothKey)].map(id => [id, 12])),
-             chashu: 8, egg: 8, nori: 8, scallion: 8, menma: 8, chili: 6, corn: 5, butter: 5 },
+    stock: { noodle: 16, ...Object.fromEntries([...Object.keys(TARES).map(tareKey), ...Object.keys(BROTHS).map(brothKey)].map(id => [id, 16])),
+             chashu: 14, egg: 14, nori: 14, scallion: 14, menma: 14, chili: 8, corn: 8, butter: 8 },   // enough for the first day; then Kitsune-ya
     jobs: [], parts: [], pops: [],
     drag: null, dragBowl: null, mouse: null, hover: null,
     flash: '', flashT: 0, steamT: 0, stats: newStats()
@@ -46,10 +46,10 @@
 
   /* ---------- settings (saved right away) and the day save (at opening and closing) ---------- */
   const SETTINGS_KEY = 'cozyRamen.settings', SAVE_KEY = 'cozyRamen.save.v1';
-  const SETTINGS = Object.assign({ music: 6, sfx: 8, textSpeed: 1, snap: true, blindClick: false }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; } })());
+  const SETTINGS = Object.assign({ music: 6, sfx: 8, textSpeed: 1, snap: true, blindClick: false, hints: false }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; } })());
   function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS)); } catch (e) { /* storage may be blocked */ } }
   // Continue always resumes at the start of a morning: `day` is the morning to resume on.
-  function saveGame(day) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned })); } catch (e) { /* storage may be blocked */ } }
+  function saveGame(day) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned, quest: G.quest, gear: G.gear, aoiMet: G.aoiMet, region: G.region, life: G.life })); } catch (e) { /* storage may be blocked */ } }
   function loadSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.day ? s : null; } catch (e) { return null; } }
   function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage may be blocked */ } }
 
@@ -147,6 +147,11 @@
     bookClose: () => { noise(0.07, 480, 0.65); tone(120, 0.09, 'sine', 0.08, 80); },
     flip: () => { const f = 2100 + Math.random() * 900; noise(0.13, f, 0.32); noise(0.06, f * 0.55, 0.18, 0.09); },
     pageSettle: () => noise(0.04, 1500, 0.12),
+    // the night shop: a sliding door, the door chime, the till, a cat
+    slide: () => { noise(0.28, 700, 0.3); noise(0.06, 300, 0.4, 0.26); },
+    chime: () => { tone(1568, 0.5, 'sine', 0.04); tone(2093, 0.6, 'sine', 0.03, 0, 0.12); tone(1760, 0.7, 'sine', 0.025, 0, 0.26); },
+    ring: () => { tone(1320, 0.08, 'square', 0.03, 0, 0.05); tone(2640, 0.3, 'triangle', 0.05, 0, 0.12); noise(0.1, 600, 0.4, 0.02); },
+    meow: () => tone(700, 0.3, 'triangle', 0.05, 520),
     blip: pitch => tone((pitch || 620) * (0.94 + Math.random() * 0.12), 0.03, 'square', 0.015)
   };
 
@@ -169,8 +174,11 @@
     STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === i));
   }
   // Where the camera is heading: a station's fixed spot, or the kitchen page's pan position.
-  const camTarget = () => { const s = STATIONS[G.st]; return s.camMax ? clamp(G.kcam, s.cam, s.camMax) : s.cam; };
-  const panBy = dx => { const s = STATIONS[G.st]; if (s.camMax) G.kcam = clamp(G.kcam + dx, s.cam, s.camMax); };
+  const wide = s => s.camMax !== undefined;   // a station you pan along
+  const panKey = () => (STATIONS[G.st].id === 'serving' ? 'scam' : 'kcam');
+  const camTarget = () => { const s = STATIONS[G.st]; return wide(s) ? clamp(G[panKey()], s.cam, s.camMax) : s.cam; };
+  const panBy = dx => { const s = STATIONS[G.st]; if (wide(s)) G[panKey()] = clamp(G[panKey()] + dx, s.cam, s.camMax); };
+  const atPanEnd = side => { const s = STATIONS[G.st], v = clamp(G[panKey()], s.cam, s.camMax); return side < 0 ? v <= s.cam + 1 : v >= s.camMax - 1; };
   const settled = () => Math.abs(G.cam - camTarget()) < 2;
 
   /* ---------- hit areas (world coordinates) ---------- */
@@ -181,45 +189,31 @@
   const tareRect = i => { const t = KL.tare(i); return { x: K(t.cx) - 22, y: t.y - 30, w: 44, h: 86 }; };
   const potRect = i => { const p = KL.pot(i); return { x: K(p.cx) - p.rx - 4, y: p.cy - 50, w: 2 * p.rx + 8, h: 112 }; };
   const noodleRect = { x: K(KL.NOODLE.x), y: KL.NOODLE.y, w: KL.NOODLE.w, h: KL.NOODLE.h };
-  // every stock that has a shelf spot (and so a restock button) in the kitchen
-  const stockIds = () => ['noodle', ...TARE_SLOTS.filter(k => k && tareOn(k)).map(tareKey), ...BROTH_SLOTS.filter(k => k && brothOn(k)).map(brothKey), ...TOPS.filter(topOn)];
-  const lockedSay = node => say('Unlocks on the level road at level ' + levelFor(node) + '.');
+  const lockedSay = node => { const n = nodeFor(node); say('Unlocks on the Japan road at ' + (n ? n.place + ', level ' + n.level : 'a later stop') + '.'); };
   const passRect = { x: K(KL.PASS.x), y: KL.PASS.y, w: KL.PASS.w, h: KL.PASS.h };
   const passSlot = i => { const [x, y] = KL.passPos(i); return { x: K(x) - 32, y: y - 14, w: 64, h: 40 }; };
   const pickSlot = i => ({ x: SL.X0 + SL.pickX(i) - 32, y: SL.SHELF_Y - 22, w: 64, h: 44 });
-  const shelfRect = { x: SL.X0 + 180, y: SL.SHELF_Y - 40, w: 580, h: 64 };
+  const shelfRect = { x: SL.X0 + SL.OX + 180, y: SL.SHELF_Y - 40, w: 580, h: 64 };
+  const doorRect = { x: SL.X0 + SL.DOOR.x - 6, y: SL.DOOR.y - 36, w: SL.DOOR.w + 12, h: SL.DOOR.h + 36 };   // the staff door
+  const lockedStall = i => { const n = nodeFor('stall' + (i + 1)); say(owns(n.id) ? 'Stall ' + (i + 1) + ' is on sale at Kitsune-ya (' + n.cost + 'G).' : 'Stall ' + (i + 1) + ' unlocks on the Japan road at ' + n.place + ', level ' + n.level + '.'); };
   const stallRect = i => ({ x: SL.X0 + SL.stallX(i) + 6, y: SL.BLIND_TOP, w: SL.STALL_W - 12, h: SL.COUNTER_Y - SL.BLIND_TOP + 140 });
   const menuCardRect = i => ({ x: SL.X0 + SL.stallX(i) + SL.STALL_W - 58, y: SL.COUNTER_Y - 40, w: 44, h: 44 });
   const trashRect = { x: K(KL.TRASH.x) - 6, y: KL.TRASH.y - 6, w: KL.TRASH.w + 12, h: KL.TRASH.h + 12 };
-  function plusRects() {
-    const out = [];
-    for (const id of stockIds()) if (G.stock[id] < capOf(id) && !G.jobs.some(j => j.id === id)) { const [x, y] = KL.badge(id); out.push({ id, r: { x: K(x) - 13, y: y - 13, w: 26, h: 26 } }); }
-    return out;
-  }
-
-  /* ---------- kitchen actions ---------- */
-  function startJob(id) {
-    const def = STOCK[id];
-    if (G.stock[id] >= capOf(id)) return say('That is fully stocked.');
-    if (G.jobs.some(j => j.id === id)) return say('That is already being prepared.');
-    if (G.jobs.length >= maxJobs()) return say('You can prep ' + maxJobs() + ' things at once. One will finish soon.');
-    G.jobs.push({ id, t: 0, dur: def.time }); SFX.chop();
-  }
   function jobPos(id) { const [x, y] = KL.badge(id); return [K(x), y - 22]; }
 
   // Things you can pick up. start() returns the drag, or null (after explaining why not).
   function sources() {
     const s = [];
-    s.push({ r: noodleRect, start: () => G.stock.noodle > 0 ? { kind: 'nest' } : say('Out of noodles. Tap the + beside the tray.') });
+    s.push({ r: noodleRect, start: () => G.stock.noodle > 0 ? { kind: 'nest' } : say('Out of noodles. Kitsune-ya sells more after closing.') });
     TARE_SLOTS.forEach((type, i) => s.push({ r: tareRect(i), start: () => {
       if (!type) return say('This crock is empty for now.');
       if (!tareOn(type)) return lockedSay(TARES[type].node);
-      return G.stock[tareKey(type)] > 0 ? { kind: 'tare', type } : say('The ' + TARES[type].name.toLowerCase() + ' crock is empty. Tap its +.');
+      return G.stock[tareKey(type)] > 0 ? { kind: 'tare', type } : say('The ' + TARES[type].name.toLowerCase() + ' crock is empty. Kitsune-ya sells more after closing.');
     } }));
     BROTH_SLOTS.forEach((type, i) => s.push({ r: potRect(i), start: () => {
       if (!type) return say('This pot is empty for now.');
       if (!brothOn(type)) return lockedSay(BROTHS[type].node);
-      return G.stock[brothKey(type)] > 0 ? { kind: 'broth', type } : say('The ' + BROTHS[type].name.toLowerCase() + ' pot is empty. Tap its +.');
+      return G.stock[brothKey(type)] > 0 ? { kind: 'broth', type } : say('The ' + BROTHS[type].name.toLowerCase() + ' pot is empty. Kitsune-ya sells more after closing.');
     } }));
     KL.basketX.forEach((bx, j) => s.push({ r: basketRect(j), start: () => {
       const b = G.baskets[j];
@@ -227,11 +221,11 @@
       if (b.t < cookTime()) return say('Still cooking. They will be ready in a moment.');
       return { kind: 'basket', j };
     } }));
-    TOPS.forEach((id, k) => s.push({ r: binRect(k), start: () => !topOn(id) ? lockedSay(TOP_NODE[id]) : G.stock[id] > 0 ? { kind: 'top', id } : say('Out of ' + TOP_NAME[id].toLowerCase() + '. Tap its + to prep more.') }));
+    TOPS.forEach((id, k) => s.push({ r: binRect(k), start: () => !topOn(id) ? lockedSay(TOP_NODE[id]) : G.stock[id] > 0 ? { kind: 'top', id } : say('Out of ' + TOP_NAME[id].toLowerCase() + '. Kitsune-ya sells more after closing.') }));
     KL.bowlX.forEach((bx, k) => s.push({ r: bowlRect(k), start: () => G.bowls[k].s > 0 ? { kind: 'bowl', bowl: G.bowls[k], spot: k } : null }));
     for (let i = 0; i < SL.NSTALL; i++) {
       const gu = G.stalls[i].guest;
-      if (gu && (gu.state === 'call' || gu.state === 'wait')) s.push({ r: cordRect(i), cord: true, start: () => ({ kind: 'cord', i }) });
+      if (stallOpen(i) && gu && (gu.state === 'call' || gu.state === 'wait')) s.push({ r: cordRect(i), cord: true, start: () => ({ kind: 'cord', i }) });
     }
     G.pass.forEach((b, i) => {
       s.push({ r: passSlot(i), start: () => ({ kind: 'bowl', bowl: b, pass: true }) });
@@ -263,7 +257,7 @@
       };
       t.push({ r: passRect, ok: canPass, drop: toPass });
       t.push({ r: shelfRect, ok: canPass, drop: toPass });
-      for (let i = 0; i < SL.NSTALL; i++) t.push({ r: stallRect(i), ok: () => { const st = G.stalls[i], gu = st.guest; return gu && gu.state === 'wait' && st.blind < 0.05 && d.bowl.s >= 3; }, drop: () => serve(i, d) });
+      for (let i = 0; i < SL.NSTALL; i++) if (stallOpen(i)) t.push({ r: stallRect(i), ok: () => { const st = G.stalls[i], gu = st.guest; return gu && gu.state === 'wait' && st.blind < 0.05 && d.bowl.s >= 3; }, drop: () => serve(i, d) });
       t.push({ r: trashRect, ok: () => true, drop: () => { takeBowl(d); SFX.drop(); pop('BINNED', K(KL.TRASH.x) + 23, KL.TRASH.y - 10, '#c9d1dd'); } });
     }
     return t;
@@ -274,9 +268,9 @@
   }
   function accepts(b, d) {
     if (d.kind === 'tare') return b.s === 0;
-    if (d.kind === 'broth') return b.s === 1;
+    if (d.kind === 'broth') return b.s === 1 && recipesFor(b.tare, d.type).length > 0;
     if (d.kind === 'basket') return b.s === 2;
-    if (d.kind === 'top') return b.s >= 3 && b.items.filter(x => x === d.id).length < 2;
+    if (d.kind === 'top') return b.s >= 3 && b.items.filter(x => x === d.id).length < 2 && toppingOk(b, d.id);
     return false;
   }
   function addTo(b, k, d) {
@@ -287,6 +281,7 @@
     } else if (d.kind === 'broth') {
       if (b.s < 1) return say('Tare goes in first. Drag a spoon from a tare crock.');
       if (b.s > 1) return say('This bowl already has broth.');
+      if (!recipesFor(b.tare, d.type).length) return say("You can't make that. No ramen uses " + TARES[b.tare].name.toLowerCase() + ' with ' + BROTHS[d.type].name.toLowerCase() + '.');
       G.stock[brothKey(d.type)]--; b.s = 2; b.broth = d.type; b.fill = 0; SFX.pour(); splash(bx, by, BROTHS[d.type].c, 12);
     } else if (d.kind === 'basket') {
       if (b.s < 2) return say(b.s < 1 ? 'Tare and broth go in before the noodles.' : 'Ladle in the broth before the noodles.');
@@ -295,8 +290,35 @@
     } else if (d.kind === 'top') {
       if (b.s < 3) return say(b.s < 1 ? 'Start in the kitchen: tare, broth, then noodles.' : 'Noodles go in before the toppings.');
       if (b.items.filter(x => x === d.id).length >= 2) return say('Two portions is the most a bowl can take.');
+      if (!toppingOk(b, d.id)) return say("You can't make that. " + TOP_NAME[d.id] + ' does not go in a ' + TARES[b.tare].short.toLowerCase() + ' and ' + BROTHS[b.broth].short.toLowerCase() + ' bowl.');
       G.stock[d.id]--; b.items.push(d.id); (b.itemT = b.itemT || [])[b.items.length - 1] = G.t; SFX.add(); spark(bx, by, 3, '#fff6d0');
     }
+  }
+
+  /* ---------- what a bowl is: which ramen it makes, and how it differs from that recipe or an order ---------- */
+  const EXTRA_OK = ['scallion', 'egg', 'corn', 'butter', 'chashu', 'menma', 'nori'];   // extras any bowl may take (chili only where its recipe has chili)
+  const recipesFor = (tare, broth) => Object.keys(MENU).filter(k => MENU[k].tare === tare && MENU[k].broth === broth && menuOn(k));
+  const toppingOk = (b, id) => recipesFor(b.tare, b.broth).some(k => MENU[k].tops[id] || EXTRA_OK.includes(id));
+  function identify(b) {   // the closest unlocked recipe for this tare + broth + toppings, or null
+    if (!b.tare || !b.broth) return null;
+    const c = ART.count(b.items);
+    let best = null, bd = Infinity;
+    for (const k of recipesFor(b.tare, b.broth)) {
+      let d = 0; for (const id of TOPS) d += Math.abs((c[id] || 0) - (MENU[k].tops[id] || 0));
+      if (d < bd) { bd = d; best = k; }
+    }
+    return best && { type: best, tops: c };
+  }
+  function orderDiff(b, order) {   // what is off, in words; empty when the bowl is exactly what was ordered
+    const m = MENU[order.type];
+    if (b.tare !== m.tare || b.broth !== m.broth) { const id = identify(b); return ['it should be ' + m.name + (id ? ', not ' + MENU[id.type].name : '')]; }
+    const c = ART.count(b.items), out = [];
+    for (const id of TOPS) {
+      const want = order.tops[id] || 0, has = c[id] || 0, n = TOP_NAME[id].toLowerCase();
+      if (has < want) out.push('missing ' + (want - has > 1 ? 'two ' : '') + n);
+      else if (has > want) out.push('extra ' + n);
+    }
+    return out;
   }
 
   /* ---------- serving ---------- */
@@ -316,6 +338,11 @@
     if (st.blind > 0.05) return say('Pull the red cord to raise the blind first.');
     if (gu.state !== 'wait') return say('They already have their bowl.');
     if (d.bowl.s < 3) return say('That bowl is not finished yet.');
+    const off = orderDiff(d.bowl, gu.order);
+    if (off.length) {
+      bubble(i, 'That is not what I ordered...');
+      return say('That is not what ' + gu.gt.name + ' ordered: ' + off.join(', ') + '.');
+    }
     takeBowl(d);
     const q = grade(d.bowl, gu.order), perfect = q > 0.99;
     gu.q = q; gu.sale = Math.round(gu.order.price * q); gu.pay = gu.sale + (perfect ? perfectTip() : 0) + (gu.trusted && perfect ? 3 : 0);
@@ -350,7 +377,7 @@
   const joinList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
   function seatGuest(i) {
     const used = G.stalls.map(s => s.guest && s.guest.gt.id);
-    const pool = GUESTS.filter(gt => !used.includes(gt.id) && (!gt.taste.night || isNight()));
+    const pool = GUESTS.filter(gt => !used.includes(gt.id) && (!gt.taste.night || isNight()) && !(gt.id === 'aoi' && G.shop === 'night'));
     const gt = pick(pool);
     const gu = { gt, img: IMG[gt.id], sil: SERVING.silhouette(IMG[gt.id]), stall: i, state: 'arrive', t: 0, mood: null, order: null };
     gu.asksRec = Math.random() < (gt.taste.pref ? 0.25 : 0.55);
@@ -361,21 +388,21 @@
   // then it eases off into a slow evening.
   function pace(h) {
     if (h < 11) return 2.6 - (h - 9) * 0.3;          // 09-11: 2.6 -> 2.0
-    if (h < 12) return 2.0 - (h - 11);               // 11-12: ramp into the rush
-    if (h < 15) return 1;                            // 12-15: peak
-    if (h < 16.5) return 1 + (h - 15) * 0.9;         // 15-16:30: easing off
+    if (h < 12) return 2.0 - (h - 11) * 0.88;        // 11-12: ramp into the rush
+    if (h < 15) return 1.12;                         // 12-15: peak (a touch calmer than it was)
+    if (h < 16.5) return 1.12 + (h - 15) * 0.85;     // 15-16:30: easing off
     return 2.4 + (h >= 18 ? 0.4 : 0);                // late afternoon, then a quieter evening
   }
   function updateGuests(dt) {
     G.spawnT -= dt; G.seatCD -= dt;
-    const free = () => G.stalls.findIndex(s => !s.guest);
+    const free = () => G.stalls.findIndex((s, i) => !s.guest && stallOpen(i));
     if (G.shop === 'morning') G.spawnT = Math.max(G.spawnT, 3);
     else if (G.shop === 'night') {     // closed, but the odd late-night walk-in knocks (gold only, never on a receipt)
       if (G.spawnT <= 0) { if (free() >= 0) seatGuest(free()); G.spawnT = rand(40, 60); }
     } else if (G.spawnT <= 0) {
       if (free() >= 0 && G.waiting === 0) seatGuest(free());
-      else if (G.waiting < MAX_WAIT) G.waiting++;
-      G.spawnT = Math.max(6.5, rand(9, 13) - 0.4 * (G.day - 1)) * pace(hour());
+      else if (G.waiting < maxWait()) G.waiting++;
+      G.spawnT = Math.max(6.5, rand(9, 13) - 0.4 * (G.day - 1)) * pace(hour()) / rainBoost();   // rain brings 25% more guests
     }
     if (G.shop === 'open' && G.waiting > 0 && G.seatCD <= 0 && free() >= 0) { G.waiting--; G.seatCD = 2; seatGuest(free()); }
     for (const st of G.stalls) {
@@ -412,6 +439,7 @@
             const S = G.stats, type = gu.order.type;
             G.gold += gu.pay; S.earned += gu.pay; S.served++; if (perfect) S.perfect++;
             S.sales += gu.sale; S.tips += gu.pay - gu.sale; S.sold[type]++; S.rev[type] += gu.sale;
+            const L = G.life; L.served++; if (perfect) L.perfect++; L.sold[type] = (L.sold[type] || 0) + 1;
             if (!G.met.includes(gu.gt.id)) G.met.push(gu.gt.id);
             pop('+' + gu.pay + 'G', cx, 220);
             gainXP(Math.round(6 + 10 * gu.q), cx);
@@ -587,12 +615,12 @@
   }
   function openUI(id, how) {
     if (BOOKS[id]) return openBook(id, how);
-    if (id === 'menu') buildMenu(); else if (id === 'road') buildRoad();
+    if (id === 'menu') buildMenu(); else if (id === 'road') { unlockReached(); JOURNEY.open(); }
     $(id).classList.add('show'); G.ui = id; G.drag = null; G.dragBowl = null; SFX.tap();
   }
   function closeUI() {
     if (BOOKS[G.ui]) return closeBook(G.ui);
-    if (G.ui === 'menu' || G.ui === 'road') { $(G.ui).classList.remove('show'); G.ui = null; SFX.tap(); }
+    if (G.ui === 'menu' || G.ui === 'road') { if (G.ui === 'road') JOURNEY.close(); $(G.ui).classList.remove('show'); G.ui = null; SFX.tap(); }
   }
   $('menu-close').onclick = closeUI;
   for (const id of ['menu', 'road']) $(id).addEventListener('pointerdown', e => { if (e.target.id === id) closeUI(); });
@@ -611,60 +639,101 @@
     if (cheatBuf.endsWith('guest')) {
       G.met = GUESTS.map(gt => gt.id); SFX.ding(); toast('Cheat: every guest is in the guest book'); cheatBuf = ''; return true;
     }
+    // 'morning': the start of the next morning (09:00, sign still CLOSED). 'night': 21:00, closing time.
+    if (cheatBuf.endsWith('morning')) {
+      if (muteBefore !== null && muted !== muteBefore) $('mute').click();   // undo the M that started the word
+      if (G.shop !== 'morning') { G.day++; G.shop = 'morning'; G.signWas = 'morning'; G.signT = G.t; G.waiting = 0; saveGame(G.day); }
+      G.time = 0; updateClock(0); SFX.bell(); toast('Cheat: Day ' + G.day + ', 09:00. Flip the sign when you are ready to open.'); cheatBuf = ''; return true;
+    }
+    if (cheatBuf.endsWith('night')) {
+      if (G.shop !== 'night') { if (G.shop === 'morning') G.stats = newStats(); G.time = PHASE; closeShop(); }
+      else G.time = PHASE;
+      updateClock(0); SFX.bell(); toast('Cheat: 21:00. Closing time; Kitsune-ya is open across the street.'); cheatBuf = ''; return true;
+    }
+    if (cheatBuf.endsWith('shower')) {
+      G.forceRain = G.rain >= 0.5 ? 0 : 1; SFX.whoosh(); toast(G.forceRain ? 'Cheat: here comes the rain' : 'Cheat: the rain clears'); cheatBuf = ''; return true;
+    }
     if (cheatBuf.endsWith('level up')) {
-      G.level = LEVEL_XP.length; G.xp = LEVEL_XP[LEVEL_XP.length - 1]; G.owned = NODES.map(n => n.id);
-      KITCHEN.refresh(); SFX.bell(); toast('Cheat: max level, everything on the level road unlocked'); cheatBuf = ''; return true;
+      G.level = LEVEL_XP.length; G.xp = LEVEL_XP[LEVEL_XP.length - 1]; G.owned = STOPS.filter(n => n.kind !== 'start').map(n => n.id);
+      KITCHEN.refresh(); SFX.bell(); toast('Cheat: max level, the whole Japan road completed'); cheatBuf = ''; return true;
     }
     return false;
   }
   $('lvl').onclick = () => { if (!G.ui && G.mode === 'play') openUI('road'); };
   $('road-close').onclick = closeUI;
 
-  /* ---------- level road: XP from serving opens each step, gold buys it ---------- */
+  /* ---------- the Japan road (js/journey.js): XP only; every stop up to your level unlocks by itself ---------- */
   const xpFloor = () => LEVEL_XP[G.level - 1], xpNext = () => LEVEL_XP[G.level];
-  function gainXP(n, x) {
-    G.xp += n; pop('+' + n + ' XP', x, 196, '#9fd8ff');
-    while (G.level < LEVEL_XP.length && G.xp >= LEVEL_XP[G.level]) {
-      G.level++; SFX.bell();
-      const nd = NODES.find(nn => nn.level === G.level);
-      toast('Level ' + G.level + '!' + (nd ? ' ' + nd.name + ' is ready on the level road.' : ''));
-    }
+  // lead: text to show before any level-up news (a quest reward, say), in one toast
+  function gainXP(n, x, lead = '') {
+    G.xp += n; if (x !== undefined) pop('+' + n + ' XP', x, 196, '#9fd8ff');
+    const lv0 = G.level;
+    while (G.level < LEVEL_XP.length && G.xp >= LEVEL_XP[G.level]) G.level++;
+    if (G.level > lv0) {
+      SFX.bell();
+      const got = unlockReached();
+      toast(lead + 'Level ' + G.level + '!' + (got.length ? ' Japan road: ' + got.join(', ') + '.' : ''));
+    } else if (lead) toast(lead.trim());
+    if (G.ui === 'road') JOURNEY.refresh();
   }
-  const claimable = () => NODES.filter(n => n.level <= G.level && !G.owned.includes(n.id));
-  function buyNode(id) {
-    const n = nodeFor(id);
-    if (!n || G.owned.includes(id) || n.level > G.level) return;
-    if (G.gold < n.cost) { SFX.bad(); return; }
-    G.gold -= n.cost; G.owned.push(id); SFX.coin(); SFX.ding();
+  const claimable = () => [];
+  // Unlock one stop (it must be the next on the road and within your level). Returns a short note for the toast.
+  function claimStop(id) {
+    const n = nodeFor(id), f = frontierIdx();
+    if (!n || STOPS.indexOf(n) !== f || !stopReady(n)) return '';
+    G.owned.push(id); if (n.gold) G.gold += n.gold;
     KITCHEN.refresh();
-    toast(n.kind === 'recipe' ? n.name + ' is on the menu! Its recipe is in the book.' : n.name + ' unlocked!');
-    buildRoad();
+    let note = n.kind === 'recipe' ? n.name + ' is on the menu' : n.kind === 'upgrade' ? n.name + ' on sale at Kitsune-ya' : n.place + (n.gold ? ' (+' + n.gold + 'G)' : '');
+    const next = STOPS[frontierIdx()];
+    if (n.kind === 'landmark' && next && next.region !== n.region && regionOpen(next.region)) { G.region = next.region; note += ', your shop moves to ' + REGIONS[next.region].name; }
+    if (frontierIdx() < 0) note += ', the journey is complete';
+    return note;
   }
-  function roadIcon(n) {
-    if (n.kind === 'recipe') return box(ico(124, 82, g => ART.bigBowl(g, 62, 26, { s: 3, tare: MENU[n.menu].tare, broth: MENU[n.menu].broth, fill: 1, noodles: 'perfect', items: recipeItems(MENU[n.menu]), hide: {} }, false, 0)), 'big');
-    const draw = { quick: g => KITCHEN.spoon(g, 14, 38, true), bins: g => ART.top(g, 'egg', 20, 20, 1.3), boil: g => KITCHEN.basket(g, 24, 48, true, false, 0), tips: g => { PX.ell(g, 18, 18, 13, 13, PX.OUTLINE); PX.ell(g, 18, 18, 12, 12, '#e0b040'); PX.ell(g, 18, 18, 8, 8, '#c98a2e'); PX.rect(g, 13, 11, 4, 2, '#ffe08a'); } }[n.id];
-    const size = { quick: [40, 46], bins: [40, 40], boil: [60, 76], tips: [36, 36] }[n.id];
-    return box(ico(size[0], size[1], draw), 'big');
+  function unlockReached() {
+    const got = [];
+    for (let f = frontierIdx(); f >= 0 && stopReady(STOPS[f]); f = frontierIdx()) { const note = claimStop(STOPS[f].id); if (!note) break; got.push(note); }
+    if (got.length) { SFX.coin(); SFX.ding(); }
+    return got;
   }
-  function buildRoad() {
-    const lv = G.level, span = Math.max(1, (xpNext() || xpFloor()) - xpFloor()), have = G.level >= LEVEL_XP.length ? span : G.xp - xpFloor();
-    $('road-head').innerHTML = `<span class="lvchip">Lv ${lv}</span>
-      <span class="xpbar big"><i style="width:${Math.round(100 * Math.min(1, have / span))}%"></i></span>
-      <span class="xptext">${G.level >= LEVEL_XP.length ? 'Max level' : (xpNext() - G.xp) + ' XP to level ' + (lv + 1)}</span>
-      <span class="goldchip">${UI.img('coin')}${G.gold}G</span>`;
-    const card = n => {
-      const owned = G.owned.includes(n.id), open = n.level <= lv, afford = G.gold >= n.cost;
-      const state = owned ? 'owned' : open ? 'open' : 'locked';
-      const sub = n.kind === 'recipe' ? (n.also ? '+ ' + n.also : 'New ramen') : n.desc;
-      const act = owned ? '<span class="done">Owned</span>'
-        : open ? `<button class="btn buy" data-node="${n.id}" type="button"${afford ? '' : ' disabled'}>${UI.img('coin')}${n.cost}G</button>`
-        : `<span class="need">Reach Lv ${n.level}</span>`;
-      return `<li class="node ${state} ${n.kind}"><span class="lvtag">Lv ${n.level}</span>${roadIcon(n)}<b>${n.name}</b><small>${sub}</small>${act}</li>`;
-    };
-    const start = `<li class="node owned recipe"><span class="lvtag">Lv 1</span>${roadIcon({ kind: 'recipe', menu: 'miso' })}<b>Miso Ramen</b><small>Your first recipe</small><span class="done">Owned</span></li>`;
-    $('road-body').innerHTML = `<ol class="road">${start}${NODES.map(card).join('')}</ol>`;
-    $('road-body').querySelectorAll('button.buy').forEach(b => { b.onclick = () => buyNode(b.dataset.node); });
+
+  /* ---------- the daily quest: one small goal each day, paid in XP and gold the moment it is done ---------- */
+  const seeded = n => { const v = Math.sin(n * 91.345 + 7.77) * 43758.5453; return v - Math.floor(v); };
+  function makeQuest(day) {
+    const L = G.level, r = k => seeded(day * 13 + k), menus = Object.keys(MENU).filter(menuOn);
+    const kinds = ['served', 'sold', 'perfect', 'earn'], k = day === 1 ? 'served' : kinds[Math.floor(r(1) * kinds.length)];
+    let q;
+    if (k === 'served') q = { k, n: 3 + Math.floor(L * 0.7) + Math.floor(r(2) * 3) };
+    else if (k === 'sold') q = { k, type: menus[Math.floor(r(3) * menus.length)], n: 3 + Math.floor(L / 3) + Math.floor(r(2) * 3) };
+    else if (k === 'perfect') q = { k, n: 2 + Math.floor(L / 2) + Math.floor(r(2) * 2) };
+    else q = { k, n: Math.round((40 + L * 18 + r(2) * 30) / 5) * 5 };
+    return Object.assign(q, { day, done: false, xp: 20 + L * 6 + (k === 'perfect' || k === 'earn' ? 10 : 0), gold: 15 + L * 5 });
   }
+  const questHave = q => G.shop === 'morning' ? 0 : q.k === 'served' ? G.stats.served : q.k === 'sold' ? G.stats.sold[q.type] || 0 : q.k === 'perfect' ? G.stats.perfect : G.stats.earned;
+  const questText = q => q.k === 'served' ? `Serve ${q.n} guests` : q.k === 'sold' ? `Serve ${q.n} ${MENU[q.type].name}` : q.k === 'perfect' ? `Serve ${q.n} perfect bowls` : `Earn ${q.n}G today`;
+  function updateQuest() {
+    if (G.mode !== 'play') return;
+    if (!G.quest || G.quest.day !== G.day) G.quest = makeQuest(G.day);
+    const q = G.quest;
+    if (!q.done && questHave(q) >= q.n) {
+      q.done = true; G.gold += q.gold; SFX.coin(); SFX.ding(); hearts(VW / 2 + G.cam, 120, 6);
+      gainXP(q.xp, undefined, 'Daily quest complete! +' + q.xp + ' XP, +' + q.gold + 'G. ');
+    }
+    const have = Math.min(questHave(q), q.n);
+    setText('quest-text', questText(q));
+    setText('quest-n', q.done ? 'Done' : have + '/' + q.n);
+    setText('quest-reward', '+' + q.xp + ' XP  +' + q.gold + 'G');
+    $('quest-fill').style.width = Math.round(100 * (q.done ? 1 : have / q.n)) + '%';
+    $('quest').classList.toggle('done', q.done);
+  }
+  NIGHTSHOP.init({
+    sfx: SFX, say, toast, img: IMG.aoi,
+    save: () => saveGame(G.shop === 'night' ? G.day + 1 : G.day),
+    back: st => { G.where = null; G.drag = null; G.st = st; G.cam = camTarget(); SFX.whoosh(); STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === st)); }
+  });
+  JOURNEY.init({
+    claim: claimStop, close: () => closeUI(), sound: n => (n === 'tap' ? SFX.tap() : null),
+    setRegion: r => { if (!regionOpen(r) || G.region === r) return; G.region = r; SFX.whoosh(); toast('Your shop is now in ' + REGIONS[r].name + '.'); }
+  });
   $('dialog').addEventListener('pointerdown', advance);
 
   /* ---------- clock (mood only) ---------- */
@@ -677,16 +746,53 @@
     toast('Day ' + G.day + ': the shop is open! Guests will start arriving.');
   }
   function closeShop() {
+    G.life.bestDay = Math.max(G.life.bestDay, G.stats.earned); G.life.days++;
     setShop('night'); G.waiting = 0; G.spawnT = rand(40, 60);
     makeReceipt();
     saveGame(G.day + 1);
-    toast('21:00, closing time. Seated guests can finish, and the odd night owl may still knock.');
+    toast('21:00, closing time. Aoi\'s supply shop across the street is open until 05:00.');
   }
   function flipSign() {
     if (G.shop === 'open') return say('The shop stays open until 21:00.');
     openShop();
   }
+  /* ---------- weather: each day may bring one rain spell; while it rains, 25% more guests duck in ---------- */
+  const RAIN_CHANCE = 0.35;
+  const atHour = h => (h - 9) / 12 * PHASE;   // hour (9-33) -> G.time
+  const rainBoost = () => 1 + 0.25 * G.rain;
+  function rollWeather() {
+    G.wx = { day: G.day, from: -1, to: -1 };
+    delete G.forceRain;
+    if (G.day > 1 && Math.random() < RAIN_CHANCE) { const h0 = rand(9, 22); G.wx.from = atHour(h0); G.wx.to = atHour(Math.min(32, h0 + rand(2.5, 6))); }
+  }
+  function updateWeather(dt) {
+    if (!G.wx || G.wx.day !== G.day) rollWeather();
+    const target = G.forceRain !== undefined ? G.forceRain : (G.time >= G.wx.from && G.time < G.wx.to ? 1 : 0);
+    const was = G.rain;
+    G.rain = clamp(G.rain + Math.sign(target - G.rain) * dt / 5, 0, 1);
+    if (G.mode === 'play' && was < 0.5 && G.rain >= 0.5) toast(G.shop === 'open' ? 'It is starting to rain. Folks will duck in for something warm.' : 'It is starting to rain.');
+    else if (G.mode === 'play' && was >= 0.5 && G.rain < 0.5) toast('The rain has stopped.');
+  }
+  // the sound of rain: looped noise through a soft filter, as loud as the rain is heavy (quieter indoors at Kitsune-ya)
+  let rainSrc = null, rainGain = null;
+  function rainSound() {
+    const want = G.mode === 'play' && !muted ? G.rain * 0.06 * SETTINGS.sfx / 8 * (G.where === 'store' ? 0.45 : 1) : 0;
+    if (!actx || (!rainSrc && want <= 0.001)) return;
+    try {
+      if (!rainSrc) {
+        const n = actx.sampleRate * 2, buf = actx.createBuffer(1, n, actx.sampleRate), d = buf.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+        rainSrc = actx.createBufferSource(); rainSrc.buffer = buf; rainSrc.loop = true;
+        const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+        const hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 300;
+        rainGain = actx.createGain(); rainGain.gain.value = 0;
+        rainSrc.connect(lp); lp.connect(hp); hp.connect(rainGain); rainGain.connect(actx.destination); rainSrc.start();
+      }
+      rainGain.gain.value = want;
+    } catch (e) { /* audio is optional */ }
+  }
   function updateClock(dt) {
+    updateWeather(dt);
     const wasEvening = isNight();
     if (G.shop !== 'morning') G.time += dt;                // the clock waits at 09:00 until you open
     if (G.shop === 'open' && G.time >= PHASE) closeShop();
@@ -699,13 +805,23 @@
   }
 
   /* ---------- update ---------- */
+  function tickJobs(dt) {   // prep keeps going in the kitchen even while you are out
+    for (const j of G.jobs) {
+      j.t += dt;
+      if (j.t >= j.dur) { const def = STOCK[j.id]; G.stock[j.id] += def.add; const [x, y] = jobPos(j.id); pop('+' + def.add, x, y, '#b6e37a'); if (!G.where) SFX.ding(); }
+      else if (!G.where && TOPS.includes(j.id) && Math.random() < dt * 5) SFX.chop();
+    }
+    G.jobs = G.jobs.filter(j => j.t < j.dur);
+  }
   function update(dt) {
     G.t += dt;
     updateDialog(dt);
     if (G.receipt && !G.ui && !G.paused && G.mode === 'play') { G.ui = 'receipt'; G.drag = null; G.dragBowl = null; G.receipt.t0 = G.t; SFX.print(); }
     if (G.ui === 'receipt') { updateReceipt(dt); return; }
     if (G.paused || G.ui === 'menu' || G.ui === 'book' || G.ui === 'road' || G.ui === 'guests' || G.ui === 'pause') return;
-    updateClock(dt);
+    updateClock(G.where === 'store' ? dt * 0.25 : dt);   // time runs slower while you browse Aoi's shelves
+    NIGHTSHOP.update(dt);
+    if (G.where) { tickJobs(dt); for (const p of G.pops) p.life -= dt; G.pops = G.pops.filter(p => p.life > 0); if (G.flashT > 0) G.flashT -= dt; return; }
     updateGuests(dt);
     // camera + edge panning
     if (G.pan) panBy(G.pan * PAN_SPEED * dt);
@@ -725,12 +841,7 @@
     for (const b of G.bowls) { b.age += dt; if (b.broth && b.fill < 1) b.fill = Math.min(1, b.fill + dt * 2.5); }
     for (const b of G.pass) b.age += dt;
     for (const s of G.slips) s.age += dt;
-    for (const j of G.jobs) {
-      j.t += dt;
-      if (j.t >= j.dur) { const def = STOCK[j.id]; G.stock[j.id] = Math.min(capOf(j.id), G.stock[j.id] + def.add); const [x, y] = jobPos(j.id); pop('+' + def.add, x, y, '#b6e37a'); SFX.ding(); }
-      else if (TOPS.includes(j.id) && Math.random() < dt * 5) SFX.chop();
-    }
-    G.jobs = G.jobs.filter(j => j.t < j.dur);
+    tickJobs(dt);
     G.steamT -= dt;
     if (G.steamT <= 0 && G.cam > 480) {
       G.steamT = 0.05;
@@ -764,17 +875,22 @@
   const slipsAlpha = () => clamp(G.cam / 960, 0, 1);
   // Plain clicks: restock buttons, the recipe book, menu cards, stalls.
   function clicks() {
-    const c = plusRects().map(p => ({ r: p.r, fn: () => startJob(p.id) }));
+    const c = [];
     c.push({ r: { x: K(KL.BOOK.x) - 4, y: KL.BOOK.y - 4, w: KL.BOOK.w + 8, h: KL.BOOK.h + 30 }, fn: () => openUI('book', 'counter') });
     c.push({ r: signRect, fn: flipSign });
+    // the pass is a doorway: walk through it to the serving room (bowls waiting in it are still picked up as usual)
+    const wm = world(G.mouse);
+    if (!G.pass.some((b, i) => inR(wm, passSlot(i)))) c.push({ r: passRect, fn: () => go(0) });
+    c.push({ r: doorRect, fn: () => NIGHTSHOP.enter('street') });
     for (let i = 0; i < SL.NSTALL; i++) {
+      if (!stallOpen(i)) { c.push({ r: stallRect(i), fn: () => lockedStall(i) }); continue; }
       c.push({ r: menuCardRect(i), fn: () => openUI('menu') });
       const gu = G.stalls[i].guest;
       if (gu && gu.state === 'wait' && G.stalls[i].blind < 0.05) c.push({ r: stallRect(i), fn: () => checkIn(gu) });
     }
     return c;
   }
-  canvas.addEventListener('pointermove', e => { G.mouse = toScreen(e); if (G.mode === 'title' || G.ui === 'pause') TITLE.move(G.mouse); });
+  canvas.addEventListener('pointermove', e => { G.mouse = toScreen(e); if (G.mode === 'title' || G.ui === 'pause') TITLE.move(G.mouse); else if (G.where) NIGHTSHOP.move(G.mouse); });
   canvas.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && !G.drag) G.mouse = null; });
   canvas.addEventListener('pointerdown', e => {
     e.preventDefault();
@@ -787,6 +903,7 @@
     if (G.paused || G.ui) return;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* not supported */ }
     const p = toScreen(e), w = world(p); G.mouse = p;
+    if (G.where) return NIGHTSHOP.down(p);
     const rc = G.receipt;
     if (rc && !rc.fly && inR(p, receiptRect())) { G.drag = { kind: 'receipt', ox: p.x - rc.x, oy: p.y - rc.y }; SFX.paper(); return; }
     const sl = slipAt(p);
@@ -808,6 +925,7 @@
     if (p.x > VW - EDGE && G.st < STATIONS.length - 1) return go(G.st + 1);
   });
   canvas.addEventListener('pointerup', e => {
+    if (G.where) return NIGHTSHOP.up(toScreen(e));
     if (!G.drag) return;
     const d = G.drag; G.drag = null; G.dragBowl = null;
     if (d.kind === 'slip') { d.slip.x = slipClamp(toScreen(e).x - d.ox); d.slip.settle = G.t; SFX.paper(); return; }
@@ -835,11 +953,14 @@
     if (G.ui === 'dialog') { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); advance(); } return; }
     if (G.ui === 'menu' || G.ui === 'road') { if (e.key === 'Escape') closeUI(); return; }
     if (G.paused) { if (e.key === 'Enter') $('modal-btn').click(); return; }
+    if (G.where && NIGHTSHOP.key(e)) { e.preventDefault(); return; }
     const k = e.key.toLowerCase(), left = k === 'a' || k === 'arrowleft', right = k === 'd' || k === 'arrowright';
     if (k.length === 1 && cheat(k)) return;
+    if (G.where) { if (k === 'escape') openPause(); else if (k === 'm') { muteBefore = muted; $('mute').click(); } return; }
     if (left || right) {
-      if (STATIONS[G.st].camMax) { e.preventDefault(); held[left ? 'l' : 'r'] = true; G.pan = (held.r ? 1 : 0) - (held.l ? 1 : 0); }   // kitchen: pan while held
-      else if (right && !e.repeat) go(G.st + 1);                                                                                     // serving: D walks to the kitchen
+      const side = right ? 1 : -1;
+      if (!e.repeat && atPanEnd(side) && G.st + side >= 0 && G.st + side < STATIONS.length) { e.preventDefault(); go(G.st + side); }   // at the end of a room: walk on
+      else { e.preventDefault(); held[left ? 'l' : 'r'] = true; G.pan = (held.r ? 1 : 0) - (held.l ? 1 : 0); }                         // otherwise pan while held
     }
     else if (k === '1' || k === '2') go(+k - 1);
     else if (k === 'escape') { if (G.drag) { G.drag = null; G.dragBowl = null; } else openPause(); }
@@ -849,16 +970,19 @@
   const held = { l: false, r: false };
   window.addEventListener('keyup', e => {
     const k = e.key.toLowerCase();
+    NIGHTSHOP.keyup(k);
     if (k === 'a' || k === 'arrowleft') held.l = false; else if (k === 'd' || k === 'arrowright') held.r = false; else return;
     G.pan = (held.r ? 1 : 0) - (held.l ? 1 : 0);
   });
   window.addEventListener('blur', () => { held.l = held.r = false; G.pan = 0; });
   // the mouse wheel pans the kitchen page too
   canvas.addEventListener('wheel', e => {
-    if (G.mode !== 'play' || G.ui || !STATIONS[G.st].camMax) return;
+    if (G.mode === 'play' && !G.ui && G.where) { e.preventDefault(); return NIGHTSHOP.wheel(Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY); }
+    if (G.mode !== 'play' || G.ui || !wide(STATIONS[G.st])) return;
     e.preventDefault(); panBy((Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * 0.9);
   }, { passive: false });
-  STATIONS.forEach((s, i) => { $('tab-' + s.id).onclick = () => go(i); });
+  STATIONS.forEach((s, i) => { $('tab-' + s.id).onclick = () => { if (G.where) return NIGHTSHOP.leaveTo(i); go(i); }; });
+  $('tab-street').onclick = () => { if (G.mode === 'play' && !G.ui && !G.where) NIGHTSHOP.enter('street'); };
   UI.mount();
   $('mute').onclick = () => {
     muted = !muted; const label = muted ? 'Sound off (M)' : 'Sound on (M)';
@@ -893,17 +1017,18 @@
   function hint() {
     if (G.ui === 'receipt') return 'Closing time! Drag the receipt away (or press Enter) to carry on.';
     if (G.flashT > 0) return G.flash;
+    if (G.where) return NIGHTSHOP.hint();
     if (G.drag) return DRAG_HINT[G.drag.kind];
     const id = STATIONS[G.st].id, best = Math.max(...G.bowls.map(b => b.s));
     if (G.shop === 'morning') return id === 'serving' ? 'Tap the CLOSED sign on the counter to open the shop.' : 'The shop is closed. Head to Serving and flip the sign to open.';
-    if (G.shop === 'night' && id === 'serving' && !G.stalls.some(s => s.guest)) return 'Closed for the night. Restock, or tap the sign to skip ahead to morning and open.';
+    if (G.shop === 'night' && id === 'serving' && !G.stalls.some(s => s.guest)) return 'Closed for the night. Kitsune-ya across the street is open: out through the staff door on the far left. Or tap the sign to skip to morning.';
     if (id === 'serving') {
       if (G.stalls.some(s => s.guest && s.guest.state === 'call')) return SETTINGS.blindClick ? 'A guest is calling. Click their blind to raise it and take the order.' : 'A guest is calling. Pull the red cord on their blind up to take the order.';
       if (G.pass.length && G.stalls.some(s => s.guest && s.guest.state === 'wait')) return 'Drag a bowl from the pickup shelf onto the right stall.';
       if (G.slips.length) return 'Orders are on the ticket rail. Head right to cook.';
       return 'All calm. Guests will call when they are ready to order.';
     }
-    if (!G.slips.length && best === 0) return 'No orders yet. Restock with the + buttons, or read the recipe book.';
+    if (!G.slips.length && best === 0) return 'No orders yet. Restock at Kitsune-ya after closing, or read the recipe book.';
     if (best >= 3) return 'Noodles are in. Add the toppings, then drag the bowl into the pass on the far left.';
     if (best === 2) return G.baskets.some(b => b.t >= cookTime()) ? 'Drag the READY basket onto the bowl.' : G.baskets.some(b => b.t >= 0) ? 'The noodles are cooking. They will wait for you once ready.' : 'Drag a noodle nest from the tray on the shelf into a basket.';
     if (best === 1) return 'Drag the ladle from the broth pot onto the tare.';
@@ -917,23 +1042,29 @@
     setText('clock', String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0'));
     setText('shopstate', G.shop === 'open' ? 'Open' : 'Closed');
     $('shopstate').classList.toggle('open', G.shop === 'open');
-    UI.set($('sky'), isNight() ? 'moon' : 'sun');
+    UI.set($('sky'), G.rain >= 0.5 ? 'rain' : isNight() ? 'moon' : 'sun');
+    rainSound();
     setText('gold', String(G.gold));
     setText('lvnum', 'Lv ' + G.level);
     $('xpfill').style.width = (G.level >= LEVEL_XP.length ? 100 : Math.round(100 * (G.xp - xpFloor()) / (xpNext() - xpFloor()))) + '%';
-    $('lvl').classList.toggle('ready', claimable().some(n => G.gold >= n.cost));
+    updateQuest();
     const calling = G.stalls.filter(s => s.guest && s.guest.state === 'call').length;
     setText('badge-kitchen', G.slips.length ? String(G.slips.length) : '');
     setText('badge-serving', calling ? '!' : G.pass.length ? String(G.pass.length) : '');
-    setText('hint', hint());
+    setText('hint', SETTINGS.hints ? hint() : G.flashT > 0 ? G.flash : '');   // hints are optional (off by default); warnings always show briefly
     $('hint').classList.toggle('warn', G.flashT > 0);
-    $('bubbles').style.visibility = STATIONS[G.st].id === 'serving' && settled() && G.ui !== 'dialog' ? 'visible' : 'hidden';
+    $('bubbles').style.visibility = !G.where && STATIONS[G.st].id === 'serving' && settled() && G.ui !== 'dialog' ? 'visible' : 'hidden';
+    $('tab-street').classList.toggle('gone', !NIGHTSHOP.streetOpen());
+    $('tab-street').classList.toggle('on', !!G.where);
+    STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', !G.where && k === G.st));
+    $('nshop').classList.toggle('hide', G.ui === 'pause' || G.mode !== 'play');
     for (let i = 0; i < SL.NSTALL; i++) {
       const el = $('bubble-' + i);
       el.style.left = `calc(${(SL.X0 + SL.stallCX(i) - G.cam) / 2}px * var(--s))`;
       if (bubbleT[i] > 0) { bubbleT[i] -= dt; if (bubbleT[i] <= 0) el.classList.remove('show'); }
     }
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').classList.remove('show'); }
+    if (G.where) { G.hover = null; G.tip = null; canvas.style.cursor = NIGHTSHOP.cursor(); return; }
     const w = world(G.mouse);
     G.hover = null; let pointer = false;
     const overPaper = G.mouse && (!G.ui || G.ui === 'receipt') && !G.drag && ((G.receipt && !G.receipt.fly && inR(G.mouse, receiptRect())) || (!G.ui && slipAt(G.mouse)));
@@ -941,7 +1072,37 @@
       const c = clicks().find(c => inR(w, c.r));
       if (c) { G.hover = c.r; pointer = true; } else { const s = sources().find(s => inR(w, s.r)); if (s) G.hover = s.r; }
     }
+    G.tip = !G.ui && !G.drag && w && !overPaper ? bowlAt(w) : null;
     canvas.style.cursor = G.drag ? 'grabbing' : pointer ? 'pointer' : (G.hover || overPaper) ? 'grab' : 'default';
+  }
+
+  function bowlAt(w) {   // a started bowl on the mat, or a finished one in the pass / on the pickup shelf
+    for (let k = 0; k < KL.bowlX.length; k++) if (G.bowls[k].s > 0 && inR(w, bowlRect(k))) return G.bowls[k];
+    for (let i = 0; i < G.pass.length; i++) if (inR(w, passSlot(i)) || inR(w, pickSlot(i))) return G.pass[i];
+    return null;
+  }
+  // A small paper tag beside the pointer: the ramen this bowl makes, then its changes from the recipe (as on a slip).
+  function drawTip(g) {
+    const b = G.tip;
+    if (!b || !G.mouse) return;
+    const INK = '#3a2f2a', FADED = '#9a8a78', lines = [];
+    if (b.s === 1) lines.push([TARES[b.tare].short + ' TARE', TARES[b.tare].c === '#e6dcc4' ? INK : TARES[b.tare].c], ['NEEDS BROTH', FADED]);
+    else if (b.s === 2) lines.push([TARES[b.tare].short + ' + ' + BROTHS[b.broth].short, INK], ['NEEDS NOODLES', FADED]);
+    else {
+      const id = identify(b);
+      if (!id) lines.push(['UNKNOWN BOWL', '#c8302a']);
+      else {
+        lines.push([MENU[id.type].short, MENU[id.type].c]);
+        const mods = ART.slipMods(id);
+        for (const md of mods) lines.push([md.t, md.add ? '#2f7a3a' : '#c8302a']);
+        if (!mods.length) lines.push(['AS ON THE MENU', FADED]);
+      }
+    }
+    const w = Math.max(...lines.map(l => PX.textW(l[0]))) + 14, h = lines.length * 16 + 4;
+    const x = Math.round(Math.min(VW - w - 4, G.mouse.x + 16)), y = Math.round(Math.max(4, Math.min(VH - h - 4, G.mouse.y - h - 6)));
+    PX.rect(g, x + 3, y + 3, w, h, 'rgba(40,20,10,0.3)');
+    PX.rect(g, x - 1, y - 1, w + 2, h + 2, PX.OUTLINE); PX.rect(g, x, y, w, h, '#fbf6ea'); PX.rect(g, x, y, w, 2, '#e8dcc0');
+    lines.forEach(([t, c], i) => PX.text(g, t, x + 7, y + 11 + i * 16, c));
   }
 
   /* ---------- blinds: pull the red cord ---------- */
@@ -962,7 +1123,7 @@
   }
 
   /* ---------- the open / closed sign (hangs on the serving counter) ---------- */
-  const signRect = { x: SL.X0 + 22, y: 424, w: 128, h: 44 };
+  const signRect = { x: SL.X0 + SL.OX + 22, y: 424, w: 128, h: 44 };
   function drawSign(g) {
     const S = signRect, cx = S.x + S.w / 2, p = clamp((G.t - G.signT) / 0.45, 0, 1);
     const state = p < 0.5 ? G.signWas : G.shop, open = state === 'open';
@@ -1068,8 +1229,9 @@
     const cam = Math.round(G.cam);
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, VW, VH);
+    if (G.where) { NIGHTSHOP.draw(ctx); if (G.ui === 'receipt' && G.receipt) { ctx.fillStyle = 'rgba(14,8,20,0.55)'; ctx.fillRect(0, 0, VW, VH); drawReceipt(ctx); } return; }
     ctx.save(); ctx.translate(-cam, 0);
-    if (cam < SL.X0 + VW) { ctx.save(); ctx.translate(SL.X0, 0); SERVING.frame(ctx, G); ctx.restore(); }
+    if (cam < SL.X0 + SL.W) { ctx.save(); ctx.translate(SL.X0, 0); SERVING.frame(ctx, G); ctx.restore(); }
     if (cam + VW > KL.X0) { ctx.save(); ctx.translate(KL.X0, 0); KITCHEN.frame(ctx, G); ctx.restore(); }
     drawSign(ctx);
     const w = world(G.mouse);
@@ -1103,7 +1265,8 @@
     drawReceipt(ctx);
     // edge arrows
     for (const side of [-1, 1]) {
-      const ni = G.st + side; if (ni < 0 || ni >= STATIONS.length || G.ui) continue;
+      const ni = G.st + side;
+      if (ni < 0 || ni >= STATIONS.length || G.ui) continue;
       // a round walnut-and-brass button; the station name shows on a tag only while the edge is hovered
       const hot = G.edgeSide === side;
       if (hot) for (let k = 0; k < EDGE; k += 2) { ctx.globalAlpha = 0.3 * (1 - k / EDGE); ctx.fillStyle = '#2a1a26'; ctx.fillRect(side < 0 ? k : VW - k - 2, 0, 2, VH); }
@@ -1116,6 +1279,8 @@
       ctx.globalAlpha = 1;
       if (hot) { const name = STATIONS[ni].name.toUpperCase(), w = PX.textW(name) + 12; SCENE.label(ctx, name, side < 0 ? cx + 18 + w / 2 : cx - 18 - w / 2, cy - 7); }
     }
+    drawTip(ctx);
+    NIGHTSHOP.draw(ctx);   // only the fade, while heading out to the street
   }
 
   /* ---------- layout + loop ---------- */
@@ -1141,6 +1306,7 @@
 
   /* ---------- title screen, new game, continue, pause ---------- */
   function enterTitle() {
+    NIGHTSHOP.closePanels(); G.where = null; if (rainGain) rainGain.gain.value = 0;
     G.mode = 'title'; G.ui = null; G.drag = null; G.dragBowl = null; G.paused = false;
     for (const id of ['dialog', 'modal', 'menu']) $(id).classList.remove('show');
     for (const id in BOOKS) if (G.ui === id) closeBook(id);
@@ -1153,11 +1319,18 @@
     updateClock(0); canvas.style.cursor = 'default';
     toast(msg);
   }
-  function newGame() { clearSave(); Object.assign(G, fresh()); startPlay('Welcome to Cozy Ramen! Tap the CLOSED sign on the counter to open.'); }
+  function newGame() { clearSave(); NIGHTSHOP.closePanels(); Object.assign(G, fresh()); startPlay('Welcome to Cozy Ramen! Tap the CLOSED sign on the counter to open.'); }
   function continueGame() {
     const s = loadSave(); if (!s) return newGame();
     Object.assign(G, fresh()); G.day = s.day; G.gold = s.gold || 0; G.met = s.met || []; G.nextNum = s.nextNum || 1;
     G.level = s.level || 1; G.xp = s.xp || 0; G.owned = (s.owned || []).filter(id => nodeFor(id));
+    G.life = Object.assign(fresh().life, s.life || {}); G.region = regionOpen(s.region || 0) ? s.region || 0 : 0;
+    // saves from before the night shop: upgrades already claimed (and paid for) on the road count as bought
+    G.gear = (s.gear || G.owned.filter(id => GEAR.includes(id))).filter(id => GEAR.includes(id));
+    if (s.pantry) for (const id in s.pantry) if (id in G.stock) G.stock[id] += (s.pantry[id] || 0) * STOCK[id].add;   // saves from the pantry days: packs go in the bins
+    G.aoiMet = !!s.aoiMet;
+    G.quest = s.quest && s.quest.day === s.day ? s.quest : null;
+    unlockReached();   // older saves: stops that were waiting on an objective unlock now
     const st = { ...(s.stock || {}) };
     if ('tare' in st) { st[tareKey('miso')] = st.tare; delete st.tare; }
     if ('broth' in st) { st[brothKey('pork')] = st.broth; delete st.broth; }
@@ -1186,6 +1359,7 @@
   function shot(kind) {
     $('modal').classList.remove('show'); G.paused = false; G.ui = null; G.shop = 'open'; G.mode = 'play'; document.body.classList.remove('title');
     if (kind === 'night' || kind === 'nightkitchen') G.time = PHASE * 1.3;
+    if (kind.includes('rain')) { G.wx = { day: G.day, from: -1, to: -1 }; G.forceRain = 1; G.rain = 1; }
     updateClock(0);
     const full = { ...newBowl(), s: 3, tare: true, broth: true, fill: 1, noodles: 'perfect', items: ['chashu', 'egg', 'nori', 'scallion', 'menma', 'chili'], age: 1 };
     for (let i = 0; i < 4; i++) {
@@ -1198,18 +1372,33 @@
     G.pass.push({ ...full }, { ...full, items: ['chashu', 'egg', 'nori', 'scallion', 'menma'] });
     G.bowls[0] = { ...full, items: ['chashu', 'egg', 'nori'] };
     G.bowls[1] = { ...newBowl(), s: 2, tare: true, broth: true, fill: 1, age: 1 };
-    G.baskets[0].t = 9; G.baskets[2].t = 2; G.jobs.push({ id: 'egg', t: 3, dur: 7 });
+    G.baskets[0].t = 9; G.baskets[2].t = 2;
     G.waiting = 1;
-    const at = Math.max(0, STATIONS.findIndex(s => s.id === ({ dialog: 'serving', night: 'serving', drag: 'kitchen', toppings: 'kitchen', nightkitchen: 'kitchen' }[kind] || kind)));
+    const at = Math.max(0, STATIONS.findIndex(s => s.id === ({ servingleft: 'serving', dialog: 'serving', night: 'serving', drag: 'kitchen', toppings: 'kitchen', nightkitchen: 'kitchen', rainkitchen: 'kitchen' }[kind] || kind)));
     G.kcam = kind === 'kitchen' || kind === 'nightkitchen' ? STATIONS[1].camMax : STATIONS[1].cam;
+    G.scam = kind === 'servingleft' ? STATIONS[0].cam : 0;   // ?shot=servingleft: the far end of the serving room
     G.st = at; G.cam = camTarget(); STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === at));
     if (kind === 'dialog') { g3.asksRec = true; takeOrder(g3); DLG.i = 1; showStep(); DLG.chars = 999; revealChoices(); }
     if (kind === 'drag') { G.drag = { kind: 'top', id: 'chashu' }; G.mouse = { x: K(KL.bowlX[0]) - G.cam + 10, y: KL.BOWL_Y - 8 }; }
     if (kind.startsWith('book')) { COOKBOOK.goToSpread(+kind.slice(4) || 0); openBook('book', 'counter', true); }   // ?shot=book, book1, book2 ... (spread)
     if (kind === 'guests') openBook('guests', null, true);
-    if (kind === 'road') { G.level = 4; G.xp = 230; G.gold = 150; G.owned = ['spicy']; KITCHEN.refresh(); openUI('road'); }
+    if (kind.startsWith('street') || kind.startsWith('store')) {   // ?shot=street, store, store1..store3 (panned), storecard, storetalk
+      G.stalls.forEach(st => { st.guest = null; }); G.slips = []; G.shop = 'night'; G.time = PHASE * 1.08; G.receipt = null; G.gold = 140; updateClock(0);
+      G.owned = kind === 'store3' ? STOPS.filter(n => n.kind !== 'start').map(n => n.id) : ['spicy', 'quick']; KITCHEN.refresh();
+      NIGHTSHOP.visit(kind.startsWith('street') ? 'street' : 'store', (+kind.slice(5) || 0) * 640);
+      if (kind === 'storecard') NIGHTSHOP.inspect('chashu');
+      if (kind === 'storelist') NIGHTSHOP.talk('list');
+      if (kind === 'streetdawn') { G.time = 256; updateClock(0); }
+      if (kind === 'storetalk') { NIGHTSHOP.addToBasket('chashu', 3); NIGHTSHOP.addToBasket('special', 1); NIGHTSHOP.addToBasket('quick', 1); NIGHTSHOP.talk('checkout'); }
+    }
+    if (kind.startsWith('road')) {   // ?shot=road, road2 (Kyoto, with progress), road4 (the coast)
+      const lv = { road: 3, road2: 6, road4: 12 }[kind] || 3, upto = { road: 2, road2: 6, road4: 17 }[kind] || 2;
+      G.level = lv; G.xp = LEVEL_XP[lv - 1] + 20; G.gold = 260; G.owned = STOPS.slice(1, upto).map(n => n.id); G.gear = G.owned.filter(id => GEAR.includes(id));
+      G.life = { served: 30, perfect: 30, sold: { miso: 9, shoyu: 4 }, bestDay: 90, days: 3 }; G.met = GUESTS.slice(0, 12).map(g => g.id);
+      G.region = STOPS[Math.max(0, upto - 1)].region; KITCHEN.refresh(); openUI('road');
+    }
   }
-  Promise.all(Object.values(IMG).map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; }))).then(() => {
+  Promise.all([PX.loadFont(), ...Object.values(IMG).map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; }))]).then(() => {
     if (params.has('shot')) shot(params.get('shot')); else enterTitle();
     requestAnimationFrame(loop);
   });

@@ -144,17 +144,59 @@ const PX = (() => {
   const FONT = {};
   for (const ch in FONT_SRC) { const rows = FONT_SRC[ch].split(' '); FONT[ch] = { w: rows[0].length, rows }; }
   const glyph = ch => FONT[ch] || FONT[ch.toUpperCase()] || FONT[' '];
-  let FS = 2; // font scale: each font pixel is FS x FS screen pixels
+  let FS = 2; // font scale: text is FS * 10 px tall (Pixelify Sans' pixel grid: crisp at multiples of 10px)
   const setFont = n => { FS = n; };
-  const textW = s => { let w = -1; for (const ch of String(s)) w += glyph(ch).w + 1; return Math.max(0, w) * FS; };
-  // y is where the top of an old 5-row glyph would sit; 7-row glyphs start one row higher so they stay centered on it.
+  /* The game font is Pixelify Sans (assets/fonts, SIL OFL), drawn hard-edged: each string is rendered once at FS * 10 px,
+     thresholded to solid pixels and cached. Until the font has loaded, the old bitmap font above stands in.
+     Placement matches the old font: y is where the top of a 5-row glyph sat, so capitals start at y - FS and the
+     baseline sits at y + 6 * FS (descenders below that). */
+  const FAMILY = '"Pixelify Sans"';
+  const fpx = () => (FS === 1 ? 13 : FS * 10);   // small text is 13px: at 10px the digits blur together (5 vs 8)
+  const base = () => Math.round(fpx() * 0.7) - FS;   // baseline below y: capitals start at y - FS
+  let webfont = false, mc = null;
+  const CACHE = new Map();
+  const bitmapW = s => { let w = -1; for (const ch of s) w += glyph(ch).w + 1; return Math.max(0, w) * FS; };
+  function metrics(s) { mc = mc || document.createElement('canvas').getContext('2d'); mc.font = fpx() + 'px ' + FAMILY; return mc.measureText(s); }
+  // Each string is drawn once at a fixed pen position and cached with its real ink extents; textW and text both use
+  // those, so centring and label boxes match what is drawn. (Pixelify Sans has half-pixel details at these sizes, so
+  // forcing it to hard pixels broke letters apart: B read as G. It is drawn as the font intends.)
+  function sprite(s, c) {
+    const key = FS + '|' + c + '|' + s;
+    let sp = CACHE.get(key); if (sp) return sp;
+    if (CACHE.size > 1500) CACHE.clear();
+    const size = fpx(), m = metrics(s), PEN = 4 * Math.max(1, Math.ceil(size / 20)) + 4;
+    const w = Math.ceil(m.width) + 2 * PEN, h = Math.ceil(size * 1.4), bo = size;
+    let col = c, alpha = 255;
+    const rgba = /^rgba\(([^)]+)\)/.exec(c);
+    if (rgba) { const p = rgba[1].split(','); col = 'rgb(' + p.slice(0, 3).join(',') + ')'; alpha = Math.round(parseFloat(p[3]) * 255); }
+    const cv = mk(Math.max(1, w), h), g = cv.getContext('2d');
+    g.font = size + 'px ' + FAMILY; g.textBaseline = 'alphabetic'; g.fillStyle = col; g.globalAlpha = alpha / 255;
+    if ('fontKerning' in g) g.fontKerning = 'none';
+    g.fillText(s, PEN, bo);
+    // ink extents, so centring and label boxes match what is drawn
+    const d = g.getImageData(0, 0, cv.width, h).data;
+    let l = cv.width, r = -1;
+    for (let x = 0; x < cv.width; x++) for (let y = 0; y < h; y++) if (d[(y * cv.width + x) * 4 + 3] > 60) { if (x < l) l = x; if (x > r) r = x; break; }
+    sp = { cv, bo, l: r < 0 ? PEN : l, w: r < 0 ? 0 : r - l + 1 }; CACHE.set(key, sp);
+    return sp;
+  }
+  const textW = s => { s = String(s); if (!webfont) return bitmapW(s); if (!s.trim()) return Math.round(metrics(s).width); return sprite(s, '#000').w; };
   function text(g, str, x, y, c) {
+    str = String(str);
+    if (webfont) { if (!str.trim()) return; const sp = sprite(str, c); g.drawImage(sp.cv, Math.round(x) - sp.l, Math.round(y) + base() - sp.bo); return; }
     g.fillStyle = c; x = Math.round(x); y = Math.round(y) - FS;
-    for (const ch of String(str)) {
+    for (const ch of str) {
       const gl = glyph(ch);
       for (let r = 0; r < gl.rows.length; r++) for (let k = 0; k < gl.w; k++) if (gl.rows[r][k] === '#') g.fillRect(x + k * FS, y + r * FS, FS, FS);
       x += (gl.w + 1) * FS;
     }
+  }
+  // Load the game font (resolves either way; falls back to the bitmap font if it cannot load).
+  function loadFont() {
+    if (!document.fonts || !document.fonts.load) return Promise.resolve(false);
+    const t = new Promise(r => setTimeout(() => r(false), 4000));
+    return Promise.race([document.fonts.load('20px ' + FAMILY).then(() => document.fonts.check('20px ' + FAMILY)), t])
+      .then(ok => { if (ok) { webfont = true; CACHE.clear(); } return ok; }, () => false);
   }
   function textO(g, str, x, y, c, oc = OUTLINE) {
     for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) text(g, str, x + ox * FS, y + oy * FS, oc);
@@ -165,5 +207,5 @@ const PX = (() => {
     if (oc) textO(g, str, x, y, c, oc); else text(g, str, x, y, c);
   };
 
-  return { mk, rgb, mix, shade, rect, dot, ell, lathe, poly, line, finish, text, textO, textC, textW, setFont, OUTLINE };
+  return { mk, rgb, mix, shade, rect, dot, ell, lathe, poly, line, finish, text, textO, textC, textW, setFont, loadFont, OUTLINE };
 })();

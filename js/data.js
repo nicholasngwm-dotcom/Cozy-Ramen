@@ -52,27 +52,75 @@ const MENU = {
 // Toppings that need a level-road step before they can be stocked and used.
 const TOP_NODE = { chili: 'spicy', corn: 'butter', butter: 'butter' };
 
-/* Level road. Serving bowls earns XP; reaching a level opens its step, and the step is then bought with gold.
+/* The Japan road. The journey runs through five regions. It is XP only: the moment you reach a stop's level
+   (XP from serving and daily quests) it unlocks on its own. Recipe stops add a ramen, upgrade stops put a tool on
+   sale at Kitsune-ya, landmark stops give gold and a decoration for the shop. Finishing a region's landmark opens
+   the next region, where you can move the shop. (cost = the tool's price at the night shop, for upgrade stops.)
+   ids of the recipe/upgrade stops are the unlock ids the rest of the game checks with owns().
    LEVEL_XP[i] = total XP needed to reach level i + 1. */
 const LEVEL_XP = [0, 50, 120, 210, 320, 450, 600, 780, 980, 1200, 1450, 1730];
-const NODES = [
-  { id: 'spicy',    level: 2,  cost: 40,  kind: 'recipe',  menu: 'spicy',    name: 'Spicy Miso', also: 'Chili topping' },
-  { id: 'quick',    level: 3,  cost: 60,  kind: 'upgrade', name: 'Quick Hands', desc: 'Prep three things at once.' },
-  { id: 'shoyu',    level: 4,  cost: 100, kind: 'recipe',  menu: 'shoyu',    name: 'Shoyu Ramen', also: 'Shoyu tare, tori broth' },
-  { id: 'bins',     level: 5,  cost: 120, kind: 'upgrade', name: 'Big Bins', desc: 'Every stock holds half as much again.' },
-  { id: 'shio',     level: 6,  cost: 150, kind: 'recipe',  menu: 'shio',     name: 'Shio Ramen', also: 'Shio tare' },
-  { id: 'tonkotsu', level: 7,  cost: 180, kind: 'recipe',  menu: 'tonkotsu', name: 'Tonkotsu' },
-  { id: 'boil',     level: 8,  cost: 200, kind: 'upgrade', name: 'Fast Boil', desc: 'Noodles cook in 4 seconds instead of 6.' },
-  { id: 'butter',   level: 9,  cost: 240, kind: 'recipe',  menu: 'butter',   name: 'Butter Corn Miso', also: 'Corn and butter toppings' },
-  { id: 'tips',     level: 10, cost: 260, kind: 'upgrade', name: 'Generous Tips', desc: 'Perfect bowls earn 3G more in tips.' },
-  { id: 'dashi',    level: 11, cost: 300, kind: 'recipe',  menu: 'seaside',  name: 'Seaside Dashi', also: 'Dashi broth' },
-  { id: 'dragon',   level: 12, cost: 380, kind: 'recipe',  menu: 'dragon',   name: "Dragon's Fire" }
+const REGIONS = [
+  { id: 'sakura', name: 'Sakura Countryside', short: 'Sakura', c: '#e88aa8' },
+  { id: 'kyoto',  name: 'Kyoto',              short: 'Kyoto',  c: '#c8443a' },
+  { id: 'osaka',  name: 'Osaka',              short: 'Osaka',  c: '#e8902a' },
+  { id: 'tokyo',  name: 'Tokyo',              short: 'Tokyo',  c: '#c060e0' },
+  { id: 'coast',  name: 'Coastal Japan',      short: 'Coast',  c: '#3a9ab8' }
 ];
+// goal kinds: served / perfect (bowls, lifetime), sold (bowls of one ramen), met (guests), bestDay (gold in one day), days
+const STOPS = [
+  { id: 'home',     region: 0, level: 1,  cost: 0,   kind: 'start',   place: 'Hanami Village', name: 'Your first shop', desc: 'Where the journey begins: a little ramen stall under the cherry trees.' },
+  { id: 'spicy',    region: 0, level: 2,  cost: 40,  kind: 'recipe',  place: 'Chili Farm', menu: 'spicy', name: 'Spicy Miso', also: 'Chili topping' },
+  { id: 'quick',    region: 0, level: 3,  cost: 60,  kind: 'upgrade', place: 'Rice Terraces', name: 'Waiting Bench', desc: 'Up to five guests wait in line instead of three.' },
+  { id: 'sakuraLm', region: 0, level: 3,  cost: 0,   kind: 'landmark', place: 'Cherry Blossom Hill', name: 'Sakura branch', deco: 0, gold: 60, desc: 'A sprig of blossom for the shop, and the road to Kyoto.' },
+  { id: 'shoyu',    region: 1, level: 4,  cost: 100, kind: 'recipe',  place: 'Fushimi Gates', menu: 'shoyu', name: 'Shoyu Ramen', also: 'Shoyu tare, tori broth' },
+  { id: 'bins',     region: 1, level: 5,  cost: 120, kind: 'upgrade', place: 'Bamboo Grove', name: 'Bulk Crates', desc: 'Every pack from Kitsune-ya holds half as much again.' },
+  { id: 'stall5',   region: 1, level: 5,  cost: 150, kind: 'upgrade', place: 'Nishiki Market', name: 'Stall 5', desc: 'Opens a fifth stall: room for one more guest.' },
+  { id: 'shio',     region: 1, level: 6,  cost: 150, kind: 'recipe',  place: 'Golden Temple', menu: 'shio', name: 'Shio Ramen', also: 'Shio tare' },
+  { id: 'kyotoLm',  region: 1, level: 6,  cost: 0,   kind: 'landmark', place: 'Gion Lantern Street', name: 'Red paper lantern', deco: 1, gold: 120, desc: 'A Gion lantern for the shop, and the road to Osaka.' },
+  { id: 'tonkotsu', region: 2, level: 7,  cost: 180, kind: 'recipe',  place: 'Dotonbori Canal', menu: 'tonkotsu', name: 'Tonkotsu' },
+  { id: 'boil',     region: 2, level: 8,  cost: 200, kind: 'upgrade', place: 'Kuromon Market', name: 'Fast Boil', desc: 'Noodles cook in 4 seconds instead of 6.' },
+  { id: 'stall6',   region: 2, level: 8,  cost: 220, kind: 'upgrade', place: 'Shinsekai', name: 'Stall 6', desc: 'Opens a sixth stall: room for one more guest.' },
+  { id: 'butter',   region: 2, level: 9,  cost: 240, kind: 'recipe',  place: 'Street Food Alley', menu: 'butter', name: 'Butter Corn Miso', also: 'Corn and butter toppings' },
+  { id: 'osakaLm',  region: 2, level: 9,  cost: 0,   kind: 'landmark', place: 'Osaka Castle', name: 'Food stall banner', deco: 2, gold: 160, desc: 'A street-food banner for the shop, and the road to Tokyo.' },
+  { id: 'tips',     region: 3, level: 10, cost: 260, kind: 'upgrade', place: 'Shibuya Crossing', name: 'Generous Tips', desc: 'Perfect bowls earn 3G more in tips.' },
+  { id: 'akibaLm',  region: 3, level: 10, cost: 0,   kind: 'landmark', place: 'Electric Town', name: 'Arcade prize', gold: 150, desc: 'A bag of arcade tokens, cashed in for gold.' },
+  { id: 'stall7',   region: 3, level: 10, cost: 300, kind: 'upgrade', place: 'Asakusa', name: 'Stall 7', desc: 'Opens a seventh stall: room for one more guest.' },
+  { id: 'dashi',    region: 3, level: 11, cost: 300, kind: 'recipe',  place: 'Fish Market', menu: 'seaside', name: 'Seaside Dashi', also: 'Dashi broth' },
+  { id: 'tokyoLm',  region: 3, level: 11, cost: 0,   kind: 'landmark', place: 'Tokyo Tower', name: 'Neon ramen sign', deco: 3, gold: 200, desc: 'A buzzing neon sign for the shop, and the road to the coast.' },
+  { id: 'dragon',   region: 4, level: 12, cost: 380, kind: 'recipe',  place: 'Fire Festival', menu: 'dragon', name: "Dragon's Fire" },
+  { id: 'stall8',   region: 4, level: 12, cost: 400, kind: 'upgrade', place: 'Kamakura', name: 'Stall 8', desc: 'Opens the eighth and last stall.' },
+  { id: 'harborLm', region: 4, level: 12, cost: 0,   kind: 'landmark', place: 'Fishing Harbour', name: 'Fisher\u2019s thanks', gold: 250, desc: 'The harbour cooks pay you a visit, and their respects.' },
+  { id: 'lightLm',  region: 4, level: 12, cost: 0,   kind: 'landmark', place: 'Lighthouse Point', name: 'Lighthouse lamp', gold: 300, desc: 'The keeper trades a lamp for a bowl.' },
+  { id: 'endLm',    region: 4, level: 12, cost: 0,   kind: 'landmark', place: 'Journey\u2019s End', name: 'Glass fishing float', deco: 4, gold: 500, desc: 'The end of the road: a glass float for the shop, and a famous name across Japan.' }
+];
+const NODES = STOPS.filter(s => s.kind === 'recipe' || s.kind === 'upgrade');   // the stops that unlock something in the shop
+
 // What the player owns right now (reads the live game state; safe to call before it exists).
 const owns = id => !id || !!(typeof window !== 'undefined' && window.G && G.owned && G.owned.includes(id));
 const menuOn = k => owns(MENU[k].node), tareOn = k => owns(TARES[k].node), brothOn = k => owns(BROTHS[k].node), topOn = id => owns(TOP_NODE[id]);
-const nodeFor = id => NODES.find(n => n.id === id);
+const nodeFor = id => STOPS.find(n => n.id === id);
 const levelFor = node => (nodeFor(node) || { level: 1 }).level;   // the level a locked thing opens at
+// Road progress (reads the live game state).
+const stopDone = s => s.kind === 'start' || owns(s.id);
+const frontierIdx = () => STOPS.findIndex(s => !stopDone(s));     // the next stop on the road; -1 once the journey is complete
+const regionEnd = r => STOPS.filter(s => s.region === r).pop();
+const regionOpen = r => r === 0 || STOPS.some(s => s.region === r && s.kind !== 'start' && stopDone(s)) || stopDone(regionEnd(r - 1));
+const goalHave = g => {
+  if (!g || typeof window === 'undefined' || !window.G) return 0;
+  const L = G.life || {};
+  if (g.k === 'served') return L.served || 0;
+  if (g.k === 'perfect') return L.perfect || 0;
+  if (g.k === 'sold') return (L.sold || {})[g.type] || 0;
+  if (g.k === 'met') return (G.met || []).length;
+  if (g.k === 'bestDay') return Math.max(L.bestDay || 0, (G.stats && G.stats.earned) || 0);
+  if (g.k === 'days') return L.days || 0;
+  return 0;
+};
+const goalText = g => !g ? '' : g.k === 'served' ? `Serve ${g.n} bowls` : g.k === 'perfect' ? `Serve ${g.n} perfect bowls`
+  : g.k === 'sold' ? `Serve ${g.n} ${MENU[g.type].name}` : g.k === 'met' ? `Meet ${g.n} different guests`
+  : g.k === 'bestDay' ? `Earn ${g.n}G in one day` : `Run the shop for ${g.n} days`;
+// The next stop unlocks as soon as its level is reached.
+const stopReady = s => { const i = STOPS.indexOf(s); return i === frontierIdx() && !!window.G && G.level >= s.level; };
 
 const EXTRA_PRICE = 2;
 const TOPS = ['chashu', 'egg', 'nori', 'scallion', 'menma', 'chili', 'corn', 'butter'];
@@ -84,7 +132,7 @@ const TOP_DESC = {
   menma: 'Seasoned bamboo shoots', chili: 'Fiery chili threads', corn: 'Sweet butter corn', butter: 'A melting pat of butter'
 };
 
-// cap: most you can hold, add: how much one prep job makes, time: seconds per job
+// add: portions in one pack bought at Kitsune-ya (cap / time are left over from kitchen prep and no longer used)
 const STOCK = {
   noodle:   { cap: 12, add: 6, time: 6,  label: 'NOODLES' },
   chashu:   { cap: 10, add: 5, time: 6 },
@@ -98,17 +146,35 @@ const STOCK = {
 };
 for (const k in TARES) STOCK[tareKey(k)] = { cap: 16, add: 8, time: 7, label: TARES[k].short, ...TARES[k].stock };
 for (const k in BROTHS) STOCK[brothKey(k)] = { cap: 16, add: 8, time: 12, label: BROTHS[k].short, ...BROTHS[k].stock };
-const MAX_PASS = 4, MAX_WAIT = 3;
-// values the level-road upgrades change
-const capOf = id => Math.round(STOCK[id].cap * (owns('bins') ? 1.5 : 1));
-const cookTime = () => (owns('boil') ? 4 : 6);   // seconds until noodles are ready; ready noodles never overcook
-const maxJobs = () => (owns('quick') ? 3 : 2);
-const perfectTip = () => (owns('tips') ? 7 : 4);
+const MAX_PASS = 4;
 
-// Two stations. The kitchen is one wide page (toppings on the left, cooking line on the right):
-// its camera pans between cam and camMax (hold A / D or use the mouse wheel).
+/* Stock comes from Aoi's night supply shop across the street (js/nightshop.js), open SHOP_HOURS after closing:
+   a pack bought there goes straight into the kitchen's bin, crock, pot or noodle tray (packSize portions, no cap).
+   SUPPLY_PRICE: gold per pack. Equipment is the Japan road's upgrade stops: the road unlocks them, the shop sells them
+   (for the stop's cost), and they only work once bought (G.gear). */
+const SHOP_HOURS = { open: 21, close: 5 };
+const SUPPLY_IDS = ['noodle', ...TOPS, ...Object.keys(TARES).map(tareKey), ...Object.keys(BROTHS).map(brothKey)];
+const SUPPLY_PRICE = { noodle: 4, chashu: 5, egg: 4, nori: 2, scallion: 2, menma: 3, chili: 3, corn: 3, butter: 4 };
+for (const k in TARES) SUPPLY_PRICE[tareKey(k)] = 4;
+for (const k in BROTHS) SUPPLY_PRICE[brothKey(k)] = 6;
+const supplyName = id => id === 'noodle' ? 'Fresh noodles' : TOP_NAME[id] || (id.startsWith('tare.') ? TARES[id.slice(5)].name : BROTHS[id.slice(6)].name);
+const supplyOn = id => id === 'noodle' || (TOPS.includes(id) ? topOn(id) : id.startsWith('tare.') ? tareOn(id.slice(5)) : brothOn(id.slice(6)));
+const supplyNode = id => TOP_NODE[id] || (id.startsWith('tare.') ? TARES[id.slice(5)].node : id.startsWith('broth.') ? BROTHS[id.slice(6)].node : null);
+const GEAR = NODES.filter(s => s.kind === 'upgrade').map(s => s.id);
+const gearOn = id => owns(id) && !!(typeof window !== 'undefined' && window.G && G.gear && G.gear.includes(id));
+const claimCost = s => 0;   // the road costs nothing: XP unlocks it (upgrades are then bought at the night shop)
+// values the equipment changes (once bought)
+const packSize = id => Math.round(STOCK[id].add * (gearOn('bins') ? 1.5 : 1));   // portions in one pack from the shop
+const cookTime = () => (gearOn('boil') ? 4 : 6);   // seconds until noodles are ready; ready noodles never overcook
+const maxWait = () => (gearOn('quick') ? 5 : 3);   // guests who will queue for a stall
+const perfectTip = () => (gearOn('tips') ? 7 : 4);
+// Stalls 1-4 are always open; stalls 5-8 open once bought at Kitsune-ya (after the road unlocks them).
+const stallOpen = i => i < 4 || gearOn('stall' + (i + 1));
+
+// Two stations, both wide pages you pan along between cam and camMax (hold A / D or use the mouse wheel):
+// the serving room (stalls 1-4 at the right, 5-8 and the staff door to the left) and the kitchen (toppings, then the cooking line).
 const STATIONS = [
-  { id: 'serving', name: 'Serving', cam: 0 },
+  { id: 'serving', name: 'Serving', cam: -960, camMax: 0 },
   { id: 'kitchen', name: 'Kitchen', cam: 960, camMax: 1520 }
 ];
 const PAN_SPEED = 820;    // px per second while A / D is held
@@ -142,10 +208,13 @@ const KL = {
   SLIP_Y: 40
 };
 
-// Serving room (local x 0-960, drawn at world x 0); the pickup shelf sits on the kitchen (right) side
+// Serving room: two screens wide (local x 0-1920, drawn at world x -960). Stalls 1-4 fill the right half, where the
+// room always was (world 0-960); stalls 5-8 continue to the left, and the staff door is on the far left wall.
 const SL = {
-  X0: 0, BEAM_Y: 40, BLIND_TOP: 62, COUNTER_Y: 300, NSTALL: 4, STALL_W: 206,
-  stallX: i => 68 + 206 * i,
-  stallCX: i => 171 + 206 * i,
-  SHELF_Y: 470, pickX: i => 660 - 120 * i
+  X0: -960, W: 1920, OX: 960, BEAM_Y: 40, BLIND_TOP: 62, COUNTER_Y: 300, NSTALL: 8, STALL_W: 206,
+  stallX: i => (i < 4 ? 1028 + 206 * i : 1028 - 206 * (i - 3)),
+  stallCX: i => SL.stallX(i) + 103,
+  LEFT: 1028 - 206 * 4, RIGHT: 1028 + 206 * 4,       // the outer edges of the stall row
+  DOOR: { x: 40, y: 92, w: 112, h: 208 },             // the staff door (local)
+  SHELF_Y: 470, pickX: i => 1620 - 120 * i
 };

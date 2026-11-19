@@ -815,7 +815,8 @@
   function nextArrival() {
     const busy = G.stalls.filter(s => s.guest && ['call', 'ordering', 'wait'].includes(s.guest.state)).length;
     const mean = ARRIVE_GAP * pace(hour()) * Math.max(0.75, 1 - 0.03 * (G.day - 1)) * (1 + 0.45 * busy) / rainBoost();   // rain brings 25% more guests
-    return clamp(-Math.log(1 - Math.random()) * mean, Math.max(5, mean * 0.3), mean * 2.6);
+    const MAX_GAP = 60;   // never more than a minute without a guest, however quiet the hour or busy the kitchen
+    return clamp(-Math.log(1 - Math.random()) * mean, Math.min(MAX_GAP, Math.max(2, mean * 0.08)), Math.min(MAX_GAP, mean * 3.5));   // a wide spread: sometimes two guests a couple of seconds apart, sometimes a long lull
   }
   function updateGuests(dt) {
     G.spawnT -= dt; G.seatCD -= dt;
@@ -1282,7 +1283,7 @@
   /* ---------- shop hours: the sign, closing time, the night ---------- */
   function setShop(state) { G.signWas = G.shop; G.shop = state; G.signT = G.t; SFX.clack(); }
   function openShop() {
-    if (G.shop === 'night') { finishDay(); G.day++; G.time = 0; }      // skipping the night (the day's receipt prints first, if 04:00 has not come yet)
+    if (G.shop === 'night') { finishDay(); G.day++; G.time = 0; }      // skipping the prep time (04:00-09:00) to the next opening
     saveGame(G.day);
     setShop('open'); G.stats = newStats(); G.dayDone = false; G.spawnT = rand(4, 10); SFX.bell();   // the first guest of the day, a few seconds after opening
     toast('Day ' + G.day + ': the shop is open! Guests will start arriving.');
@@ -1300,8 +1301,10 @@
     G.life.bestDay = Math.max(G.life.bestDay, G.stats.earned); G.life.days++;
     makeReceipt();
   }
+  // The sign: opens the shop in the morning; after 04:00 it skips the prep time straight to the next opening.
   function flipSign() {
     if (G.shop === 'open') return say('The shop stays open until 21:00.');
+    if (lateOpen()) return say('Late walk-ins until 04:00. Then the shop closes and you can skip the prep time.');
     openShop();
   }
   /* ---------- weather: each day may bring one rain spell; while it rains, 25% more guests duck in ---------- */
@@ -1344,12 +1347,12 @@
   const shutHours = () => { const h = hour(); return G.shop !== 'open' && h >= 4 && h < 9; };
   function updateClock(dt) {
     updateWeather(dt);
-    const wasEvening = isNight(), wasShut = shutHours();
+    const wasEvening = isNight();
     if (G.shop !== 'morning') G.time += dt;                // the clock waits at 09:00 until you open
     if (G.shop === 'open' && G.time >= PHASE) closeShop();
     else if (G.shop === 'night' && G.time >= PHASE * 2) { G.time = 0; G.day++; G.shop = 'morning'; G.signWas = 'morning'; saveGame(G.day); toast('Good morning! Flip the sign when you are ready to open.'); }
     else if (G.shop === 'open' && !wasEvening && isNight()) toast('Evening falls. The night crowd is a quieter bunch.');
-    if (G.shop === 'night' && !wasShut && shutHours()) {   // 04:00: lights out for the last walk-ins
+    if (G.shop === 'night' && shutHours() && !G.dayDone) {   // 04:00 (or any time after it, if the clock jumped): lights out for the last walk-ins, once a night
       let n = 0;
       G.stalls.forEach((st, i) => { if (st.guest) { G.slips = G.slips.filter(o => o.guest !== st.guest); leaveSeat(i, false); n++; } });
       G.waiting = 0;
@@ -1613,7 +1616,7 @@
     if (G.drag) return DRAG_HINT[G.drag.kind];
     const id = STATIONS[G.st].id, best = Math.max(...G.bowls.map(b => b.s));
     if (G.shop === 'morning') return id === 'serving' ? 'Tap the CLOSED sign on the counter to open the shop.' : 'The shop is closed. Head to Serving and flip the sign to open.';
-    if (G.shop === 'night' && id === 'serving' && !G.stalls.some(s => s.guest)) return NIGHTSHOP.storeOpen() ? 'Closed for the night. Kitsune-ya across the street is open: out through the staff door on the far left. Or tap the sign to skip to morning.' : 'Closed for the night. Kitsune-ya across the street opens at 04:00. Or tap the sign to skip to morning.';
+    if (G.shop === 'night' && id === 'serving' && !G.stalls.some(s => s.guest)) return NIGHTSHOP.storeOpen() ? (lateOpen() ? 'Late hours: the odd walk-in until 04:00. Kitsune-ya across the street opens at 04:00.' : 'Closed: prep time until 09:00. Kitsune-ya across the street is open: out through the staff door on the far left. Or tap the sign to skip the prep time.') : (lateOpen() ? 'Late hours: the odd walk-in until 04:00. Kitsune-ya across the street opens at 04:00.' : 'Closed: prep time until 09:00. Or tap the sign to skip the prep time.');
     if (id === 'serving') {
       if (G.stalls.some(s => s.guest && s.guest.state === 'call')) return 'A guest is calling. Tap them to take the order.';
       if (G.pass.length && G.stalls.some(s => s.guest && s.guest.state === 'wait')) return 'Drag a bowl from your tray to the guest whose ticket it matches.';
@@ -1729,9 +1732,10 @@
       PX.rect(g, x + 6, y + 7, w - 12, S.h - 14, PX.OUTLINE); PX.rect(g, x + 7, y + 8, w - 14, S.h - 16, inl); PX.rect(g, x + 7, y + 8, w - 14, 1, PX.shade(inl, 0.6));
       PX.textC(g, open ? 'OPEN' : 'CLOSED', cx, y + 16, open ? '#a6e07a' : '#ff9a86');
     }
-    if (G.shop !== 'open' && p >= 1) {
+    if ((G.shop === 'morning' || (G.shop === 'night' && !lateOpen())) && p >= 1) {   // (no label while late walk-ins keep it OPEN)
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
-      SCENE.label(g, G.shop === 'night' ? 'TAP: SKIP NIGHT' : 'TAP TO OPEN', cx, S.y + S.h + 5 + bob, '#7a2f1a');
+      const txt = G.shop === 'night' ? 'TAP: SKIP PREP TIME' : 'TAP TO OPEN', half = PX.textW(txt) / 2 + 14;
+      SCENE.label(g, txt, Math.max(cx, Math.round(G.cam) + half + 4), S.y + S.h + 5 + bob, '#7a2f1a');   // (kept inside the screen)
     }
   }
 

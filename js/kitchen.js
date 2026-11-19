@@ -121,7 +121,7 @@ const KITCHEN = (() => {
     for (let k = 1; k < 4; k++) rect(g, WIN.x + Math.round(WIN.w * k / 4) - 1, WIN.y, 2, WIN.h, '#6e4a2c');
     rect(g, WIN.x, WIN.y + WIN.h / 2 - 1, WIN.w, 2, '#6e4a2c');
     rect(g, WIN.x - 10, WIN.y + WIN.h + 6, WIN.w + 20, 6, DK); wood(g, WIN.x - 9, WIN.y + WIN.h + 7, WIN.w + 18, 4, '#8a623c', 4, false, 313);
-    bottle(g, WIN.x + 6, WIN.y + WIN.h + 6, '#c8443a', 14); bottle(g, WIN.x + 22, WIN.y + WIN.h + 6, '#4aa86a', 18); bottle(g, WIN.x + 96, WIN.y + WIN.h + 6, '#5a7ad8', 12);
+    bottle(g, WIN.x + 6, WIN.y + WIN.h + 6, '#c8443a', 14); bottle(g, WIN.x + 22, WIN.y + WIN.h + 6, '#4aa86a', 18);
     for (let k = 0; k < 5; k++) { const hx = WIN.x + 40 + k * 7; line(g, hx, WIN.y - 8, hx + (k % 2 ? 2 : -2), WIN.y + 18, '#5a7a3a', 2); dot(g, hx, WIN.y + 18, '#7aa04a'); }
     rect(g, WIN.x + 36, WIN.y - 10, 34, 3, DK); rect(g, WIN.x + 37, WIN.y - 9, 32, 1, '#c9a468');
     // prep wall: a hinoki shelf of clean bowls with a beckoning cat at the end (the cat's paw is animated in frame())
@@ -552,10 +552,9 @@ const KITCHEN = (() => {
   function drawOil(g, G) {
     if (!chiliOilOn()) return;
     const O = KL.OIL, n = G.stock[CHILI_OIL] || 0;
-    contact(g, O.cx, O.by + 2, 16, 3);
     if (!(G.drag && G.drag.kind === 'oil')) oilBottle(g, O.cx, O.by, 10);
-    label(g, 'CHILI OIL', O.cx, O.by - 64);
-    chip(g, n, O.cx + 24, O.by - 24);
+    PX.setFont(1); tag(g, 'CHILI OIL', O.cx, O.by + 12, undefined, 8, 44); PX.setFont(2);
+    chip(g, n, O.cx + 30, O.by - 22);
   }
 
   /* The ice bath (once a cold recipe is learned): a hinoki tub of ice water on the counter. Chilled nests wait in it
@@ -607,7 +606,7 @@ const KITCHEN = (() => {
         line(g, cx + 20, y - 23, cx + 22, y - 28, '#7a1e18', 3);
       }
       chip(g, n, cx, y + 26);
-      plate(g, def.short, cx, y + 62);
+      PX.setFont(1); tag(g, def.short, cx, y + 63, undefined, 8, 44); PX.setFont(2);
       badge(g, G, id);
     });
   }

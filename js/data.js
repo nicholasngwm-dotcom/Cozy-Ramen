@@ -352,8 +352,8 @@ const KL = {
   bowlX: [700, 820], BOWL_Y: 420,
   tare: i => ({ cx: 976 + 64 * i, y: 330 }),            // crock i: centre x, rim y
   pot: i => ({ cx: 1150 + 48 * i, cy: 340, rx: 21 }),    // broth pot i on the hearth (five smaller pots)
-  ICE: { cx: 1022, cy: 452, rx: 40 },
-  OIL: { cx: 1102, by: 482 },                           // the chili oil bottle, beside the ice bath (by = its bottom)                   // the ice bath for cold ramen, on the counter in front of the crocks
+  ICE: { cx: 1030, cy: 452, rx: 40 },                   // the ice bath for cold ramen, on the counter in front of the crocks
+  OIL: { cx: 1040, by: 240 },                           // the chili oil bottle, on the window sill above the crocks (by = its bottom)
   BOIL: { cx: 1440, cy: 352, rx: 66 }, basketX: [1398, 1440, 1482],
   NOODLE: { x: 1394, y: 226, w: 92, h: 40 },            // tray of noodle nests on the shelf above the boiler
   // where each stock's "+" restock button sits

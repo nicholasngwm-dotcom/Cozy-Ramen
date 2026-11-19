@@ -9,6 +9,7 @@ const COOKBOOK = (() => {
   const SPECIAL = MENU_KEYS_PREMIUM();   // the house specials: the premium bowls
   function MENU_KEYS_PREMIUM() { return Object.keys(MENU).filter(k => MENU[k].tier === 'premium'); }
   const NOTE = {   // a line of book copy for the things that have no menu description of their own
+    [CHILI_OIL]: 'Red chili oil. A splash on the broth makes it spicy, for Spicy Miso and Market Tantanmen.',
     'tare.miso': 'Fermented soybean paste. Deep, nutty and warming.',
     'tare.shoyu': 'Dark soy sauce tare. Savoury and bold.',
     'tare.shio': 'Salt tare. Clean, bright and simple.',
@@ -44,6 +45,7 @@ const COOKBOOK = (() => {
       uses: { [tareKey(m.tare)]: 1, [brothKey(m.broth)]: 1, ...(m.spicy ? { [CHILI_OIL]: 1 } : {}), noodle: 1, ...m.tops }, on: () => menuOn(k) }; }),
     ...Object.keys(TARES).map(k => ({ id: tareKey(k), key: k, kind: 'tare', cats: ['soups'], name: TARES[k].name, node: TARES[k].node, c: TARES[k].c, uses: { [tareKey(k)]: 1 }, on: () => tareOn(k) })),
     ...Object.keys(BROTHS).map(k => ({ id: brothKey(k), key: k, kind: 'broth', cats: ['soups'], name: BROTHS[k].name, node: BROTHS[k].node, c: BROTHS[k].c, uses: { [brothKey(k)]: 1 }, on: () => brothOn(k) })),
+    { id: CHILI_OIL, key: CHILI_OIL, kind: 'oil', cats: ['soups'], name: 'Chili oil', node: 'spicy', c: '#c8302a', uses: { [CHILI_OIL]: 1 }, on: () => chiliOilOn() },
     { id: 'noodle', key: 'noodle', kind: 'noodle', cats: ['noodles'], name: 'Ramen noodles', c: '#f0d890', uses: { noodle: 1 }, on: () => true },
     ...TOPS.map(id => ({ id, key: id, kind: 'top', cats: ['toppings'], name: TOP_NAME[id], node: TOP_NODE[id], c: '#8a6a3a', uses: { [id]: 1 }, on: () => topOn(id) }))
   ];
@@ -58,6 +60,7 @@ const COOKBOOK = (() => {
   const INGREDIENTS = [
     ...Object.keys(TARES).map(k => ({ id: tareKey(k), label: TARES[k].name, group: 'Tare' })),
     ...Object.keys(BROTHS).map(k => ({ id: brothKey(k), label: BROTHS[k].name, group: 'Broth' })),
+    { id: CHILI_OIL, label: 'Chili oil', group: 'Seasoning' },
     { id: 'noodle', label: 'Noodles', group: 'Noodles' },
     ...TOPS.map(id => ({ id, label: TOP_NAME[id], group: 'Toppings' }))
   ];
@@ -79,7 +82,7 @@ const COOKBOOK = (() => {
     return `<span class="cb-chip miss">Missing: ${s.short.map(id => esc(itemName(id).toLowerCase())).join(', ')}</span>`;
   }
   const lockStamp = s => (s.locked ? '<span class="cb-lockstamp">Locked</span>' : '');
-  const link = (pageOf, e, label) => (pageOf.has(e.id) ? `<a class="cb-link" data-goto="${pageOf.get(e.id)}">${label}<i>p.${pageOf.get(e.id) + 1}</i></a>` : label);
+  const link = (pageOf, e, label) => (e && pageOf.has(e.id) ? `<a class="cb-link" data-goto="${pageOf.get(e.id)}">${label}<i>p.${pageOf.get(e.id) + 1}</i></a>` : label);
 
   function ramenPages(e, p, pageOf) {
     const m = MENU[e.key], s = status(e), ids = Object.keys(e.uses);
@@ -127,8 +130,8 @@ const COOKBOOK = (() => {
   }
   function itemPage(e, p, pageOf) {
     const s = status(e), id = e.id, def = STOCK[id];
-    const chap = { tare: 'Soups &middot; Tare', broth: 'Soups &middot; Broth', noodle: 'Noodles', top: 'Toppings' }[e.kind];
-    const where = e.kind === 'tare' ? `the ${esc(TARES[e.key].short.toLowerCase())} crock` : e.kind === 'broth' ? `the ${esc(BROTHS[e.key].short.toLowerCase())} pot` : e.kind === 'noodle' ? 'the noodle tray' : 'its topping bin';
+    const chap = { tare: 'Soups &middot; Tare', broth: 'Soups &middot; Broth', oil: 'Soups &middot; Chili oil', noodle: 'Noodles', top: 'Toppings' }[e.kind];
+    const where = e.kind === 'tare' ? `the ${esc(TARES[e.key].short.toLowerCase())} crock` : e.kind === 'broth' ? `the ${esc(BROTHS[e.key].short.toLowerCase())} pot` : e.kind === 'noodle' ? 'the noodle tray' : e.kind === 'oil' ? 'the chili oil bottle' : 'its topping bin';
     const users = ENTRIES.filter(x => x.kind === 'ramen' && id in x.uses);
     return `
       <div class="cb-chap"><i class="cb-dot" style="background:${e.c}"></i>${chap}</div>
@@ -174,7 +177,7 @@ const COOKBOOK = (() => {
   }
   const blank = p => `<div class="cb-blank"><div class="cb-orn"></div><p>Notes</p></div>${num(p)}`;
   // A chapter's title page, used where a ramen spread has to start on the next left page anyway.
-  const CHAPTER = { ramen: ['Ramen', 'The bowls of the house'], tare: ['Soups', 'Tares and broths'], broth: ['Soups', 'Tares and broths'], noodle: ['Noodles', 'The heart of every bowl'], top: ['Toppings', 'The finishing touches'] };
+  const CHAPTER = { ramen: ['Ramen', 'The bowls of the house'], tare: ['Soups', 'Tares and broths'], broth: ['Soups', 'Tares and broths'], oil: ['Soups', 'Tares and broths'], noodle: ['Noodles', 'The heart of every bowl'], top: ['Toppings', 'The finishing touches'] };
   const divider = (kind, p) => `<div class="cb-blank cb-divider"><div class="cb-orn"></div><h2>${CHAPTER[kind][0]}</h2><p>${CHAPTER[kind][1]}</p>${kind === 'ramen' ? ART.figure('shoyu', 'cb-fig-c') : ''}<div class="cb-orn"></div></div>${num(p)}`;
   const notesPage = p => `<h3 class="cb-head">Kitchen notes</h3><ul class="cb-tips">
       <li>Click a crock, a pot, a READY basket or a topping bin and it flies into the glowing bowl (click a bowl or press Tab to choose it). Keys 1-9 add the topping in that bin; a recipe's double portion goes in with one click, Shift adds just one. Dragging works too.</li>

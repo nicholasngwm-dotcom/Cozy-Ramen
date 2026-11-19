@@ -1,7 +1,7 @@
 'use strict';
 /* Guest roster. Portraits are in assets/guests/ (from the RPG Fantasy Girls packs).
    ax = x of the body centre inside the image, top / bottom = first and last non-empty rows, head = top of the head.
-   taste: pref = favourite bowl, tops = topping counts that differ from the standard bowl, night = only visits at night.
+   taste: pref = favourite bowl, tops = topping counts that differ from the standard bowl (they must still differ from the trimmed recipes), night = only visits at night.
    To add a guest, drop a PNG in assets/guests/ and add a line here. */
 const GUESTS = [
   {id: 'annabel',name: 'Annabel',title: 'Hedge Witch',w: 119,h: 194,ax: 63,top: 1,head: 4,bottom: 193,hi: 'My cauldron could never.',yum: 'Mmm, bewitching!',taste: {pref: 'miso',tops: {corn: 1}}},
@@ -26,7 +26,7 @@ const GUESTS = [
   {id: 'iguara',name: 'Iguara',title: 'City Guard',w: 221,h: 210,ax: 115,top: 2,head: 3,bottom: 209,hi: 'Long watch tonight.',yum: 'The city sleeps safe on this.',taste: {tops: {chashu: 2}}},
   {id: 'imani',name: 'Imani',title: 'Axe Warrior',w: 302,h: 217,ax: 153,top: 8,head: 9,bottom: 216,hi: 'Two axes, one empty stomach.',yum: 'Strong broth. I respect it.',taste: {pref: 'spicy',tops: {chashu: 2}}},
   {id: 'kaya',name: 'Kaya',title: 'Tinkerer',w: 164,h: 193,ax: 47,top: 2,head: 9,bottom: 192,hi: 'My drone says I skipped lunch.',yum: 'Recording this recipe. Wow.',taste: {tops: {butter: 1,egg: 2}}},
-  {id: 'seraphina',name: 'Seraphina',title: 'Fortune Teller',w: 141,h: 217,ax: 69,top: 0,head: 2,bottom: 216,hi: 'I foresee noodles in my future.',yum: 'Just as the orb promised.',taste: {pref: 'spicy',tops: {menma: 0}}},
+  {id: 'seraphina',name: 'Seraphina',title: 'Fortune Teller',w: 141,h: 217,ax: 69,top: 0,head: 2,bottom: 216,hi: 'I foresee noodles in my future.',yum: 'Just as the orb promised.',taste: {pref: 'spicy',tops: {scallion: 0}}},
   {id: 'tilia',name: 'Tilia',title: 'War Mage',w: 184,h: 194,ax: 66,top: 1,head: 3,bottom: 193,hi: 'Mana is low. Carbs, please.',yum: 'Fully recharged!',taste: {tops: {corn: 1}}},
   {id: 'naida',name: 'Naida',title: 'Shield Bearer',w: 253,h: 216,ax: 97,top: 0,head: 8,bottom: 215,hi: 'Big shield, bigger appetite.',yum: 'Now THAT is a bowl.',taste: {tops: {chashu: 2,egg: 2}}},
   {id: 'kira',name: 'Kira',title: 'Claw Brawler',w: 180,h: 198,ax: 76,top: 26,head: 28,bottom: 197,hi: 'Spar later. Eat first.',yum: 'Knockout flavour!',taste: {pref: 'spicy',tops: {chili: 2}}},
@@ -47,7 +47,7 @@ const GUESTS = [
   {id: 'abyzara',name: 'Abyzara',title: 'Octo Pirate',w: 219,h: 300,ax: 112,top: 70,head: 71,bottom: 299,hi: 'Arr. Eight arms, one empty belly.',yum: 'A treasure from the deep.',taste: {pref: 'seaside',tops: {nori: 2}}},
   {id: 'adeline',name: 'Adeline',title: 'Reptile Ranger',w: 188,h: 217,ax: 72,top: 19,head: 19,bottom: 216,hi: 'Cold-blooded. Need warm broth. Urgently.',yum: 'Ahh. Basking in a bowl.',taste: {pref: 'tonkotsu'}},
   {id: 'aurelia',name: 'Aurelia',title: 'Temple Priestess',w: 160,h: 243,ax: 97,top: 0,head: 7,bottom: 242,hi: 'Blessings upon this humble kitchen.',yum: 'Truly, a blessed bowl.',taste: {pref: 'shio',tops: {egg: 2}}},
-  {id: 'calista',name: 'Calista',title: 'Dark Elf Duelist',w: 124,h: 210,ax: 65,top: 1,head: 1,bottom: 209,hi: 'Your finest bowl. I have refined tastes.',yum: 'Hm. Flawless form.',taste: {pref: 'shoyu',tops: {scallion: 0}}},
+  {id: 'calista',name: 'Calista',title: 'Dark Elf Duelist',w: 124,h: 210,ax: 65,top: 1,head: 1,bottom: 209,hi: 'Your finest bowl. I have refined tastes.',yum: 'Hm. Flawless form.',taste: {pref: 'shoyu',tops: {nori: 0}}},
   {id: 'ember',name: 'Ember',title: 'Fox Spirit',w: 172,h: 216,ax: 70,top: 22,head: 22,bottom: 215,hi: 'A fox never says no to a warm bowl.',yum: 'My tails are wagging. All of them.',taste: {pref: 'butter',tops: {butter: 1,corn: 1}}},
   {id: 'aoi',name: 'Aoi',title: 'Kitsune Shopkeeper',w: 172,h: 216,ax: 70,top: 1,head: 22,bottom: 215,hi: 'My shop opens at nine. Your noodles open now.',yum: 'Worth closing early for. Not that I would.',taste: {pref: 'shoyu',tops: {scallion: 2}}},
   {id: 'fynja',name: 'Fynja',title: 'Sun Elementalist',w: 190,h: 247,ax: 85,top: 26,head: 29,bottom: 246,hi: 'Bring the heat! I am made of it.',yum: 'Hot, bright and perfect!',taste: {pref: 'dragon',tops: {chili: 2}}},

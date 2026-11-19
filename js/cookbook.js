@@ -6,7 +6,8 @@
 const COOKBOOK = (() => {
   const esc = s => BOOKFILTER.esc(s);
   const PER_TOC = 12;
-  const SPECIAL = ['seaside', 'dragon'];   // the house specials: the harbour dashi and the dragon's fire
+  const SPECIAL = MENU_KEYS_PREMIUM();   // the house specials: the premium bowls
+  function MENU_KEYS_PREMIUM() { return Object.keys(MENU).filter(k => MENU[k].tier === 'premium'); }
   const NOTE = {   // a line of book copy for the things that have no menu description of their own
     'tare.miso': 'Fermented soybean paste. Deep, nutty and warming.',
     'tare.shoyu': 'Dark soy sauce tare. Savoury and bold.',
@@ -25,21 +26,22 @@ const COOKBOOK = (() => {
   }
   const im = (url, cls = '') => `<img class="px ${cls}" src="${url}" alt="">`;
   const recipeItems = m => Object.entries(m.tops).flatMap(([id, n]) => Array(n).fill(id));
-  const bowlURL = k => { const m = MENU[k]; return draw('bowl.' + k, 140, 96, g => ART.bigBowl(g, 70, 34, { s: 3, tare: m.tare, broth: m.broth, fill: 1, noodles: 'perfect', items: recipeItems(m), hide: {} }, false, 0)); };
+  const bowlURL = k => ART.figURL(k);   // each ramen's picture: its real bowl, printed in ink (ART.figURL)
   function iconURL(id) {
     if (id.startsWith('tare.')) { const t = TARES[id.slice(5)]; return draw(id, 40, 46, g => KITCHEN.spoon(g, 14, 38, true, t.c)); }
     if (id.startsWith('broth.')) { const b = BROTHS[id.slice(6)]; return draw(id, 60, 62, g => KITCHEN.ladle(g, 20, 52, true, 0, [b.c, b.dark, b.light])); }
     if (id === 'noodle') return draw(id, 60, 76, g => KITCHEN.basket(g, 24, 48, true, false, 0));
+    if (id === CHILI_OIL) return draw(id, 30, 52, g => KITCHEN.oilBottle(g, 15, 50, 8));
     return draw('top.' + id, 30, 30, g => ART.top(g, id, 15, 15));
   }
   const ico = (id, cls = '') => `<span class="ico ${cls}">${im(iconURL(id), 'ico-img')}</span>`;
-  const itemName = id => (id.startsWith('tare.') ? TARES[id.slice(5)].name : id.startsWith('broth.') ? BROTHS[id.slice(6)].name : id === 'noodle' ? 'Noodles' : TOP_NAME[id]);
-  const qty = (id, n) => (id.startsWith('tare.') ? n + ' spoon' : id.startsWith('broth.') ? n + ' ladle' : id === 'noodle' ? n + ' nest' : 'x' + n);
+  const itemName = id => id === CHILI_OIL ? 'Chili oil' : (id.startsWith('tare.') ? TARES[id.slice(5)].name : id.startsWith('broth.') ? BROTHS[id.slice(6)].name : id === 'noodle' ? 'Noodles' : TOP_NAME[id]);
+  const qty = (id, n) => id === CHILI_OIL ? n + ' splash' : (id.startsWith('tare.') ? n + ' spoon' : id.startsWith('broth.') ? n + ' ladle' : id === 'noodle' ? n + ' nest' : 'x' + n);
 
   /* ---------- the entries: one per thing in the game, built from the data ---------- */
   const ENTRIES = [
     ...Object.keys(MENU).map(k => { const m = MENU[k]; return { id: 'r.' + k, key: k, kind: 'ramen', cats: ['ramen', ...(SPECIAL.includes(k) ? ['special'] : [])], name: m.name, node: m.node, c: m.c,
-      uses: { [tareKey(m.tare)]: 1, [brothKey(m.broth)]: 1, noodle: 1, ...m.tops }, on: () => menuOn(k) }; }),
+      uses: { [tareKey(m.tare)]: 1, [brothKey(m.broth)]: 1, ...(m.spicy ? { [CHILI_OIL]: 1 } : {}), noodle: 1, ...m.tops }, on: () => menuOn(k) }; }),
     ...Object.keys(TARES).map(k => ({ id: tareKey(k), key: k, kind: 'tare', cats: ['soups'], name: TARES[k].name, node: TARES[k].node, c: TARES[k].c, uses: { [tareKey(k)]: 1 }, on: () => tareOn(k) })),
     ...Object.keys(BROTHS).map(k => ({ id: brothKey(k), key: k, kind: 'broth', cats: ['soups'], name: BROTHS[k].name, node: BROTHS[k].node, c: BROTHS[k].c, uses: { [brothKey(k)]: 1 }, on: () => brothOn(k) })),
     { id: 'noodle', key: 'noodle', kind: 'noodle', cats: ['noodles'], name: 'Ramen noodles', c: '#f0d890', uses: { noodle: 1 }, on: () => true },
@@ -70,7 +72,7 @@ const COOKBOOK = (() => {
 
   /* ---------- page templates ---------- */
   const num = p => `<span class="cb-num">${p + 1}</span>`;
-  const unlockText = node => { const n = nodeFor(node); return n ? `Japan road: <b>${esc(n.place)}</b>, level ${n.level}.` : 'Available from day one.'; };
+  const unlockText = node => { const n = nodeFor(node); return n ? `${ROAD_NAME}: <b>${esc(n.place)}</b>, level ${n.level}.` : 'Available from day one.'; };
   function chip(s) {
     if (s.locked) return '<span class="cb-chip lock">Locked</span>';
     if (s.cook) return '<span class="cb-chip ok">Ready to cook</span>';
@@ -82,15 +84,26 @@ const COOKBOOK = (() => {
   function ramenPages(e, p, pageOf) {
     const m = MENU[e.key], s = status(e), ids = Object.keys(e.uses);
     const left = `
-      <div class="cb-chap"><i class="cb-dot" style="background:${m.c}"></i>Ramen${SPECIAL.includes(e.key) ? ' &middot; House special' : ''}</div>
+      <div class="cb-chap"><i class="cb-dot" style="background:${m.c}"></i>Ramen &middot; ${TIER_NAME[m.tier]}${m.night ? ' &middot; Night only' : ''}${m.cold ? ' &middot; Served cold' : ''}</div>
+      ${ART.figure(e.key, 'cb-fig', lockStamp(s))}
       <h3 class="cb-title">${esc(m.name)}</h3>
-      <div class="cb-art">${im(bowlURL(e.key), 'cb-bowl')}${lockStamp(s)}${m.rec ? '<span class="pickme">&#9733; Chef\'s pick</span>' : ''}</div>
       <div class="cb-line">${chip(s)}<span class="price">${m.price}G</span></div>
+      ${window.G && G.pick === e.key ? '<div class="cb-pick"><span class="pickme">&#9733; Chef\'s pick</span></div>' : window.G && G.menu && G.menu.includes(e.key) ? '<div class="cb-pick"><span class="cb-chip ok">On the menu</span></div>' : ''}
       <table class="cb-ingr"><thead><tr><th colspan="2">Ingredient</th><th>Qty</th><th>Have</th></tr></thead><tbody>
       ${ids.map(id => { const n = e.uses[id], h = have(id); return `<tr class="${h < n ? 'short' : ''}"><td>${ico(id)}</td><td>${link(pageOf, ENTRIES.find(x => x.id === id), esc(itemName(id)))}</td><td class="q">${qty(id, n)}</td><td class="h">${h}</td></tr>`; }).join('')}
       </tbody></table>${num(p)}`;
     const tops = Object.keys(m.tops).map(id => esc(TOP_NAME[id].toLowerCase()) + (m.tops[id] > 1 ? ' x' + m.tops[id] : '')).join(', ');
     const tk = tareKey(m.tare), bk = brothKey(m.broth);
+    // the recipe's special steps (optional: they only improve the bowl's grade)
+    const steps = [];
+    if (m.cold) steps.push('<b>Ice bath</b>: rinse the READY noodles in the ice bath (click it), then click it again to put them in. Served cold, no steam.');
+    if (m.tops.emberpep) steps.push(`<b>Ember pepper oil</b>: hold on the bowl to pour ${m.tops.emberpep} swirl${m.tops.emberpep > 1 ? 's' : ''}, then let go.`);
+    if (m.tops.mayu) steps.push('<b>Black garlic oil</b>: hold on the bowl to pour one swirl, then let go.');
+    if (m.tops.sesame) steps.push('<b>Sesame</b>: hold on the bowl to grind it; let go while it is fine (under a second and a half).');
+    if (TORCH_RECIPES.includes(e.key)) { const meat = TORCH_MEATS.find(id => m.tops[id]); steps.push(`<b>Torched ${esc(TOP_NAME[meat].toLowerCase())}</b>: hold on the bowl until it turns golden (about a second).`); }
+    if (m.tops.mandrake) steps.push('<b>Mandrake root</b>: it goes in whole; click the bowl to slice it. It squeaks.');
+    if (m.tops.butter) steps.push('<b>Butter</b>: it melts as it waits; serve it before it is gone.');
+    if (m.strict && steps.length) steps.push('<b>Hiro\'s rule</b>: every touch must be perfect. A fluffed step costs three times as much here.');
     const right = `
       <div class="cb-chap">Method</div>
       <p class="cb-quote">&ldquo;${esc(m.desc)}&rdquo;</p>
@@ -103,11 +116,12 @@ const COOKBOOK = (() => {
       <h4>Cooking</h4>
       <ol class="cb-steps">
         <li>Spoon <b>${esc(TARES[m.tare].short.toLowerCase())} tare</b> into an empty bowl.</li>
-        <li>Ladle <b>${esc(BROTHS[m.broth].short.toLowerCase())} broth</b> over it.</li>
-        <li>Boil a nest for <b>${cookTime()}s</b>, then tip the basket in.</li>
+        <li>Ladle <b>${esc(BROTHS[m.broth].name.toLowerCase())}</b> over it.</li>${m.spicy ? '<li>Click the <b>chili oil</b> bottle: the broth turns red and spicy.</li>' : ''}
+        <li>Boil a nest for <b>${cookTime()}s</b>, then ${m.cold ? 'chill it in the ice bath and put it in' : 'tip the basket in'}.</li>
         <li>Add ${tops}.</li>
-        <li>Pass it, then serve it at the stall.</li>
+        <li>Pass it, then serve it to the guest at the counter.</li>
       </ol>
+      ${steps.length ? `<h4>Special touch</h4><ul class="cb-steps cb-touch">${steps.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
       <dl class="cb-facts"><dt>Cook time</dt><dd>${cookTime()}s noodles</dd><dt>Needs</dt><dd>${unlockText(m.node)}</dd></dl>${num(p + 1)}`;
     return [left, right];
   }
@@ -124,7 +138,7 @@ const COOKBOOK = (() => {
       <p class="cb-quote">${esc(NOTE[id] || TOP_DESC[id] || '')}</p>
       <dl class="cb-facts">
         <dt>In the kitchen</dt><dd>${have(id)} in ${where}</dd>
-        <dt>Restock</dt><dd>${packSize(id)} a pack, ${SUPPLY_PRICE[id]}G at Kitsune-ya</dd>
+        <dt>Restock</dt><dd>${packSize(id)} a pack, ${SUPPLY_PRICE[id]}G at Kitsune-ya</dd>${e.kind === 'top' ? `<dt>As an extra</dt><dd>+${extraPrice(id)}G when a guest asks for more</dd>` : ''}
         ${e.kind === 'noodle' ? `<dt>Boil</dt><dd>${cookTime()}s in a basket; ready noodles never overcook</dd>` : ''}
         <dt>Needs</dt><dd>${unlockText(e.node)}</dd>
       </dl>
@@ -150,7 +164,7 @@ const COOKBOOK = (() => {
       <div class="cb-titlepage">
         <div class="cb-orn"></div>
         <h2>The Cozy Ramen<br>Cookbook</h2>
-        <div class="cb-art">${im(bowlURL('miso'), 'cb-bowl')}</div>
+        <div class="cb-art">${ART.figure('miso', 'cb-fig-c')}</div>
         <p class="cb-quote">Recipes of the house, kept by the chef.</p>
         <p class="cb-count">${ENTRIES.length} recipes &middot; ${on} unlocked &middot; ${cook} ready to cook</p>
         <p class="cb-filtersum">${filters ? `Showing ${list.length}: ${sum.join(' &middot; ')}` : 'Showing every recipe'}</p>
@@ -161,12 +175,13 @@ const COOKBOOK = (() => {
   const blank = p => `<div class="cb-blank"><div class="cb-orn"></div><p>Notes</p></div>${num(p)}`;
   // A chapter's title page, used where a ramen spread has to start on the next left page anyway.
   const CHAPTER = { ramen: ['Ramen', 'The bowls of the house'], tare: ['Soups', 'Tares and broths'], broth: ['Soups', 'Tares and broths'], noodle: ['Noodles', 'The heart of every bowl'], top: ['Toppings', 'The finishing touches'] };
-  const divider = (kind, p) => `<div class="cb-blank cb-divider"><div class="cb-orn"></div><h2>${CHAPTER[kind][0]}</h2><p>${CHAPTER[kind][1]}</p>${kind === 'ramen' ? im(bowlURL('shoyu'), 'cb-bowl') : ''}<div class="cb-orn"></div></div>${num(p)}`;
+  const divider = (kind, p) => `<div class="cb-blank cb-divider"><div class="cb-orn"></div><h2>${CHAPTER[kind][0]}</h2><p>${CHAPTER[kind][1]}</p>${kind === 'ramen' ? ART.figure('shoyu', 'cb-fig-c') : ''}<div class="cb-orn"></div></div>${num(p)}`;
   const notesPage = p => `<h3 class="cb-head">Kitchen notes</h3><ul class="cb-tips">
+      <li>Click a crock, a pot, a READY basket or a topping bin and it flies into the glowing bowl (click a bowl or press Tab to choose it). Keys 1-9 add the topping in that bin; a recipe's double portion goes in with one click, Shift adds just one. Dragging works too.</li>
       <li>Each slip shows the ramen's name. Lines in green or red are the guest's changes: + adds a topping, &minus; leaves one out.</li>
       <li>Every recipe needs its own tare and broth. Check the name on the crock and the pot.</li>
       <li>Noodles wait in the basket once they are ready, so nothing overcooks.</li>
-      <li>If a guest asks for a recommendation, the Miso Ramen is the chef's pick.</li>
+      <li>If a guest asks for a recommendation, offer the chef's pick: choose it (and the whole menu) at the menu board.</li>
       <li>The kitchen is one long counter: hold A / D or scroll the mouse wheel to look along it.</li>
       <li>Restock at Kitsune-ya, through the staff door at the far left of the serving room, from ${pad(SHOP_HOURS.open)}:00 to ${pad(SHOP_HOURS.close)}:00. Packs go straight into the kitchen; it sells road-unlocked tools too.</li>
       <li>No one is in a hurry here.</li></ul>${num(p)}`;
@@ -198,7 +213,7 @@ const COOKBOOK = (() => {
   let book = null, tb = null, hooks = { sound: () => {}, close: () => {} }, lastSpread = 0, sig = '';
   const run = BOOKFILTER.memo();
   const coverHTML = () => `<div class="pb-cover-art"><div class="pb-cover-frame">
-      <div class="pb-cover-title">Cozy Ramen</div>${im(bowlURL('miso'), 'pb-cover-emb')}<div class="pb-cover-sub">Cookbook</div></div></div>`;
+      <div class="pb-cover-title">Cozy Ramen</div>${ART.figure('miso', 'pb-cover-fig')}<div class="pb-cover-sub">Cookbook</div></div></div>`;
   function ensure() {
     if (book) return;
     book = PBOOK.create(document.getElementById('book'), { skin: 'skin-recipe', coverHTML: coverHTML(), sound: n => hooks.sound(n), onBackdrop: () => hooks.close(), requestClose: () => hooks.close(), onSettle: s => { lastSpread = s; } });
@@ -209,7 +224,7 @@ const COOKBOOK = (() => {
       if (e.target.closest('[data-act="reset"]')) tb.clear();
     });
   }
-  const stateSig = () => (window.G ? JSON.stringify([G.stock, G.owned]) : '');
+  const stateSig = () => (window.G ? JSON.stringify([G.stock, G.owned, G.menu, G.pick]) : '');
   function results() { return run(tb.key() + '#' + sig, () => ENTRIES.filter(e => match(e, tb.state))); }
   function rebuild(fromFilter) {
     const list = results();

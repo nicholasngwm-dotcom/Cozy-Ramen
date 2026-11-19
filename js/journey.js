@@ -1,5 +1,5 @@
 'use strict';
-/* The Japan road: a hand-drawn pixel map, five screens wide, that the level progression travels along.
+/* The Ramen Road: a hand-drawn pixel map, five screens wide, that the level progression travels along.
    The scenery is painted once into a big off-screen canvas (sky, mountains, the five regions, the road); each frame
    blits the visible slice and adds what moves: clouds, falling petals, water shimmer, lantern glow, neon, waves,
    boats, the stop markers and a little ramen cart that rolls along the road to whichever stop you pick.
@@ -32,7 +32,8 @@ const JOURNEY = (() => {
   // a region's stops are spread evenly across it, alternating low and high along the road
   const slot = (k, n) => [Math.round(140 + k * (700 / Math.max(1, n - 1))), k % 2 ? 322 : 412];
   const YOFF = [[0, 0, 0, 0, 0], [-10, 16, -14, 10, -6], [8, -8, 10, -12, 6], [-6, 12, -10, 8, -4], [10, -12, 4, 6, -8]];
-  const POS = STOPS.map((s, i) => { const r = s.region, k = STOPS.filter((t, j) => j < i && t.region === r).length, n = STOPS.filter(t => t.region === r).length, sl = slot(k, n); return { x: r * RW + sl[0], y: sl[1] + YOFF[r][k] }; });
+  const yoff = (r, k) => (YOFF[r][k] !== undefined ? YOFF[r][k] : [6, -10, 12, -6, 8, -12][k % 6]);   // regions with more stops than the table
+  const POS = STOPS.map((s, i) => { const r = s.region, k = STOPS.filter((t, j) => j < i && t.region === r).length, n = STOPS.filter(t => t.region === r).length, sl = slot(k, n); return { x: r * RW + sl[0], y: sl[1] + yoff(r, k) }; });
   const CTRL = [{ x: -30, y: 440 }];
   POS.forEach((p, i) => { if (i) { const q = POS[i - 1]; CTRL.push({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 + (i % 2 ? 46 : -46) }); } CTRL.push(p); });
   CTRL.push({ x: MW + 30, y: 360 });
@@ -420,7 +421,9 @@ const JOURNEY = (() => {
     const p = POS[i], x = Math.round(p.x - cam), y = p.y, st = stateOf(i), s = STOPS[i], lm = s.kind === 'landmark' || s.kind === 'start';
     if (x < -60 || x > VW + 60) return;
     const R = lm ? 13 : 11;
-    if (s.kind === 'recipe' && st !== 'done') recipeSign(g, x, y, s, st);
+    // a recipe still to come shows its signboard and name only when it is next, picked or pointed at (regions hold up to 11 stops)
+    const near = st === 'open' || i === sel || i === hover;
+    if (s.kind === 'recipe' && st !== 'done' && near) recipeSign(g, x, y, s, st);
     ell(g, x, y + 4, R + 4, 5, 'rgba(20,10,10,0.35)');
     if (st === 'open') { const pulse = 0.5 + 0.5 * Math.sin(t * 4); g.globalAlpha = 0.25 + 0.25 * pulse; ell(g, x, y, R + 8 + pulse * 3, R + 8 + pulse * 3, stopReady(s) ? '#ffe680' : '#fff0c0'); g.globalAlpha = 1; }
     ell(g, x, y, R + 2, R + 2, DK);
@@ -429,8 +432,8 @@ const JOURNEY = (() => {
     else { ell(g, x, y, R, R, '#5a5660'); ell(g, x, y, R - 2, R - 2, '#6e6a74'); rect(g, x - 4, y - 1, 8, 6, '#2a2830'); rect(g, x - 3, y - 5, 1, 4, '#2a2830'); rect(g, x + 2, y - 5, 1, 4, '#2a2830'); rect(g, x - 3, y - 6, 6, 1, '#2a2830'); }
     if (lm) { rect(g, x + R - 2, y - R - 12, 1, 14, '#3a2a1a'); poly(g, [[x + R - 1, y - R - 12], [x + R + 9, y - R - 9], [x + R - 1, y - R - 6]], st === 'locked' ? '#8a8690' : REGIONS[s.region].c); }
     if (st === 'open' && stopReady(s)) { const b = Math.round(Math.sin(t * 6) * 2); rect(g, x - 2, y - R - 18 + b, 5, 9, DK); rect(g, x - 1, y - R - 17 + b, 3, 7, '#ffe680'); rect(g, x - 2, y - R - 7 + b, 5, 4, DK); rect(g, x - 1, y - R - 6 + b, 3, 2, '#ffe680'); }
-    if (i === sel) { const b = Math.round(Math.sin(t * 5) * 2) - (s.kind === 'recipe' && st !== 'done' ? 74 : 0); poly(g, [[x - 6, y - R - 26 + b], [x + 6, y - R - 26 + b], [x, y - R - 18 + b]], DK); poly(g, [[x - 4, y - R - 25 + b], [x + 4, y - R - 25 + b], [x, y - R - 20 + b]], '#ffffff'); }
-    if (s.kind === 'recipe' && st !== 'done') SCENE.label(g, 'NEW RECIPE: ' + MENU[s.menu].short, x, y + R + 16, st === 'locked' ? 'muted' : MENU[s.menu].c);
+    if (i === sel) { const b = Math.round(Math.sin(t * 5) * 2) - (s.kind === 'recipe' && st !== 'done' && near ? 74 : 0); poly(g, [[x - 6, y - R - 26 + b], [x + 6, y - R - 26 + b], [x, y - R - 18 + b]], DK); poly(g, [[x - 4, y - R - 25 + b], [x + 4, y - R - 25 + b], [x, y - R - 20 + b]], '#ffffff'); }
+    if (s.kind === 'recipe' && st !== 'done' && near) SCENE.label(g, 'NEW RECIPE: ' + MENU[s.menu].short, x, y + R + 16, st === 'locked' ? 'muted' : MENU[s.menu].c);
     else if (i === sel || i === hover || st === 'open' || i === currentIdx()) SCENE.label(g, s.place.toUpperCase(), x, y + R + 16, st === 'locked' ? 'muted' : undefined);
   }
   function drawCart(g) {
@@ -535,18 +538,13 @@ const JOURNEY = (() => {
     }).join('');
     $('jr-regions').querySelectorAll('.jr-reg').forEach(b => { b.onclick = () => { const r = +b.dataset.r; hooks.setRegion(r); camT = clamp(r * RW, 0, MW - VW); header(); }; });
   }
-  const bowlPic = {};
-  function bowlURL(k) {   // the ramen drawn big, as in the recipe book (procedural, so it can be copied to an image)
-    if (!bowlPic[k]) { const c = document.createElement('canvas'); c.width = 140; c.height = 96; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; ART.bigBowl(g, 70, 34, Object.assign({ s: 3 }, recipeBowl(k)), false, 0); bowlPic[k] = c.toDataURL(); }
-    return bowlPic[k];
-  }
   function card() {
     const s = STOPS[sel], st = stateOf(sel), f = frontierIdx(), el = $('jr-card');
     const kind = { start: 'Start', recipe: 'New recipe', upgrade: 'Upgrade', landmark: 'Landmark' }[s.kind];   // the card's kind line
     let what = '';
     if (s.kind === 'recipe') {
       const m = MENU[s.menu], tops = Object.entries(m.tops).map(([id, n]) => TOP_NAME[id].toLowerCase() + (n > 1 ? ' x' + n : '')).join(', ');
-      what = `<span class="jr-new" style="--rc:${m.c}"><span class="jr-ribbon">New recipe</span><img class="px jr-bowl" src="${bowlURL(s.menu)}" alt="">`
+      what = `<span class="jr-new" style="--rc:${m.c}"><span class="jr-ribbon">New recipe</span>${ART.figure(s.menu, 'jr-fig')}`
         + `<span class="jr-dish"><b style="color:${m.c}">${esc(m.name)}</b><small>${esc(TARES[m.tare].name)} &middot; ${esc(BROTHS[m.broth].name.toLowerCase())}</small><small>${esc(tops)}</small>`
         + `${s.also ? `<small class="jr-also">Also unlocks: ${esc(s.also.toLowerCase())}</small>` : ''}<small class="jr-price">Sells for ${m.price}G</small></span></span>`;
     }

@@ -3,13 +3,14 @@
    After closing (G.shop === 'night') the serving room's left edge leads out to the night street (G.where = 'street'),
    where Aoi's shop is lit from SHOP_HOURS.open to SHOP_HOURS.close. Inside (G.where = 'store') is one wide room you
    pan around (A / D, the wheel, dragging, or the edge arrows): the counter with Aoi, a specials cabinet, the fresh
-   cooler, pantry shelves and the tools table. Tap a product to inspect it and put packs in your cart; Aoi takes
+   cooler, pantry shelves, the tools table, and past them the market annex: a second cooler of newer ingredients and a
+   curio cabinet of rare (fantasy) ones. Tap a product to inspect it and put packs in your cart; Aoi takes
    payment at the counter. Everything sold comes from the shared data: SUPPLY_IDS / SUPPLY_PRICE (packs),
    GEAR (the road's upgrade stops). Packs go straight into the kitchen (G.stock); tools into G.gear.
    Tonight's special is one ingredient at 40% off, shown on its own price tag and in the specials cabinet. */
 const NIGHTSHOP = (() => {
   const { rect, dot, ell, poly, line, shade, mix, text, textC, textW } = PX;
-  const DK = PX.OUTLINE, SW = 2240, FLOOR = 430, CTOP = 378, EDGE = 46;
+  const DK = PX.OUTLINE, SW = 3260, FLOOR = 430, CTOP = 378, EDGE = 46;
   const $ = id => document.getElementById(id);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const inR = (p, r) => p && p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
@@ -20,8 +21,11 @@ const NIGHTSHOP = (() => {
 
   /* ---------- hours ---------- */
   const hourNow = () => G.hour === undefined ? 0 : G.hour;
-  const streetOpen = () => G.mode === 'play' && G.shop === 'night';
-  const storeOpen = () => { const h = hourNow(); return streetOpen() && (h >= SHOP_HOURS.open || h < SHOP_HOURS.close); };
+  // The street is always there to step out to; Kitsune-ya itself keeps SHOP_HOURS (04:00-15:00, so also during the
+  // morning and the lunch service: while you are out, your own shop waits for you).
+  const streetOpen = () => G.mode === 'play';
+  const inHours = h => (SHOP_HOURS.open < SHOP_HOURS.close ? h >= SHOP_HOURS.open && h < SHOP_HOURS.close : h >= SHOP_HOURS.open || h < SHOP_HOURS.close);
+  const storeOpen = () => streetOpen() && inHours(hourNow());
   const pad2 = n => String(n).padStart(2, '0');
   const HOURS = pad2(SHOP_HOURS.open) + ':00-' + pad2(SHOP_HOURS.close) + ':00';
 
@@ -30,23 +34,28 @@ const NIGHTSHOP = (() => {
     quick: { name: 'Waiting bench',    line: 'A cedar bench for the queue. Up to five guests wait instead of three.' },
     bins:  { name: 'Bulk crates',      line: 'Aoi packs your orders in bulk crates: every pack holds half as much again.' },
     boil:  { name: 'High-flame boiler', line: 'A roaring burner. Noodles in four seconds.' },
+    caddy: { name: 'Garnish caddy',    line: 'A little cedar caddy of spring onion and nori: it sprinkles them in with the noodles, as the order asks.' },
     tips:  { name: 'Lucky tip cat',    line: 'A beckoning cat for the counter. Happy guests tip more.' },
-    stall5: { name: 'Stall 5 kit', line: 'A noren, a stool and a blind: opens stall 5 in your serving room.' },
-    stall6: { name: 'Stall 6 kit', line: 'A noren, a stool and a blind: opens stall 6 in your serving room.' },
-    stall7: { name: 'Stall 7 kit', line: 'A noren, a stool and a blind: opens stall 7 in your serving room.' },
-    stall8: { name: 'Stall 8 kit', line: 'A noren, a stool and a blind: opens stall 8, the last one.' }
+    stall5: { name: 'Seat 5 kit', line: 'A stool, a paper lantern and a bamboo blind: opens stall 5 at your counter.' },
+    stall6: { name: 'Seat 6 kit', line: 'A stool, a paper lantern and a bamboo blind: opens stall 6 at your counter.' },
+    stall7: { name: 'Seat 7 kit', line: 'A stool, a paper lantern and a bamboo blind: opens stall 7 at your counter.' },
+    stall8: { name: 'Seat 8 kit', line: 'A stool, a paper lantern and a bamboo blind: opens stall 8, the last one.' },
+    board9: { name: 'Menu board plank', line: 'One more plank for the menu board: a ninth dish on your menu.' },
+    board10: { name: 'Grand menu board', line: 'A lacquered extension for the menu board: a tenth dish on your menu.' }
   };
   function market() {
-    if (!G.market || G.market.day !== G.day) {
+    const mday = G.shop === 'night' ? G.day + 1 : G.day;   // (the 04:00-09:00 window already belongs to the coming day)
+    if (!G.market || G.market.day !== mday) {
       const left = {}; for (const id of SUPPLY_IDS) left[id] = 8;
-      left.crate = 2;
+      left.crate = 2; left.cockegg = 1;   // cockatrice eggs: one pack (two eggs) a night
       const pool = SUPPLY_IDS.filter(supplyOn);
-      G.market = { day: G.day, left, special: pool[(G.day * 7 + 3) % pool.length] };
+      G.market = { day: mday, left, special: pool[(mday * 7 + 3) % pool.length] };
     }
     return G.market;
   }
   function descOf(id) {
     if (id === 'noodle') return 'Springy wavy noodles, made fresh this afternoon.';
+    if (id === CHILI_OIL) return 'Red chili oil for spicy broths: a splash turns Spicy Miso and Tantanmen red.';
     if (TOP_DESC[id]) return TOP_DESC[id] + '.';
     if (id.startsWith('tare.')) return 'A sealed jar of ' + TARES[id.slice(5)].name.toLowerCase() + ', ready for the crock.';
     return 'Bones and aromatics for a fresh pot of ' + BROTHS[id.slice(6)].name.toLowerCase() + '.';
@@ -59,7 +68,7 @@ const NIGHTSHOP = (() => {
   const RARITY = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
   function rarity(it) {
     if (!it) return 0;
-    if (it.kind === 'gear') return it.id.startsWith('stall') ? 4 : 3;
+    if (it.kind === 'gear') return it.id.startsWith('stall') || it.id.startsWith('board') ? 4 : 3;
     if (it.kind === 'crate' || it.sale) return 2;
     return it.node ? 1 : 0;
   }
@@ -77,23 +86,29 @@ const NIGHTSHOP = (() => {
     }
     if (id === 'special') return Object.assign({}, item(M.special), { id, kind: 'special', of: M.special });   // the cabinet's display of tonight's sale
     if (id === 'crate') {
-      const tops = TOPS.filter(topOn);
-      return { id, kind: 'crate', tops, name: 'Market crate', desc: 'A cedar crate with one pack of every topping you can use (' + tops.length + ' packs).',
+      const tops = TOPS.filter(id => topOn(id) && !FANTASY.includes(id));
+      return { id, kind: 'crate', tops, name: 'Market crate', desc: 'A cedar crate with one pack of every everyday topping you can use (' + tops.length + ' packs; rare goods not included).',
         price: Math.round(tops.reduce((a, t) => a + SUPPLY_PRICE[t], 0) * 0.8), on: true, left: M.left.crate, unit: tops.length + ' packs' };
     }
     return null;
   }
-  const CATALOGUE = () => [['Specials', [market().special, 'crate']], ['Fresh', TOPS.slice()], ['Pantry', SUPPLY_IDS.filter(id => !TOPS.includes(id))], ['Upgrades', GEAR.slice()]];
+  const CATALOGUE = () => [['Specials', [market().special, 'crate']], ['Fresh', TOPS.filter(id => !FANTASY.includes(id))], ['Curios', FANTASY.slice()], ['Pantry', SUPPLY_IDS.filter(id => !TOPS.includes(id))], ['Upgrades', GEAR.slice()]];
 
   /* ---------- where everything sits in the store (store x 0-SW) ---------- */
   const SLOTS = [];
   SLOTS.push({ id: 'special', x: 720, base: 268 }, { id: 'crate', x: 720, base: 362 });
-  TOPS.forEach((id, i) => SLOTS.push({ id, x: 932 + (i % 4) * 94, base: i < 4 ? 282 : 374 }));
-  ['noodle', ...Object.keys(TARES).map(tareKey)].forEach((id, i) => SLOTS.push({ id, x: 1360 + i * 92, base: 230 }));
-  Object.keys(BROTHS).map(brothKey).forEach((id, i) => SLOTS.push({ id, x: 1406 + i * 92, base: 330 }));
-  GEAR.filter(id => !id.startsWith('stall')).forEach((id, i) => SLOTS.push({ id, x: 1820 + i * 106, base: 340 }));
-  GEAR.filter(id => id.startsWith('stall')).forEach((id, i) => SLOTS.push({ id, x: 1820 + i * 106, base: 232 }));
-  for (const s of SLOTS) s.r = { x: s.x - 40, y: s.base - 54, w: 80, h: 64 };
+  const FRESH1 = TOPS.slice(0, 12), FRESH2 = TOPS.filter(id => !FRESH1.includes(id) && !FANTASY.includes(id));
+  FRESH1.forEach((id, i) => SLOTS.push({ id, x: 932 + (i % 4) * 94, base: [222, 298, 374][Math.floor(i / 4)] }));
+  ['noodle', ...Object.keys(TARES).map(tareKey), CHILI_OIL].forEach((id, i) => SLOTS.push({ id, x: 1346 + i * 74, base: 230, small: true }));
+  Object.keys(BROTHS).map(brothKey).forEach((id, i) => SLOTS.push({ id, x: 1344 + i * 74, base: 330, small: true }));
+  // the market annex past the umbrella stand: a second cooler (five to a shelf) and the curio cabinet (four to a shelf)
+  const ANNEX = { cool: { x: 2280, w: 500 }, curio: { x: 2830, w: 396 } };
+  FRESH2.forEach((id, i) => SLOTS.push({ id, x: 2338 + (i % 5) * 96, base: [222, 298, 374][Math.floor(i / 5)] }));
+  FANTASY.forEach((id, i) => SLOTS.push({ id, x: 2884 + (i % 4) * 96, base: [262, 362][Math.floor(i / 4)] }));
+  const shelfGear = id => id.startsWith('stall') || id.startsWith('board');
+  GEAR.filter(id => !shelfGear(id)).forEach((id, i) => SLOTS.push({ id, x: 1806 + i * 86, base: 340 }));   // five kitchen tools on the table
+  [...GEAR.filter(id => id.startsWith('stall')), ...GEAR.filter(id => id.startsWith('board'))].forEach((id, i) => SLOTS.push({ id, x: 1798 + i * 72, base: 232, small: true }));
+  for (const s of SLOTS) s.r = s.small ? { x: s.x - 33, y: s.base - 54, w: 66, h: 64 } : { x: s.x - 40, y: s.base - 54, w: 80, h: 64 };
   const DOOR = { x: 40, y: 168, w: 120, h: FLOOR - 168 };
   const COUNTER = { x: 222, y: CTOP - 12, w: 350, h: FLOOR - CTOP + 12 };
   const REG = { x: 520, y: CTOP };
@@ -347,7 +362,7 @@ const NIGHTSHOP = (() => {
     if (it.kind !== 'gear') rows += `<dt>Pack</dt><dd>${esc(it.unit)}</dd><dt>On the shelf</dt><dd>${it.left > 0 ? it.left + ' left tonight' : 'Sold out'}</dd>`;
     if (it.kind === 'ing') rows += `<dt>In your kitchen</dt><dd>${it.have}</dd>`;
     let act;
-    if (!it.on) act = `<p class="ns-lock">Unlocks on the Japan road at ${esc(lockPlace(it.node))}.</p>`;
+    if (!it.on) act = `<p class="ns-lock">Unlocks on the ${ROAD_NAME} at ${esc(lockPlace(it.node))}.</p>`;
     else if (it.bought) act = `<p class="ns-ok">Installed in your kitchen.</p>`;
     else if (!room) act = `<p class="ns-lock">${it.left ? 'All of tonight’s stock is in your cart.' : 'Sold out tonight. Fresh stock tomorrow night.'}</p>`;
     else act = (it.kind === 'gear' ? '' : `<div class="ns-qty"><button type="button" class="btn" data-q="-1" aria-label="One less">&minus;</button><b>${S.qty}</b><button type="button" class="btn" data-q="1" aria-label="One more">+</button><span>= ${S.qty * it.price}G</span></div>`)
@@ -387,7 +402,7 @@ const NIGHTSHOP = (() => {
     } else if (S.view === 'list') {
       html = '<div class="ns-list">' + CATALOGUE().map(([sec, ids]) => `<h4>${sec}</h4>` + ids.map(id => {
         const it = item(id), room = it.left - inBasket(id);
-        const why = !it.on ? 'Japan road' : it.bought ? 'Installed' : room <= 0 ? (it.left ? 'In cart' : 'Sold out') : '';
+        const why = !it.on ? ROAD_NAME : it.bought ? 'Installed' : room <= 0 ? (it.left ? 'In cart' : 'Sold out') : '';
         return `<div class="ns-row${why ? ' off' : ''}"><img class="px${rare(it)}" src="${artURL(id)}" alt=""><span class="ns-nm">${esc(it.name)}${it.sale ? ' <i class="ns-saletag">Sale</i>' : ''}</span><span class="ns-pr">${it.full ? `<s>${it.full}G</s> ` : ''}${it.price}G</span>`
           + (why ? `<span class="ns-why">${why}</span>` : `<button type="button" class="btn" data-add="${id}">+1</button>`) + '</div>';
       }).join('')).join('') + '</div>';
@@ -490,10 +505,8 @@ const NIGHTSHOP = (() => {
       else if (S.fade <= 0 && S.fadeDir < 0) S.fadeDir = 0;
     }
     if (!G.where) return;
-    // the night is over: back to the restaurant for the morning
-    if (G.shop !== 'night' && !S.fadeDir) { H.toast('Dawn. Time to head back and get the shop ready.'); return backHome(0); }
     if (G.where === 'store' && !storeOpen() && !S.closing && !S.fadeDir) {
-      S.closing = 3.2; closePanels(); bubble('The sky is getting light, chef. Kitsune-ya is closing. Come back tonight!', 3.2); S.aoi.hop = 0.4;
+      S.closing = 3.2; closePanels(); bubble('Three o\'clock, chef. Kitsune-ya is closing. Come back at four in the morning!', 3.2); S.aoi.hop = 0.4;
     }
     if (S.closing > 0) { S.closing -= dt; if (S.closing <= 0) leaveStore(); }
     S.door += clamp(S.doorT - S.door, -dt * 3.2, dt * 3.2);
@@ -533,7 +546,7 @@ const NIGHTSHOP = (() => {
     rect(g, x - 1, y - 1, w + 2, 1, DK); rect(g, x - 1, y + h, w + 2, 1, DK); rect(g, x - 1, y, 1, h, DK); rect(g, x + w, y, 1, h, DK);
   }
   function plank(g, x, y, w, h, c) { rect(g, x - 1, y - 1, w + 2, h + 2, DK); rect(g, x, y, w, h, c); rect(g, x, y, w, 1, shade(c, 1.3)); rect(g, x, y + h - 1, w, 1, shade(c, 0.6)); }
-  function signBoard(g, s, cx, y, c = '#5a3a22', ink = '#ffe08a') {   // a plank sign hanging from the beam on two cords
+  function signBoard(g, s, cx, y, c = '#5a3a22', ink = '#ffe08a') {   // a plank sign hanging from the beam on two strings
     const w = textW(s) + 26, x = Math.round(cx - w / 2);
     line(g, x + 8, 34, x + 8, y, '#2a1a12'); line(g, x + w - 8, 34, x + w - 8, y, '#2a1a12');
     plank(g, x, y, w, 24, c); rect(g, x + 3, y + 3, w - 6, 18, shade(c, 0.85)); textC(g, s, cx, y + 7, ink);
@@ -549,7 +562,7 @@ const NIGHTSHOP = (() => {
     if (sale) { text(g, 'SALE', px, y + 4, '#ffe08a'); px += sw; }
     text(g, s, px, y + 4, c);
   }
-  function lockTag(g, x, y) {   // a small grey tag with a padlock: not on sale until the Japan road gets there
+  function lockTag(g, x, y) {   // a small grey tag with a padlock: not on sale until the road gets there
     rect(g, x - 11, y - 1, 22, 21, DK); rect(g, x - 10, y, 20, 19, '#d8ccb6');
     rect(g, x - 4, y + 4, 8, 2, '#6a5e52'); rect(g, x - 4, y + 4, 2, 5, '#6a5e52'); rect(g, x + 2, y + 4, 2, 5, '#6a5e52'); rect(g, x - 6, y + 9, 12, 7, '#6a5e52'); rect(g, x - 1, y + 11, 2, 3, '#d8ccb6');
   }
@@ -583,6 +596,7 @@ const NIGHTSHOP = (() => {
         const offs = [[0, -16], [-14, -14], [14, -14]];
         for (let i = 0; i < k; i++) ART.top(g, iid, x + offs[i][0], base + offs[i][1] - (it.kind === 'special' ? 4 : 0), 0.95);
       } else if (iid === 'noodle') { for (let i = 0; i < k; i++) nest(g, x + [0, -16, 16][i], base - (i ? 0 : 1)); }
+      else if (iid === CHILI_OIL) { for (let i = 0; i < k; i++) KITCHEN.oilBottle(g, x + [0, -16, 16][i], base, 6); }
       else if (iid.startsWith('tare.')) { for (let i = 0; i < k; i++) jar(g, x + [0, -22, 22][i], base, TARES[iid.slice(5)].c === '#e6dcc4' ? '#b8a888' : TARES[iid.slice(5)].c); }
       else { for (let i = 0; i < k; i++) tin(g, x + [0, -21, 21][i], base, BROTHS[iid.slice(6)].c); }
       return;
@@ -595,13 +609,27 @@ const NIGHTSHOP = (() => {
       return;
     }
     // equipment
-    if (id.startsWith('stall')) {   // stall kit: a small noren on a stand, with the stall number, and a stool
+    if (id.startsWith('stall')) {   // seat kit: a paper lantern on a little stand, with the seat number, and a stool
       const n = id.slice(5);
-      rect(g, x - 26, base - 44, 3, 44, DK); rect(g, x + 1, base - 44, 3, 44, DK); rect(g, x - 28, base - 46, 34, 4, DK); rect(g, x - 27, base - 45, 32, 2, '#8a5a32');
-      rect(g, x - 25, base - 42, 28, 26, DK); rect(g, x - 24, base - 41, 26, 24, '#2f3f78'); rect(g, x - 12, base - 41, 1, 24, '#1e2a58');
-      textC(g, n, x - 11, base - 36, '#f6e6c0');
+      rect(g, x - 12, base - 50, 3, 50, DK); rect(g, x - 26, base - 52, 20, 4, DK); rect(g, x - 25, base - 51, 18, 2, '#8a5a32');
+      rect(g, x - 17, base - 48, 1, 4, DK);
+      ell(g, x - 17, base - 32, 11, 13, DK); ell(g, x - 17, base - 32, 10, 12, '#f2e2bc');
+      for (const ry of [-8, -4, 0, 4, 8]) { const hw = Math.round(10 * Math.sqrt(1 - (ry / 13) ** 2)); rect(g, x - 17 - hw, base - 32 + ry, hw * 2 + 1, 1, '#c8aa7a'); }
+      rect(g, x - 23, base - 45, 13, 3, DK); rect(g, x - 23, base - 20, 13, 3, DK);
+      textC(g, n, x - 17, base - 41, '#a8302a');
       ell(g, x + 18, base - 16, 10, 4, DK); ell(g, x + 18, base - 17, 9, 3, '#c8302a'); ell(g, x + 16, base - 18, 4, 1, '#e8604a');
       for (const lx of [x + 11, x + 23]) { rect(g, lx - 1, base - 14, 4, 14, DK); rect(g, lx, base - 14, 2, 14, '#6e4428'); }
+    } else if (id.startsWith('board')) {   // menu board upgrade: a small wooden menu plank on a stand, with its slot number
+      const n = id.slice(5), big = n === '10';
+      rect(g, x - 2, base - 6, 4, 6, DK); rect(g, x - 12, base - 2, 24, 2, DK);
+      rect(g, x - 20, base - 40, 40, 34, DK); SCENE.wood(g, x - 19, base - 39, 38, 32, big ? '#3a2418' : '#6e4428', 32, false, 17);
+      rect(g, x - 16, base - 36, 32, 26, big ? '#1e140e' : '#2e2018'); if (big) { rect(g, x - 19, base - 39, 38, 1, PAL.brass); rect(g, x - 19, base - 8, 38, 1, PAL.brass); }
+      for (let k = 0; k < 3; k++) rect(g, x - 12, base - 32 + k * 6, 14 + (k % 2) * 6, 1, '#d8c8a0');
+      textC(g, n, x + 9, base - 30, '#ffd76a');
+    } else if (id === 'caddy') {   // garnish caddy: a cedar box of spring onion, nori sheets standing at the back
+      for (const [ox, h] of [[-9, 12], [-3, 14], [3, 11]]) { rect(g, x + ox - 1, base - 14 - h, 6, h + 2, DK); rect(g, x + ox, base - 13 - h, 4, h, '#1c3626'); rect(g, x + ox, base - 13 - h, 1, h, '#3c6a4a'); }
+      rect(g, x - 15, base - 15, 30, 15, DK); rect(g, x - 14, base - 14, 28, 13, '#c8925a'); rect(g, x - 14, base - 14, 28, 2, '#e8b880'); rect(g, x - 14, base - 3, 28, 2, '#8a5a32');
+      for (let k = 0; k < 9; k++) { const gx = x - 11 + (k % 5) * 5, gy = base - 12 + Math.floor(k / 5) * 3; rect(g, gx, gy, 2, 2, k % 3 ? '#5fbf40' : '#c8ef9a'); }
     } else if (id === 'quick') {   // waiting bench: a little cedar bench with a cushion
       rect(g, x - 28, base - 16, 56, 7, DK); rect(g, x - 27, base - 15, 54, 5, '#c8925a'); rect(g, x - 27, base - 15, 54, 1, '#e8b880');
       rect(g, x - 20, base - 19, 18, 4, DK); rect(g, x - 19, base - 18, 16, 2, '#2f6ab0'); rect(g, x + 4, base - 19, 18, 4, DK); rect(g, x + 5, base - 18, 16, 2, '#c8302a');
@@ -663,11 +691,11 @@ const NIGHTSHOP = (() => {
     for (const y of [268, 362]) { rect(g, 616, y, 208, 4, DK); rect(g, 616, y, 208, 2, '#d8eef6'); }
     for (const lx of [624, 812]) rect(g, lx, 394, 6, FLOOR - 394, DK);
     // the fresh cooler: steel body, a cool lit interior, two shelves
-    rect(g, 878, 196, 384, FLOOR - 196, DK); rect(g, 880, 198, 380, FLOOR - 198, '#c9d1dd');
-    rect(g, 886, 214, 368, 172, '#e6f2f8'); for (let y = 216; y < 384; y += 8) rect(g, 886, y, 368, 1, '#d6e6ee');
-    SCENE.ao(g, 886, 214, 368, 172, 'top', 14, 0.25, '#2a4a6a');
-    for (const y of [282, 374]) { rect(g, 886, y, 368, 4, DK); rect(g, 886, y, 368, 2, '#ffffff'); }
-    rect(g, 880, 198, 380, 14, '#5a6a7a'); rect(g, 884, 202, 372, 6, '#f2fbff');
+    rect(g, 878, 144, 384, FLOOR - 144, DK); rect(g, 880, 146, 380, FLOOR - 146, '#c9d1dd');
+    rect(g, 886, 162, 368, 224, '#e6f2f8'); for (let y = 164; y < 384; y += 8) rect(g, 886, y, 368, 1, '#d6e6ee');
+    SCENE.ao(g, 886, 162, 368, 224, 'top', 14, 0.25, '#2a4a6a');
+    for (const y of [222, 298, 374]) { rect(g, 886, y, 368, 4, DK); rect(g, 886, y, 368, 2, '#ffffff'); }
+    rect(g, 880, 146, 380, 14, '#5a6a7a'); rect(g, 884, 150, 372, 6, '#f2fbff');
     rect(g, 880, 390, 380, FLOOR - 390, '#8a929e'); for (let x = 900; x < 1250; x += 14) rect(g, x, 404, 8, 2, '#5a626e'); for (let x = 900; x < 1250; x += 14) rect(g, x, 412, 8, 2, '#5a626e');
     // pantry shelving
     for (const x of [1306, 1688]) { rect(g, x - 1, 150, 12, FLOOR - 150, DK); rect(g, x, 150, 10, FLOOR - 150, '#7a5230'); rect(g, x, 150, 2, FLOOR - 150, '#a57a4c'); }
@@ -682,6 +710,23 @@ const NIGHTSHOP = (() => {
     plank(g, 1760, 232, 420, 8, '#8a5a32'); SCENE.ao(g, 1760, 240, 420, 24, 'top', 10, 0.3);
     for (const bx of [1772, 2168]) { rect(g, bx - 1, 240, 6, 12, DK); rect(g, bx, 240, 4, 11, '#6e4428'); }
     rect(g, 1760, 340, 420, 6, DK); rect(g, 1760, 340, 420, 4, '#a57a4c');
+    // the market annex: a second cooler of newer ingredients, then the curio cabinet of rare goods
+    { const A = ANNEX.cool, x0 = A.x, w = A.w;
+      rect(g, x0 - 2, 144, w + 4, FLOOR - 144, DK); rect(g, x0, 146, w, FLOOR - 146, '#c9d1dd');
+      rect(g, x0 + 6, 162, w - 12, 224, '#e6f2f8'); for (let y = 164; y < 384; y += 8) rect(g, x0 + 6, y, w - 12, 1, '#d6e6ee');
+      SCENE.ao(g, x0 + 6, 162, w - 12, 224, 'top', 14, 0.25, '#2a4a6a');
+      for (const y of [222, 298, 374]) { rect(g, x0 + 6, y, w - 12, 4, DK); rect(g, x0 + 6, y, w - 12, 2, '#ffffff'); }
+      rect(g, x0, 146, w, 14, '#5a6a7a'); rect(g, x0 + 4, 150, w - 8, 6, '#f2fbff');
+      rect(g, x0, 390, w, FLOOR - 390, '#8a929e'); for (let x = x0 + 20; x < x0 + w - 10; x += 14) { rect(g, x, 404, 8, 2, '#5a626e'); rect(g, x, 412, 8, 2, '#5a626e'); } }
+    { const A = ANNEX.curio, x0 = A.x, w = A.w;   // a carved cabinet: deep violet velvet, glass shelves, brass trim
+      rect(g, x0 - 2, 150, w + 4, 252, DK); rect(g, x0, 152, w, 248, '#3a2448');
+      for (let y = 156; y < 398; y += 6) rect(g, x0, y, w, 1, '#442a54');
+      SCENE.ao(g, x0, 152, w, 248, 'top', 18, 0.45);
+      for (const y of [262, 362]) { rect(g, x0, y, w, 4, DK); rect(g, x0, y, w, 2, '#d8eef6'); }
+      rect(g, x0, 152, w, 3, '#c9962e'); rect(g, x0, 397, w, 3, '#c9962e');
+      for (const lx of [x0 + 10, x0 + w - 16]) rect(g, lx, 400, 6, FLOOR - 400, DK);
+      for (let k = 0; k < 7; k++) { const sx = x0 + 30 + k * 56; dot(g, sx, 168 + (k % 2) * 6, '#ffe8a0'); dot(g, sx + 1, 169 + (k % 2) * 6, '#c8a8ff'); } }   // little sparkles
+    for (const x of [2252, 2806, 3240]) post(g, x - 6, 35, 12, FLOOR - 35);
     // umbrella stand by the far wall
     rect(g, 2200, 360, 26, 70, DK); rect(g, 2201, 361, 24, 68, '#3a4a6a'); for (const [ux, c] of [[2206, '#c8302a'], [2214, '#e0b040'], [2220, '#2f7a8a']]) { rect(g, ux, 318, 3, 44, DK); poly(g, [[ux - 5, 340], [ux + 1, 318], [ux + 8, 340]], c); }
 
@@ -700,6 +745,15 @@ const NIGHTSHOP = (() => {
     for (const x of [900, 1010, 1130]) { f.fillStyle = 'rgba(255,255,255,0.3)'; for (let k = 0; k < 60; k++) f.fillRect(x + k, 380 - k * 2, 2, 2); }
     rect(f, 880, 210, 380, 4, '#8a929e'); rect(f, 880, 384, 380, 6, '#8a929e'); rect(f, 880, 384, 380, 1, '#e8eef6');
     for (const x of [880, 1068, 1256]) rect(f, x, 210, 4, 180, '#8a929e');
+    { const A = ANNEX.cool;   // the annex cooler's glass front, and the curio cabinet's glass and frame
+      f.fillStyle = 'rgba(190,230,255,0.14)'; f.fillRect(A.x + 6, 214, A.w - 12, 172);
+      for (const x of [A.x + 30, A.x + 170, A.x + 330]) { f.fillStyle = 'rgba(255,255,255,0.3)'; for (let k = 0; k < 60; k++) f.fillRect(x + k, 380 - k * 2, 2, 2); }
+      rect(f, A.x, 210, A.w, 4, '#8a929e'); rect(f, A.x, 384, A.w, 6, '#8a929e'); rect(f, A.x, 384, A.w, 1, '#e8eef6');
+      for (const x of [A.x, A.x + A.w / 2 - 2, A.x + A.w - 4]) rect(f, x, 210, 4, 180, '#8a929e');
+      const C2 = ANNEX.curio;
+      f.fillStyle = 'rgba(220,200,255,0.14)'; f.fillRect(C2.x, 152, C2.w, 248);
+      for (const [x, y] of [[C2.x + 20, 170], [C2.x + 220, 280]]) { f.fillStyle = 'rgba(255,255,255,0.26)'; for (let k = 0; k < 40; k++) f.fillRect(x + k, y + 40 - k, 3, 1); }
+      border(f, C2.x, 152, C2.w, 248, '#6e4428', 5); rect(f, C2.x + C2.w / 2 - 2, 152, 4, 248, '#6e4428'); }
     // tools table front
     rect(f, 1760, 345, 420, FLOOR - 345, DK); SCENE.wood(f, 1761, 346, 418, FLOOR - 346, '#6e4428', 12, true, 341);
     rect(f, 1761, 346, 418, 4, '#4a2e1a');
@@ -759,7 +813,7 @@ const NIGHTSHOP = (() => {
     for (const [x, y, rx, ry] of cool) SCENE.soft(g, x, y, rx * 0.8, ry * 0.8, 0.06, '170,220,255');
     g.restore();
   }
-  const LANTERNS = [116, 560, 990, 1160, 1380, 1620, 1830, 2110];
+  const LANTERNS = [116, 560, 990, 1160, 1380, 1620, 1830, 2110, 2400, 2660, 2920, 3140];
   function drawStore(g) {
     if (!BG) paintStore();
     const cam = Math.round(S.cam);
@@ -781,7 +835,7 @@ const NIGHTSHOP = (() => {
     for (const s of SLOTS) {
       const it = item(s.id), n = left(s);
       if (!it.on) g.globalAlpha = 0.45;
-      if (it.kind === 'gear') { if (!it.bought) { if (s.id.startsWith('stall')) drawItem(g, s.id, s.x, s.base, 1); else { g.save(); g.translate(s.x, s.base); g.scale(1.6, 1.6); drawItem(g, s.id, 0, 0, 1); g.restore(); } } }
+      if (it.kind === 'gear') { if (!it.bought) { if (shelfGear(s.id)) drawItem(g, s.id, s.x, s.base, 1); else { g.save(); g.translate(s.x, s.base); g.scale(1.6, 1.6); drawItem(g, s.id, 0, 0, 1); g.restore(); } } }
       else drawItem(g, s.id, s.x, s.base, n);
       g.globalAlpha = 1;
     }
@@ -795,9 +849,9 @@ const NIGHTSHOP = (() => {
       else priceTag(g, s.x, ty, it.price + 'G');
     }
     drawCounterTop(g);
-    signBoard(g, 'CHECKOUT', 396, 44, '#7a1e18'); signBoard(g, 'SPECIALS', 720, 132, '#7a1e18'); signBoard(g, 'FRESH', 1070, 150, '#2f4a6a', '#e8f6ff'); signBoard(g, 'PANTRY', 1497, 108); signBoard(g, 'UPGRADES', 1970, 52, '#7a1e18');
+    signBoard(g, 'CHECKOUT', 396, 44, '#7a1e18'); signBoard(g, 'SPECIALS', 720, 132, '#7a1e18'); signBoard(g, 'FRESH', 1070, 150, '#2f4a6a', '#e8f6ff'); signBoard(g, 'PANTRY', 1497, 108); signBoard(g, 'UPGRADES', 1970, 52, '#7a1e18'); signBoard(g, 'MARKET', 2530, 150, '#2f4a6a', '#e8f6ff'); signBoard(g, 'CURIOS', 3028, 110, '#4a2a5a', '#f0e0ff');
     lanterns(g, LANTERNS, 40);
-    dim(g, cam, VW, [[100, 300, 120, 150], [400, 290, 220, 160], [720, 290, 150, 160], [1500, 290, 240, 160], [1970, 300, 260, 160]].concat(LANTERNS.map(x => [x, 70, 46, 40])), 0.46, [[1070, 300, 240, 150]]);
+    dim(g, cam, VW, [[100, 300, 120, 150], [400, 290, 220, 160], [720, 290, 150, 160], [1500, 290, 240, 160], [1970, 300, 260, 160], [3028, 290, 220, 170]].concat(LANTERNS.map(x => [x, 70, 46, 40])), 0.1 + 0.36 * (G.nightF || 0), [[1070, 300, 240, 150], [2530, 300, 270, 150]]);
     // coins flying into the till
     for (const p of S.parts) { if (p.k < 0) continue; const e = p.k * p.k, x = p.x + (REG.x + 20 - p.x) * e, y = p.y + (CTOP - 30 - p.y) * e - Math.sin(p.k * Math.PI) * 50; ell(g, Math.round(x), Math.round(y), 4, 4, DK); ell(g, Math.round(x), Math.round(y), 3, 3, '#ffd76a'); }
     for (const p of S.pops) { g.globalAlpha = Math.min(1, p.life * 2.5); textC(g, p.str, p.x, Math.round(p.y), p.c, DK); }
@@ -951,7 +1005,7 @@ const NIGHTSHOP = (() => {
     if (S.fade > 0) { g.fillStyle = `rgba(10,6,16,${S.fade})`; g.fillRect(0, 0, VW, VH); }
   }
   function hint() {
-    if (G.where === 'street') return storeOpen() ? 'The night street. Kitsune-ya is open until ' + pad2(SHOP_HOURS.close) + ':00. Your own door is on the left.' : 'Kitsune-ya is closed. It opens at ' + pad2(SHOP_HOURS.open) + ':00, after your shop closes.';
+    if (G.where === 'street') return storeOpen() ? 'The street. Kitsune-ya is open until ' + pad2(SHOP_HOURS.close) + ':00. Your own door is on the left.' : 'Kitsune-ya is closed. It opens at ' + pad2(SHOP_HOURS.open) + ':00, when your shop has closed for the night.';
     if (S.ui === 'talk') return 'Talking with Aoi.';
     if (S.basket.length) return 'Basket: ' + basketN() + ' item' + (basketN() === 1 ? '' : 's') + ', ' + basketTotal() + 'G. Aoi takes payment at the counter.';
     return 'Tap anything on the shelves to look closer. Hold A / D, scroll or drag to look around.';
@@ -964,7 +1018,7 @@ const NIGHTSHOP = (() => {
     init: h => { H = Object.assign(H, h); }, enter, leaveTo: backHome, update, draw, down, move, up, wheel, key, keyup, hint, cursor,
     // jump straight in (for ?shot= screenshots and tests)
     visit: (where, cam = 0) => { G.where = where; S.cam = S.camT = clamp(cam, 0, SW - VW); S.fade = 0; S.fadeDir = 0; S.door = 0; S.doorT = 0; if (where === 'store') { S.aoi.x = S.aoi.tx = 420; greet(); } },
-    streetOpen, storeOpen, item, market, addToBasket, pay, inspect, talk, closePanels, hours: HOURS,
+    artURL, streetOpen, storeOpen, item, market, addToBasket, pay, inspect, talk, closePanels, hours: HOURS,
     receipt: () => S.receipt, tuckReceipt, giveReceipt, goCheckout, cart: () => ({ ...CART }),
     setDoors: (r, sd) => { S.rdoor = S.rdoorT = r; S.sdoor = S.sdoorT = sd; },
     state: () => ({ cam: S.cam, camT: S.camT, fade: S.fade, ui: S.ui, view: S.view, sel: S.sel, basket: S.basket.map(b => ({ ...b })), aoi: { ...S.aoi }, bubble: S.bubble && S.bubble.msg, door: S.door, sdoor: S.sdoor, hover: S.hover, closing: S.closing }),

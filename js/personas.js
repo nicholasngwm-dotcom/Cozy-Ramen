@@ -1,11 +1,11 @@
 'use strict';
 /* Guest personalities. Every key is optional; missing ones fall back to generic lines.
    trait: shown under the name in the dialog box. pitch: dialog blip pitch (their "voice").
-   call: shout from behind the blind.   hi: greeting.   menu: reading the menu card.
+   call: calling you over from their seat.   hi: greeting.   menu: reading the menu board after sitting down.
    ask: asking for a recommendation.    trust / bold: reply to Miso (chef's pick) / Spicy.
    order: templates with {dish}.        mods: template with {mods} for extras or removals.
    wait: after ordering.  react: when the bowl arrives.  yum / meh / bad: verdict after eating.
-   idle: when you tap a waiting guest (blind up) to chat.
+   idle: when you tap a waiting guest at the counter to chat.
    day / night: the same keys again; at that time of day they replace the general line. */
 const PERSONA = {
   annabel: { trait: 'Dramatic hedge witch', pitch: 560,
@@ -101,7 +101,7 @@ const PERSONA = {
     ask: ['Feed me your finest! What is it?'], trust: ['MISO! A hearty choice!'], bold: ['Spicy! A battle in a bowl!'],
     order: ['Bring me {dish}!'], mods: ['And {mods}! For strength!'], wait: ['I shall sharpen my sword while I wait. Loudly.'],
     react: ['A feast fit for a saga!'], yum: ['A feast worthy of a saga!'], meh: ['Good fuel for battle.'], bad: ['This is not the meal I fought for!'],
-    idle: ['*rests greatsword against the stall wall with a THUD*'],
+    idle: ['*rests greatsword against the counter with a THUD*'],
     day: { hi: ['Slew a wyvern this morning. Starving!'] },
     night: { hi: ['Night raid went well! Starving! Also tired! Mostly starving!'], idle: ['*yawns like a battle horn*'] } },
   celestia: { trait: 'Stoic, dry humour', pitch: 450,
@@ -133,7 +133,7 @@ const PERSONA = {
     ask: ['What grows best in your kitchen?'], trust: ['Miso. Earthy and kind. Thank you.'], bold: ['Spicy... like autumn leaves.'],
     order: ['May I have {dish}?'], mods: ['And {mods}. The forest thanks you.'], wait: ['I will listen to the rain while I wait.'],
     react: ['It smells like a sunny clearing.'], yum: ['The grove shall hear of this.'], meh: ['Nourishing. Thank you.'], bad: ['Not quite as I asked, but I am grateful.'],
-    idle: ['Mind my antlers, they catch on the blinds.'],
+    idle: ['Mind my antlers, they catch on your lanterns.'],
     day: { hi: ['The forest has no noodles. It is my one complaint about it.'] },
     night: { hi: ['The forest is asleep. I came for something warm.'], idle: ['Listen. The crickets are singing.'] } },
   elfina: { trait: 'Hot-headed show-off', pitch: 680,
@@ -211,7 +211,7 @@ const PERSONA = {
   kira: { trait: 'Hyper brawler', pitch: 660,
     call: ['Hey! Hey! Order! Hey!'], hi: ['Spar later. Eat first. Or both! Can I eat while sparring?'],
     ask: ['Which bowl hits hardest?'], trust: ['Miso! A solid jab!'], bold: ['Spicy! Knockout punch!'],
-    order: ['{dish}! Hyah!'], mods: ['And {mods}! One-two!'], wait: ['*shadowboxes behind the blind*'],
+    order: ['{dish}! Hyah!'], mods: ['And {mods}! One-two!'], wait: ['*shadowboxes at the counter*'],
     react: ['Whoa! Combo bonus!'], yum: ['Knockout flavour!'], meh: ['Good round!'], bad: ['Foul! Wrong order!'],
     idle: ['Jab, jab, slurp!'],
     day: { hi: ['Spar later. Eat first. Or both! Can I eat while sparring?'] },

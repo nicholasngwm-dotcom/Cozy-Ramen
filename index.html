@@ -79,10 +79,10 @@
     <div id="book" class="overlay pbook" aria-label="Recipe book"></div>
     <div id="guests" class="overlay pbook" aria-label="Guest book"></div>
 
-    <div id="road" class="overlay journey" aria-label="Japan road">
+    <div id="road" class="overlay journey" aria-label="Ramen Road">
       <canvas id="map" width="960" height="540"></canvas>
       <div class="jr-top">
-        <div class="jr-title wood"><b>Japan Road</b><span id="jr-count"></span></div>
+        <div class="jr-title wood"><b>Ramen Road</b><span id="jr-count"></span></div>
         <div class="jr-stats wood"><span id="jr-lv" class="lvchip"></span><span class="xpbar"><i id="jr-xp"></i></span><span id="jr-xptext"></span><span id="jr-gold" class="jr-gold"></span></div>
         <button id="road-close" class="close" type="button">Close</button>
       </div>
@@ -102,6 +102,19 @@
           <div id="ns-body"></div>
           <div id="ns-choices"></div>
         </div>
+      </div>
+    </div>
+
+    <div id="levelup" aria-live="polite">
+      <div class="lu-flash"></div>
+      <div class="lu-rays"></div>
+      <div class="lu-sparks" id="lu-sparks"></div>
+      <div class="lu-card jrpg">
+        <div class="lu-banner" id="lu-banner"></div>
+        <div class="lu-level"><span class="lu-lv">LV</span><span class="lu-old" id="lu-old"></span><span class="lu-arrow">&#9654;</span><span class="lu-new" id="lu-new"></span></div>
+        <div class="lu-sub" id="lu-sub"></div>
+        <ul class="lu-list" id="lu-list"></ul>
+        <button id="lu-btn" type="button">Wonderful!</button>
       </div>
     </div>
 

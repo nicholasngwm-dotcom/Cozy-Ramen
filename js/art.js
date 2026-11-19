@@ -7,7 +7,7 @@ const ART = (() => {
   const DK = PX.OUTLINE;
   const BROTH = '#c8792e', BROTH2 = '#8a4518', BROTH3 = '#efb45e', TARE = '#93451f';
   // Colours for the bowl's actual tare / broth kind (bowls store the kind id; older code may store true).
-  const brothPal = b => { const k = BROTHS[b && b.broth] || {}; return [k.c || BROTH, k.dark || BROTH2, k.light || BROTH3, k.mid || '#b0652a']; };
+  const brothPal = b => { const k = BROTHS[b && b.broth] || {}, p = [k.c || BROTH, k.dark || BROTH2, k.light || BROTH3, k.mid || '#b0652a']; return b && b.spicy ? [mix(p[0], '#d0381e', 0.6), mix(p[1], '#7a140c', 0.6), mix(p[2], '#ff8a4a', 0.55), mix(p[3], '#b02818', 0.6)] : p; };   // chili oil turns the broth red
   const tareC = b => (TARES[b && b.tare] || {}).c || TARE;
   // Noodle palettes: [highlight, body, shadow under each strand, deep gaps between strands]
   const now = () => (typeof window !== 'undefined' && window.G ? window.G.t : 0);
@@ -101,6 +101,159 @@ const ART = (() => {
         R(3, 6, 4, 4, DK); R(4, 6, 2, 3, '#f0d062');
         R(-6, -4, 4, 1, '#ffffff'); R(-7, 0, 1, 4, '#fff6c0');
         break;
+      case 'moyashi': // bean sprouts: a tangle of pale stems, little yellow heads
+        E(0, 2, 11, 6, 'rgba(120,100,60,0.25)');
+        for (let k = 0; k < 9; k++) {
+          const x0 = -9 + k * 2.2, x1 = x0 + ((k % 3) - 1) * 5, y0 = 6 - (k % 2) * 2, y1 = -6 + (k % 3) * 2;
+          line(g, X(x0), Y(y0), X(x1), Y(y1), DK); line(g, X(x0) + 1, Y(y0), X(x1) + 1, Y(y1), k % 2 ? '#f6f2dc' : '#e8e4c8');
+          if (k % 2 === 0) { R(x1, y1 - 1, 2, 2, '#e8d070'); }
+        }
+        break;
+      case 'bokchoy': // a halved baby bok choy: dark leaf, pale ribbed stem
+        P([[-10, -8], [2, -11], [10, -4], [6, 6], [-6, 8], [-11, 0]], DK);
+        P([[-9, -7], [2, -10], [9, -4], [5, 5], [-6, 7], [-10, 0]], '#3a8a3a');
+        P([[-6, -5], [2, -8], [6, -3], [2, 2], [-4, 3]], '#5aae4a');
+        R(-1, -7, 1, 12, '#2a6a2a'); R(-5, -3, 8, 1, '#2a6a2a');
+        P([[-3, 3], [4, 1], [7, 8], [-1, 10]], DK); P([[-2, 4], [4, 2], [6, 8], [0, 9]], '#e8f0d0'); R(1, 4, 1, 4, '#c8d8a8');
+        break;
+      case 'kikurage': // wood ear mushroom: dark, wavy, glossy strips
+        for (const [ox, oy, rx, ry] of [[-4, -3, 7, 4], [4, 2, 7, 4], [-3, 5, 5, 3]]) { E(ox, oy, rx + 1, ry + 1, DK); E(ox, oy, rx, ry, '#3a2420'); E(ox - 1, oy - 1, rx - 2, Math.max(1, ry - 2), '#5a3a30'); R(ox - rx + 2, oy - 1, 3, 1, '#8a6a5a'); }
+        break;
+      case 'naruto': // a slice of narutomaki: white fish cake, ridged edge, pink swirl
+        E(0, 0, 10, 9, DK); E(0, 0, 9, 8, '#fbf6ee');
+        for (let a = 0; a < 16; a++) { const t = a / 16 * Math.PI * 2; dot(g, X(Math.cos(t) * 9), Y(Math.sin(t) * 8), a % 2 ? '#e8dcd0' : DK); }
+        for (let a = 0; a < 40; a++) { const t = a / 40 * Math.PI * 3.2, r = 1 + a * 0.15; R(Math.cos(t) * r, Math.sin(t) * r * 0.9, 1, 1, '#e8608a'); }
+        break;
+      case 'torichashu': // pale chicken breast slice: a golden seared rim, white-pink meat, grill lines
+        E(0, 1, 11, 8, DK);
+        E(0, 1, 10, 7, '#b88a5a'); E(0, 0, 10, 7, '#e8c898'); E(-1, -1, 9, 6, '#f8eadc');
+        R(-6, -3, 9, 1, '#e0b890'); R(-4, 0, 10, 1, '#e0b890'); R(-7, 3, 9, 1, '#e0b890');
+        E(2, 1, 4, 2, '#f6d6cc'); R(-6, -5, 3, 1, '#ffffff');
+        break;
+      case 'wakame': // soft seaweed ribbons, dark green, glossy
+        for (const [ox, oy, w, k] of [[-8, -4, 12, 0], [-2, 1, 13, 1], [-9, 5, 11, 2]]) {
+          for (let i = 0; i < w; i++) { const yy = oy + Math.round(Math.sin(i * 0.8 + k) * 1.5); R(ox + i, yy - 1, 1, 4, DK); }
+          for (let i = 0; i < w; i++) { const yy = oy + Math.round(Math.sin(i * 0.8 + k) * 1.5); R(ox + i, yy, 1, 2, k === 1 ? '#3a8a4a' : '#2a6a3a'); if (i % 4 === 1) R(ox + i, yy, 1, 1, '#7ac07a'); }
+        }
+        break;
+      case 'benishoga': // pickled red ginger: a heap of bright red shreds
+        E(0, 3, 9, 4, 'rgba(160,20,40,0.3)');
+        for (let i = 0; i < 11; i++) {
+          const x0 = -8 + (i * 5) % 15, y0 = -5 + (i * 7) % 10, sw = ((i * 3) % 5) - 2;
+          line(g, X(x0), Y(y0), X(x0 + 4), Y(y0 + sw), DK); line(g, X(x0), Y(y0) - 1, X(x0 + 4), Y(y0 + sw) - 1, i % 3 === 0 ? '#ff7a8a' : i % 2 ? '#e8304a' : '#c81e3a');
+        }
+        break;
+      case 'yuzupeel': // little curls of yellow zest
+        for (const [ox, oy] of [[-6, -3], [3, -5], [6, 3], [-3, 4], [0, 0]]) {
+          for (let a = 0; a < 7; a++) { const th = a / 7 * Math.PI * 1.4 + ox; const px = ox + Math.cos(th) * 3, py = oy + Math.sin(th) * 2; R(px - 0.5, py - 0.5, 2, 2, DK); }
+          for (let a = 0; a < 7; a++) { const th = a / 7 * Math.PI * 1.4 + ox; R(ox + Math.cos(th) * 3, oy + Math.sin(th) * 2, 1, 1, a % 3 ? '#f0c830' : '#fff090'); }
+        }
+        break;
+      case 'minced': // spicy ground pork: red-brown crumbles in a little mound
+        E(0, 2, 11, 7, DK); E(0, 2, 10, 6, '#6a2a14'); E(-1, 0, 8, 5, '#8a3a1a');
+        for (let i = 0; i < 18; i++) { const px = -8 + (i * 7) % 17, py = -4 + (i * 5) % 9; R(px, py, 2, 2, i % 3 === 0 ? '#c86a3a' : i % 3 === 1 ? '#a84a24' : '#7a2a12'); }
+        R(-5, -3, 2, 1, '#e8905a'); R(2, -4, 2, 1, '#e8905a'); R(5, 1, 1, 1, '#ff6a3d'); R(-2, 3, 1, 1, '#ff6a3d');
+        break;
+      case 'garlicchip': // thin golden fried garlic slices
+        for (const [ox, oy] of [[-6, -3], [2, -5], [6, 2], [-2, 3], [-8, 4], [3, 6]]) {
+          E(ox, oy, 4, 3, DK); E(ox, oy, 3, 2, '#d8a848'); E(ox - 1, oy - 1, 2, 1, '#fff0b0'); R(ox, oy, 1, 1, '#a8762a');
+        }
+        break;
+      case 'sesame': // toasted sesame seeds: a pale little heap with a few black seeds
+        E(0, 3, 9, 4, 'rgba(120,90,50,0.3)');
+        for (let i = 0; i < 26; i++) { const px = Math.round(Math.cos(i * 2.4) * (i % 9)), py = Math.round(Math.sin(i * 2.4) * (i % 9) * 0.55); R(px, py, 2, 1, i % 6 === 0 ? '#2a1e1a' : i % 2 ? '#f6e6c0' : '#e0c890'); }
+        break;
+      case 'aburaage': // a sweet fried tofu pouch: a golden-brown tilted square with a spongy surface
+        P([[-10, -6], [7, -10], [11, 5], [-6, 9]], DK);
+        P([[-9, -6], [6, -9], [10, 5], [-6, 8]], '#c8843a');
+        P([[-8, -5], [5, -8], [6, -4], [-6, -1]], '#e8ac5a');
+        for (const [ox, oy] of [[-4, 0], [1, -3], [4, 2], [-1, 4], [6, -2], [-5, 4]]) R(ox, oy, 1, 1, '#a8642a');
+        R(-7, -5, 3, 1, '#ffd890');
+        break;
+      case 'kakuni': // braised pork belly cube: glossy lacquered top, a creamy fat layer, dark meat
+        R(-9, -8, 18, 17, DK);
+        R(-8, -7, 16, 5, '#8a3014'); R(-8, -7, 16, 1, '#c8602a'); R(-6, -6, 5, 1, '#ffb070');
+        R(-8, -2, 16, 3, '#f2dcc0'); R(-8, -2, 16, 1, '#fff2e0');
+        R(-8, 1, 16, 7, '#6a2410'); R(-8, 4, 16, 1, '#e8c8a8'); R(4, 1, 4, 7, '#4a180a');
+        break;
+      case 'shiitake': // two brown mushroom caps, each with a cross cut
+        for (const [ox, oy, r] of [[-4, -2, 7], [5, 4, 6]]) {
+          E(ox, oy, r + 1, r, DK); E(ox, oy, r, r - 1, '#7a4a2a'); E(ox - 1, oy - 1, r - 2, r - 3, '#9a6438');
+          line(g, X(ox - r + 3), Y(oy), X(ox + r - 3), Y(oy), '#f2dcc0'); line(g, X(ox), Y(oy - r + 3), X(ox), Y(oy + r - 3), '#f2dcc0');
+          R(ox - r + 2, oy - 2, 2, 1, '#c8904a');
+        }
+        break;
+      case 'clam': // little asari clams, one open to show the meat
+        for (const [ox, oy, open] of [[-5, 1, 1], [5, -2, 0], [3, 5, 0]]) {
+          E(ox, oy, 6, 4, DK); E(ox, oy, 5, 3, open ? '#f0c8a0' : '#cfc6bc');
+          if (open) { E(ox, oy - 3, 5, 2, DK); E(ox, oy - 3, 4, 1, '#d8d0c8'); E(ox + 1, oy, 2, 1, '#e8a080'); }
+          else for (let k = -3; k <= 3; k += 2) R(ox + k, oy - 1, 1, 3, '#9a9088');
+          R(ox - 3, oy - 1, 2, 1, '#ffffff');
+        }
+        break;
+      case 'shrimp': // a whole cooked shrimp curled in a C, striped orange, a fanned tail
+        for (let a = 0; a <= 8; a++) { const th = Math.PI * 0.25 + a / 8 * Math.PI * 1.25, r = 7 - a * 0.25; E(Math.cos(th) * 6, Math.sin(th) * 5, r * 0.55 + 1, r * 0.45 + 1, DK); }
+        for (let a = 0; a <= 8; a++) { const th = Math.PI * 0.25 + a / 8 * Math.PI * 1.25, r = 7 - a * 0.25; E(Math.cos(th) * 6, Math.sin(th) * 5, r * 0.55, r * 0.45, a % 2 ? '#ff8a4a' : '#ffb07a'); }
+        P([[3, -6], [9, -9], [9, -3]], DK); P([[4, -6], [8, -8], [8, -4]], '#e8502a');
+        R(-5, 1, 1, 1, DK);
+        break;
+      case 'mayu': // black garlic oil, not yet poured: a dark glossy drop
+        E(0, 2, 8, 4, DK); E(0, 2, 7, 3, '#2a2024'); E(-2, 1, 3, 1, '#6a5a5a'); R(-1, 0, 1, 1, '#a89a98');
+        break;
+      case 'sunpetal': // an edible meadow flower: five yellow-pink petals, an amber heart
+        for (let k = 0; k < 5; k++) { const th = k / 5 * Math.PI * 2 - Math.PI / 2; E(Math.cos(th) * 5, Math.sin(th) * 4.5, 4, 3, DK); }
+        for (let k = 0; k < 5; k++) { const th = k / 5 * Math.PI * 2 - Math.PI / 2; E(Math.cos(th) * 5, Math.sin(th) * 4.5, 3, 2, k % 2 ? '#f8a0b8' : '#ffe070'); }
+        E(0, 0, 2, 2, '#e88a2a'); R(-1, -1, 1, 1, '#fff6c0');
+        break;
+      case 'mandrake': // sliced mandrake root: pale rounds with a darker ring; one still has a tiny worried face
+        for (const [ox, oy, face] of [[-5, 2, 0], [4, -2, 1], [5, 5, 0]]) {
+          E(ox, oy, 6, 5, DK); E(ox, oy, 5, 4, '#e8dcbc'); E(ox, oy, 3, 2, '#f6eed8');
+          if (face) { R(ox - 2, oy - 1, 1, 1, DK); R(ox + 1, oy - 1, 1, 1, DK); R(ox - 1, oy + 1, 2, 1, '#8a5a3a'); }
+        }
+        break;
+      case 'glowcap': // a mushroom that glows: a blue-green cap with bright spots on a pale stem
+        R(-2, 0, 5, 8, DK); R(-1, 1, 3, 6, '#e8f0d8');
+        E(0, -2, 9, 6, DK); E(0, -2, 8, 5, '#2aa898'); E(-2, -4, 5, 2, '#5ad8c8');
+        R(-5, -3, 2, 2, '#c8fff4'); R(2, -5, 2, 1, '#c8fff4'); R(4, -1, 1, 1, '#c8fff4'); R(-1, -1, 1, 1, '#a8fff0');
+        break;
+      case 'frostleaf': // a cooling herb: an icy blue-green leaf with a white vein and frost specks
+        P([[-10, 6], [-6, -4], [2, -10], [10, -8], [6, 2], [-2, 8]], DK);
+        P([[-9, 5], [-5, -4], [2, -9], [9, -7], [5, 2], [-2, 7]], '#6ac8d0');
+        P([[-9, 5], [-5, -4], [2, -9], [-2, 1]], '#9ae4ea');
+        line(g, X(-8), Y(5), X(7), Y(-6), '#e8fbff');
+        for (const [ox, oy] of [[-3, -2], [4, -2], [0, 4], [-6, 2]]) R(ox, oy, 1, 1, '#ffffff');
+        break;
+      case 'emberpep': // a red pepper that keeps smouldering: orange flecks, a green stem, a wisp of heat
+        P([[-9, 4], [-4, -3], [4, -6], [9, -5], [5, 1], [-4, 6]], DK);
+        P([[-8, 4], [-4, -2], [4, -5], [8, -4], [4, 1], [-4, 5]], '#c8302a');
+        P([[-6, 2], [-3, -2], [4, -4], [2, -2]], '#e8503a');
+        R(8, -7, 3, 3, DK); R(9, -6, 2, 2, '#4a8a3a');
+        for (const [ox, oy] of [[-2, 1], [2, -2], [-5, 3], [5, -3]]) R(ox, oy, 1, 1, '#ffb03a');
+        R(-3, -6, 1, 2, '#ffd04a'); R(0, -8, 1, 2, '#ff8a3a');
+        break;
+      case 'kraken': // thick-cut grilled tentacle: purple-pink rounds, pale suckers, grill char
+        for (const [ox, oy, r] of [[-4, 0, 7], [5, 3, 6]]) {
+          E(ox, oy, r + 1, r, DK); E(ox, oy, r, r - 1, '#a85a9a'); E(ox, oy, r - 2, r - 3, '#e8c8d8');
+          for (let a = 0; a < 6; a++) { const th = a / 6 * Math.PI * 2; R(ox + Math.cos(th) * (r - 1), oy + Math.sin(th) * (r - 2), 1, 1, '#f8d8ec'); }
+          R(ox - 2, oy - 1, 3, 1, '#6a2a5a');
+        }
+        break;
+      case 'cockegg': // a halved cockatrice egg: twice the size of a ramen egg, with a molten golden yolk
+        E(0, 1, 14, 10, DK);
+        E(0, 0, 13, 9, '#b8843a');
+        E(0, 0, 12, 8, '#f0d8a8'); E(-1, -1, 11, 7, '#fff8ea');
+        E(1, 0, 7, 5, '#c87a0a'); E(1, 0, 6, 4, '#ffb800'); E(2, 1, 3, 2, '#ff9a00');
+        R(-1, -3, 4, 1, '#fff07a'); R(-9, -4, 2, 2, '#ffffff'); R(-8, -5, 1, 1, '#ffffff');
+        break;
+      case 'wyvern': // smoky wyvern chashu: dark red meat, a charred edge, a pale fat swirl
+        E(0, 1, 11, 9, DK);
+        E(0, 2, 10, 7, '#2a0e0a');
+        E(0, 0, 10, 8, '#5a1612'); E(-1, -1, 9, 7, '#8a2a22');
+        R(-8, 2, 3, 1, '#1a0806'); R(5, 4, 3, 1, '#1a0806'); R(6, -4, 2, 1, '#1a0806');
+        E(0, -1, 6, 4, '#a83a32'); E(-1, -2, 4, 3, '#c85a4a');
+        R(-2, -2, 4, 1, '#e8a898'); R(2, -2, 1, 3, '#e8a898'); R(-3, -1, 1, 3, '#e8a898');
+        R(-7, -5, 3, 1, '#ff8a5a');
+        break;
       case 'noodle': // a fresh nest
         E(0, 1, 11, 8, DK);
         E(0, 1, 10, 7, '#a9692c');
@@ -119,14 +272,25 @@ const ART = (() => {
   const SLOT = {
     nori: [[-30, -16, 1.25], [-19, -19, 1.2]], chashu: [[14, -9, 1.2], [28, -6, 1.15]], menma: [[40, 2, 1], [36, 9, 1]],
     butter: [[18, -2, 0.9], [4, -4, 0.9]], corn: [[4, 10, 0.9], [15, 11, 0.9]], egg: [[-30, 5, 1.15], [-14, 9, 1.15]],
-    scallion: [[-4, 1, 1], [-8, 7, 1]], chili: [[8, -4, 1], [20, 3, 1]]
+    scallion: [[-4, 1, 1], [-8, 7, 1]], chili: [[8, -4, 1], [20, 3, 1]],
+    naruto: [[-6, -10, 1], [6, -13, 1]], kikurage: [[-40, -2, 0.95], [-36, 6, 0.95]], moyashi: [[26, 7, 1], [33, -2, 1]], bokchoy: [[-20, -8, 1.05], [-44, 1, 1]],
+    torichashu: [[14, -9, 1.2], [28, -6, 1.15]], wyvern: [[14, -9, 1.2], [28, -6, 1.15]], kraken: [[14, -9, 1.15], [28, -6, 1.1]],
+    kakuni: [[-4, -11, 1.1], [8, -14, 1.05]], aburaage: [[16, -9, 1.1], [30, -5, 1.05]], shiitake: [[16, -6, 1], [30, -2, 1]], mandrake: [[16, -6, 1.1], [28, -2, 1.05]],
+    wakame: [[-40, -2, 1], [-36, 6, 1]], benishoga: [[36, 4, 0.95], [30, 10, 0.9]], yuzupeel: [[6, 10, 0.9], [16, 11, 0.9]], garlicchip: [[4, 10, 0.9], [15, 11, 0.9]],
+    minced: [[0, -8, 1.15], [14, -10, 1.05]], sesame: [[-2, 4, 1], [10, 6, 1]], clam: [[-30, 5, 1], [-14, 9, 1]], shrimp: [[30, 4, 1], [38, -4, 1]], mayu: [[-4, 0, 0.8], [6, 2, 0.8]],
+    sunpetal: [[-14, -2, 0.95], [-2, -6, 0.9]], glowcap: [[-6, -10, 1], [-30, -12, 0.95]], frostleaf: [[6, -8, 1.05], [-6, -2, 1]], emberpep: [[-6, -6, 0.9], [4, 6, 0.9]],
+    cockegg: [[-26, 4, 1.3], [-8, 8, 1.2]]
   };
   const MINI = {
     nori: [[-13, -7, 0.6], [-8, -8, 0.55]], chashu: [[7, -4, 0.55], [13, -3, 0.5]], menma: [[19, 0, 0.45], [17, 3, 0.45]],
     butter: [[9, -1, 0.45], [2, -2, 0.45]], corn: [[2, 3, 0.45], [7, 4, 0.45]], egg: [[-13, 2, 0.55], [-6, 3, 0.55]],
-    scallion: [[-1, 0, 0.5], [-4, 3, 0.5]], chili: [[4, -2, 0.5], [10, 1, 0.5]]
+    scallion: [[-1, 0, 0.5], [-4, 3, 0.5]], chili: [[4, -2, 0.5], [10, 1, 0.5]],
+    naruto: [[-3, -5, 0.5], [3, -6, 0.5]], kikurage: [[-18, -1, 0.45], [-16, 3, 0.45]], moyashi: [[12, 3, 0.45], [15, -1, 0.45]], bokchoy: [[-9, -4, 0.5], [-19, 1, 0.45]]
   };
-  const DRAW_ORDER = ['nori', 'chashu', 'menma', 'butter', 'corn', 'egg', 'scallion', 'chili'];
+  for (const id in SLOT) if (!MINI[id]) MINI[id] = SLOT[id].map(([x, y, sc]) => [Math.round(x * 0.46), Math.round(y * 0.45), Math.round(sc * 46) / 100]);
+  const DRAW_ORDER = ['nori', 'wakame', 'bokchoy', 'chashu', 'torichashu', 'wyvern', 'kraken', 'kakuni', 'aburaage', 'shiitake', 'mandrake', 'naruto', 'glowcap', 'menma',
+    'kikurage', 'moyashi', 'benishoga', 'frostleaf', 'shrimp', 'clam', 'butter', 'corn', 'garlicchip', 'yuzupeel', 'minced', 'egg', 'cockegg', 'sunpetal', 'scallion', 'sesame',
+    'chili', 'emberpep', 'mayu'];
 
   // Glossy deep-red bowl with a bright rim, a shine stripe and a cool table reflection near the foot.
   // Built once per size and cached, then stamped. cy = rim centre.
@@ -178,6 +342,73 @@ const ART = (() => {
     g.drawImage(bodyCache[key] || (bodyCache[key] = buildBody(rx, ry, depth)), Math.round(cx) - rx - 4, Math.round(cy) - ry - 4);
   }
 
+  /* ---------- special steps on the bowl (b.fx, set in game.js) ----------
+     chiliN / chiliLive: swirls of chili oil poured; torch / torchLive: how far the chashu was seared; egg: 'whole' until
+     it is sliced; b.butterAt: when the butter landed (it melts over BUTTER_MELT seconds). */
+  const BUTTER_MELT = 45;
+  const meltOf = (b, t) => (b.butterAt === undefined ? 0 : Math.max(0, Math.min(1, (t - b.butterAt) / BUTTER_MELT)));
+  const OILS = { chili: ['#e8502a', '#ff8a4a'], ember: ['#ff8a1a', '#ffd04a'], mayu: ['#1e1618', '#5a4a4a'] };
+  function oilSwirl(g, cx, cy, rx, ry, n, t, kind = 'chili') {   // n rings of oil drifting on the broth (chili red, ember orange, black garlic)
+    const oc = OILS[kind];
+    for (let k = 0; k < n; k++) {
+      const r = 0.35 + k * 0.28, seg = 18 + k * 8;
+      for (let a = 0; a < seg; a++) {
+        if (a % 3 === 2) continue;
+        const th = a / seg * Math.PI * 2 + t * 0.4 + k * 1.3, x = cx + Math.round(Math.cos(th) * rx * r), y = cy + Math.round(Math.sin(th) * ry * r);
+        dot(g, x, y, a % 2 ? oc[0] : oc[1]);
+      }
+    }
+  }
+  function sear(g, x, y, s, amt) {   // browned (or charred) edges on a chashu slice; amt 0-1 golden, past 1 charred
+    if (amt <= 0.05) return;
+    const c = amt > 1 ? '#2a140c' : amt > 0.6 ? '#6e3414' : '#a8582a', n = Math.round(10 + 6 * Math.min(1, amt));
+    for (let a = 0; a < n; a++) { const th = a / n * Math.PI * 2; dot(g, Math.round(x + Math.cos(th) * 9 * s), Math.round(y + 1 + Math.sin(th) * 7 * s), c); }
+    if (amt > 0.6) { dot(g, Math.round(x - 3 * s), Math.round(y - 2 * s), c); dot(g, Math.round(x + 4 * s), Math.round(y + 2 * s), c); }
+  }
+  function wholeEgg(g, x, y, s) {   // a soy-marinated egg before it is sliced: smooth, tan, glossy
+    const E = (dx, dy, rx, ry, c) => ell(g, Math.round(x + dx * s), Math.round(y + dy * s), Math.max(1, Math.round(rx * s)), Math.max(1, Math.round(ry * s)), c);
+    E(0, 1, 9, 7, DK); E(0, 0, 8, 6, '#c8925a'); E(-1, -1, 6, 4, '#e2b07a'); E(-3, -3, 2, 1, '#fff2d8');
+  }
+  // Toppings as the bowl shows them, with any special step applied.
+  function wholeCockegg(g, x, y, s) {   // the cockatrice egg before slicing: big, speckled gold-tan
+    const E = (dx, dy, rx, ry, c) => ell(g, Math.round(x + dx * s), Math.round(y + dy * s), Math.max(1, Math.round(rx * s)), Math.max(1, Math.round(ry * s)), c);
+    E(0, 1, 13, 10, DK); E(0, 0, 12, 9, '#c8a050'); E(-2, -2, 8, 5, '#e8c878'); E(-4, -4, 3, 1, '#fff6d8');
+    for (const [dx, dy] of [[4, 2], [-3, 4], [6, -3], [0, -1]]) dot(g, Math.round(x + dx * s), Math.round(y + dy * s), '#8a6a2a');
+  }
+  function wholeRoot(g, x, y, s) {   // the mandrake root before slicing: a pale root with leaves and a little face
+    const E = (dx, dy, rx, ry, c) => ell(g, Math.round(x + dx * s), Math.round(y + dy * s), Math.max(1, Math.round(rx * s)), Math.max(1, Math.round(ry * s)), c);
+    for (const [dx, c] of [[-3, '#3a8a3a'], [0, '#5aae4a'], [3, '#3a8a3a']]) line(g, Math.round(x), Math.round(y - 6 * s), Math.round(x + dx * s * 1.5), Math.round(y - 12 * s), c, 2);
+    E(0, 0, 6, 8, DK); E(0, 0, 5, 7, '#e2d0a8'); E(-2, -2, 2, 4, '#f6ead0');
+    line(g, Math.round(x + 2 * s), Math.round(y + 7 * s), Math.round(x + 4 * s), Math.round(y + 11 * s), '#c8b088');
+    dot(g, Math.round(x - 2 * s), Math.round(y - 1 * s), DK); dot(g, Math.round(x + 2 * s), Math.round(y - 1 * s), DK); dot(g, Math.round(x), Math.round(y + 2 * s), '#8a5a3a');
+  }
+  function groundSesame(g, x, y, s, how) {   // sesame after grinding: a fine pale dusting (coarse: seeds; paste: a brown smear)
+    if (how === 'paste') { ell(g, x, y, Math.round(8 * s), Math.round(4 * s), '#8a6a3a'); ell(g, x - 2, y - 1, Math.round(4 * s), Math.round(2 * s), '#a8844a'); return; }
+    const n = how === 'coarse' ? 14 : 34;
+    for (let i = 0; i < n; i++) { const a = i * 2.39996, r = Math.sqrt(i / n) * 11 * s; dot(g, Math.round(x + Math.cos(a) * r), Math.round(y + Math.sin(a) * r * 0.5), i % 7 === 0 ? '#3a2a22' : i % 2 ? '#f6e6c0' : '#d8c090'); }
+  }
+  const nightNow = () => (typeof window !== 'undefined' && window.G ? (window.G.nightF || 0) : 0);
+  function topFx(g, b, id, x, y, s, t) {
+    const fx = b.fx || {};
+    if (id === 'egg' && fx.egg === 'whole') return wholeEgg(g, x, y, s);
+    if (id === 'cockegg' && fx.cegg === 'whole') return wholeCockegg(g, x, y, s);
+    if (id === 'mandrake' && fx.mandrake === 'whole') return wholeRoot(g, x, y, s);
+    if (id === 'sesame' && fx.sesame && fx.sesame !== 'pending') return groundSesame(g, x, y, s, fx.sesame);
+    if (id === 'mayu' && fx.mayu && fx.mayu !== 'pending') return;   // poured: it is the swirl on the broth now
+    if (id === 'glowcap' && nightNow() > 0.3) {   // after dark the cap glows
+      const a = 0.25 + 0.1 * Math.sin(t * 2.2 + x);
+      g.globalAlpha = a; ell(g, x, y - Math.round(2 * s), Math.round(13 * s), Math.round(9 * s), '#8affea'); g.globalAlpha = 1;
+    }
+    if (id === 'butter') {
+      const m = meltOf(b, t);
+      ell(g, x, y + Math.round(5 * s), Math.max(1, Math.round((6 + 8 * m) * s)), Math.max(1, Math.round((2 + m) * s)), '#f8dc78');   // the puddle spreads
+      if (m < 1) top(g, 'butter', x, y + Math.round(m * 4 * s), s * (1 - 0.6 * m));
+      return;
+    }
+    top(g, id, x, y, s);
+    if (TORCH_MEATS.includes(id)) sear(g, x, y, s, fx.torchLive !== undefined ? fx.torchLive : fx.torch === 'perfect' ? 0.8 : fx.torch === 'charred' ? 1.3 : fx.torch === 'light' ? 0.35 : 0);
+  }
+
   // Index of each topping in b.items, so we can look up when it landed.
   function landed(b) { const o = {}; b.items.forEach((id, i) => (o[id] = o[id] || []).push(i)); return o; }
   // Drop-in offset: falls for 0.3s, then a small bounce.
@@ -219,10 +450,18 @@ const ART = (() => {
       ell(g, ncx, ncy + 1, rx + 1, ry, '#7a4418');
       pile(g, ncx, ncy, rx, ry, t, 7, COOKED, 2);
     }
+    const fx = b.fx || {};
+    if (b.broth) for (const [k, ox, oy] of [['mayu', 0, 0], ['chili', -4, 2], ['ember', 2, 3]]) {
+      const oil = fx[k + 'Live'] !== undefined ? fx[k + 'Live'] : fx[k + 'N'] || 0;
+      if (oil) oilSwirl(g, cx + ox, cy + oy, k === 'mayu' ? 40 : 46, k === 'mayu' ? 11 : 13, Math.min(3, oil), t + (k === 'mayu' ? 2 : 0), k);
+    }
+    if (b.cold && b.broth) for (const [ox, oy, w] of [[-36, -2, 6], [32, 4, 5], [-20, 9, 5], [40, -6, 4]]) {   // ice cubes float on cold ramen
+      rect(g, cx + ox - 1, cy + oy - 1, w + 2, w, DK); rect(g, cx + ox, cy + oy, w, w - 2, '#e8fbff'); rect(g, cx + ox, cy + oy, w, 1, '#ffffff'); rect(g, cx + ox + w - 2, cy + oy + 1, 2, w - 3, '#b8e4f4');
+    }
     const at = landed(b);
     for (const id of DRAW_ORDER) for (let k = 0; k < Math.min(2, sh[id] || 0); k++) {
       const [ox, oy, s] = SLOT[id][k];
-      top(g, id, cx + ox, cy + oy + dropY(b, at[id] && at[id][k], t), s);
+      topFx(g, b, id, cx + ox, cy + oy + dropY(b, at[id] && at[id][k], t), s, t);
     }
     if (sel) {
       const by = cy - 44 + Math.round(Math.sin(t * 5) * 3);
@@ -243,10 +482,13 @@ const ART = (() => {
       ell(g, cx - 12 + Math.round(Math.sin(t * 1.2) * 2), cy - 2, 5, 1, BROTH3);
     }
     if (b.noodles) { ell(g, cx + 4, cy + 1, 15, 4, '#7a4418'); pile(g, cx + 3, cy + 1, 14, 4, t, 3); }
+    const fx = b.fx || {};
+    if (b.broth) for (const k of ['mayu', 'chili', 'ember']) if (fx[k + 'N']) oilSwirl(g, cx - 2, cy + 1, 20, 5, Math.min(3, fx[k + 'N']), t, k);
+    if (b.cold && b.broth) { rect(g, cx - 18, cy - 1, 3, 2, '#e8fbff'); rect(g, cx + 15, cy + 1, 3, 2, '#e8fbff'); }
     const c = count(b.items);
     for (const id of DRAW_ORDER) for (let k = 0; k < Math.min(2, c[id] || 0); k++) {
       const [ox, oy, s] = MINI[id][k];
-      top(g, id, cx + ox, cy + oy, s);
+      topFx(g, b, id, cx + ox, cy + oy, s, t);
     }
   }
 
@@ -292,5 +534,53 @@ const ART = (() => {
     }
   }
 
-  return { top, pile, COOKED, RAW, bigBowl, smallBowl, bowlBody, slip, slipRows, slipMods, nameLines, count, shown, BROTH, BROTH2, BROTH3, TARE, SLIP_W, slipH, tareC, brothPal };
+  // Ink colours for the printed recipe pictures (the recipe book, its cover and the road card).
+  const FIG_INK = '#3b2a22', FIG_PAPER = '#e6d3ad';
+  const wash = c => mix(c, FIG_PAPER, 0.4), faint = mix(FIG_INK, FIG_PAPER, 0.55);
+  /* The recipe's picture is the real bowl: the same big bowl the kitchen builds (same toppings, same places, the special
+     steps done: sliced egg, seared chashu, chili oil), drawn at half size and printed in ink: flat colours under a sepia
+     wash, a dark ink outline, steam wisps. So the book always matches the bowl you make. */
+  const figCache = {};
+  function figURL(type) {
+    if (figCache[type]) return figCache[type];
+    const m = MENU[type], items = Object.entries(m.tops).flatMap(([id, n]) => Array(n).fill(id));
+    const bowl = { s: 3, tare: m.tare, broth: m.broth, fill: 1, noodles: 'perfect', items, hide: {},
+      cold: !!m.cold, spicy: !!m.spicy, fx: { egg: 'sliced', cegg: 'sliced', mandrake: 'sliced', sesame: 'perfect', emberN: m.tops.emberpep || undefined,
+        mayuN: m.tops.mayu ? 1 : undefined, mayu: m.tops.mayu ? 'done' : undefined, torch: TORCH_RECIPES.includes(type) ? 'perfect' : undefined } };
+    // 1. the real bowl, full size
+    const big = mk(140, 104), bg = big.getContext('2d'); bg.imageSmoothingEnabled = false;
+    bigBowl(bg, 70, 40, bowl, false, 0);
+    // 2. half size (averaged, so the toppings stay readable)
+    const W = 70, H = 54, c = mk(W, H), g = c.getContext('2d');
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(big, 0, 0, 140, 104, 0, 2, W, 52);
+    // 3. printed in ink: flat, faded colours; dark lines become ink; an ink outline around the whole shape
+    const im = g.getImageData(0, 0, W, H), d = im.data, A = new Uint8Array(W * H);
+    const ink = [59, 42, 34], paper = [230, 211, 173];
+    for (let p = 0; p < W * H; p++) {
+      const q = p * 4; A[p] = d[q + 3] > 110 ? 1 : 0;
+      if (!A[p]) { d[q + 3] = 0; continue; }
+      const r = d[q], gg = d[q + 1], b = d[q + 2], lum = 0.3 * r + 0.59 * gg + 0.11 * b;
+      if (lum < 34) { d[q] = ink[0]; d[q + 1] = ink[1]; d[q + 2] = ink[2]; d[q + 3] = 255; continue; }
+      const flat = v => Math.min(255, Math.round(v / 32) * 32), grey = (flat(r) + flat(gg) + flat(b)) / 3;
+      const col = [flat(r), flat(gg), flat(b)].map(v => v + (grey - v) * 0.12);   // a little less saturated
+      for (let k = 0; k < 3; k++) d[q + k] = Math.round(col[k] + (paper[k] - col[k]) * 0.2);   // the sepia wash
+      d[q + 3] = 255;
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {   // the outline: empty pixels touching the bowl
+      const p = y * W + x; if (A[p]) continue;
+      if ((x > 0 && A[p - 1]) || (x < W - 1 && A[p + 1]) || (y > 0 && A[p - W]) || (y < H - 1 && A[p + W])) { const q = p * 4; d[q] = ink[0]; d[q + 1] = ink[1]; d[q + 2] = ink[2]; d[q + 3] = 255; }
+    }
+    g.putImageData(im, 0, 0);
+    // 4. steam: three thin, broken ink wisps
+    const faintInk = mix(FIG_INK, FIG_PAPER, 0.55);
+    for (const [ox, h] of [[-9, 9], [1, 11], [11, 8]]) for (let k = 0; k < h; k++) if (k % 5 !== 4) dot(g, 35 + ox + Math.round(Math.sin(k * 0.55 + ox) * 1.5), 12 - k, faintInk);
+    return (figCache[type] = c.toDataURL());
+  }
+  // A printed figure: the illustration in a thin frame with a caption under it ("Fig. 1 - Miso Ramen"). It is ink on the
+  // page, so it cannot be grabbed (drags fall through to the page). cls adds a size / placement class.
+  const figNo = type => Object.keys(MENU).indexOf(type) + 1;
+  // (spans, not <figure>, so it can sit inside any paragraph or inline element)
+  const figure = (type, cls = '', extra = '') => `<span class="ink-fig ${cls}" role="img" aria-label="Fig. ${figNo(type)}: ${MENU[type].name}"><img class="px" src="${figURL(type)}" alt="" draggable="false"><span class="figcap">Fig. ${figNo(type)} &ndash; ${MENU[type].name}</span>${extra}</span>`;
+
+  return { BUTTER_MELT, meltOf, wholeEgg, top, pile, COOKED, RAW, bigBowl, smallBowl, bowlBody, slip, slipRows, slipMods, nameLines, count, shown, BROTH, BROTH2, BROTH3, TARE, SLIP_W, slipH, tareC, brothPal, figURL, figure };
 })();

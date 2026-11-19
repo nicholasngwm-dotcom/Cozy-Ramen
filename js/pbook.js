@@ -327,7 +327,7 @@ const PBOOK = (() => {
       if (side) pend = { side, x: e.clientX, y: e.clientY, corner: zone(e) === side };
     });
     stage.addEventListener('pointermove', e => {
-      if (!drag) stage.style.cursor = mode === 'open' && sideAt(e) && !e.target.closest('[data-goto], [data-act], button, select, input, .pb-tabs, .pb-side') ? 'grab' : '';
+      if (!drag) stage.style.cursor = mode === 'open' && sideAt(e) && !e.target.closest('[data-goto], [data-act], button, select, input, .pb-tabs, .pb-side, .ink-fig') ? 'grab' : '';   // (a printed figure is ink on the page: no grab cursor of its own, but a drag across it still turns the page)
       if (pend && !drag) {
         const dx = e.clientX - pend.x, dy = e.clientY - pend.y;
         if (Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {

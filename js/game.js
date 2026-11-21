@@ -30,7 +30,8 @@
   const fresh = () => ({
     menu: ['miso'], pick: 'miso',   // the menu the shop sells from (in order), and the chef's pick
     mode: 'title', met: [], aff: {}, level: 1, xp: 0, owned: [], gear: [], where: null, aoiMet: false, region: 0,
-    aoi: { seen: 0, visit: 0, buy: 0, chat: 0, notes: 0 }, aoiDay: 0,   // Aoi's story (js/aoi.js): scenes seen, tonight's markers, notes left; the day she last ate here life: { served: 0, perfect: 0, sold: {}, bestDay: 0, days: 0 },
+    life: { served: 0, perfect: 0, sold: {}, bestDay: 0, days: 0 },
+    aoi: { seen: 0, visit: 0, buy: 0, chat: 0, notes: 0 }, aoiDay: 0,   // Aoi's story (js/aoi.js): scenes seen, tonight's markers, notes left; the day she last ate here
     t: 0, time: 0, day: 1, gold: 0, paused: false, ui: null, nightF: 0, duskF: 0, rain: 0, wx: null, quest: null,
     shop: 'morning', signT: -9, signWas: 'morning', receipt: null,   // shop: morning (closed, waiting for the sign) | open | night
     st: 0, cam: -960, kcam: 960, scam: -960, pan: 0, edge: 0, edgeSide: 0,   // the serving room starts at its far left

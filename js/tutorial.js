@@ -85,8 +85,8 @@ const TUT = (() => {
     // guest 1: a plain Miso Ramen
     call: 'A guest! Tap them to take the order.',
     ticket: 'Tickets tell you everything they want.',
-    cook1: { kitchen: 'To the kitchen!', slip: 'Their order hangs on this rail too. Cook from it.', tare: 'Miso first, then the pork pot.', broth: 'Click or drag, whichever you like.',
-      nest: 'Noodles next. Click the tray to drop a nest in.', pull: 'Pull them out when they say READY.', tops: 'Chashu, egg, scallion. Click them in.',
+    cook1: { kitchen: 'To the kitchen!', slip: 'Their order hangs on this rail too. Cook from it.', tare: 'Drag a spoon of miso into the bowl.', broth: 'Now drag the pork broth over it.',
+      nest: 'Noodles next. Drag a nest into a basket.', pull: 'When they say READY, drag the basket to the bowl.', tops: 'Chashu, egg, scallion. Drag each one in.',
       pass: 'Drag the bowl into the pass. It goes on your tray.', serve: 'Drag it from your tray to their spot on the counter.',
       eat: "Hear that slurp? Music to a cook's ears.", coins: 'Your first sale! Tap the coins.' },
     // XP, the moment the first bowl earns some
@@ -94,8 +94,8 @@ const TUT = (() => {
     // guest 2: extras and removals
     call2: 'Another one! Tap them, chef.',
     extras: ['This one has changes. Plus means add, minus means leave it out.', "Each extra portion goes on their bill. Leaving something out doesn't change the price."],
-    cook2: { kitchen: 'Back to the kitchen!', tare: 'Same start: miso, then pork.', broth: 'Now the pork pot.', nest: 'Noodles in.', pull: 'Wait for READY, then pull.',
-      tops: 'Chashu and two eggs, no scallion. One click adds both eggs.', pass: 'Spot on. Added too much? Right-click the bowl.', serve: 'Off you go!',
+    cook2: { kitchen: 'Back to the kitchen!', tare: 'Same start: drag the miso in.', broth: 'Now drag the pork broth.', nest: 'Drag the noodles in.', pull: 'Wait for READY, then drag.',
+      tops: 'Chashu and two eggs, no scallion. Drag the egg in twice.', pass: 'Spot on. Added too much? Right-click the bowl.', serve: 'Off you go!',
       eat: 'Extras make for happy guests.', coins: 'A bigger bill, thanks to that extra egg!' },
     // guest 3: asks for a bowl from the very end of the Ramen Road (turning a guest away)
     far: ['A traveller from far away! Listen closely to their order.', "If it's something we can't make yet, just say sorry. That's fine."],
@@ -195,6 +195,7 @@ const TUT = (() => {
   /* ---------- the handover ---------- */
   const R = new Proxy({}, { get: (o, k) => H.R[k] });
   const bowlAt = s => G.bowls.findIndex(b => b.s >= s);
+  const bowlR = k => (k >= 0 ? R.bowl(k) : null);
   const gone = () => { const gu = tg(); return !gu || G.stalls[gu.stall].guest !== gu; };
   const served = () => gone() || ['react', 'eat', 'pay'].includes(tg().state);
   const passed = () => G.pass.length > 0 || served();
@@ -220,14 +221,18 @@ const TUT = (() => {
       { id: 'kitchen' + n, seg, line: L.kitchen, target: () => R.edge(1), done: () => at('kitchen') || bowlAt(1) >= 0 || passed() },
       // (the first time: the same order on the kitchen's ticket rail; a talk step inside the segment counts as done once read)
       ...(L.slip ? [{ id: 'slip' + n, seg, talk: true, lines: [L.slip], at: 'kitchen', cam: 1, target: () => R.slip(tg()) }] : []),
-      { id: 'tare' + n, seg, line: L.tare, at: 'kitchen', cam: 1, target: () => R.tare('miso'), done: () => bowlAt(1) >= 0 || passed() },
-      { id: 'broth' + n, seg, line: L.broth, at: 'kitchen', cam: 1, target: () => R.pot('pork'), done: () => bowlAt(2) >= 0 || passed() },
-      { id: 'nest' + n, seg, line: L.nest, at: 'kitchen', cam: 1, target: () => R.noodle(), done: () => G.baskets.some(b => b.t >= 0) || flying('nest') || flying('basket') || bowlAt(3) >= 0 || passed() },
+      // (every cooking step is a drag: the glove slides from what to pick up to where it goes)
+      { id: 'tare' + n, seg, line: L.tare, at: 'kitchen', cam: 1, target: () => R.tare('miso'), drag: () => bowlR(G.bowls.findIndex(b => b.s === 0)), done: () => bowlAt(1) >= 0 || passed() },
+      { id: 'broth' + n, seg, line: L.broth, at: 'kitchen', cam: 1, target: () => R.pot('pork'), drag: () => bowlR(G.bowls.findIndex(b => b.s === 1)), done: () => bowlAt(2) >= 0 || passed() },
+      { id: 'nest' + n, seg, line: L.nest, at: 'kitchen', cam: 1, target: () => R.noodle(), drag: () => R.basket(Math.max(0, G.baskets.findIndex(b => b.t < 0))),
+        done: () => G.baskets.some(b => b.t >= 0) || flying('nest') || flying('basket') || bowlAt(3) >= 0 || passed() },
       { id: 'pull' + n, seg, line: L.pull, at: 'kitchen', cam: 1,
         target: () => { let j = G.baskets.findIndex(b => b.t >= cookTime()); if (j < 0) j = Math.max(0, G.baskets.findIndex(b => b.t >= 0)); return R.basket(j); },
+        drag: () => (G.baskets.some(b => b.t >= cookTime()) ? bowlR(G.bowls.findIndex(b => b.s === 2)) : null),   // (no slide until the noodles are READY)
         done: () => bowlAt(3) >= 0 || flying('basket') || passed() },
       { id: 'tops' + n, seg, line: L.tops, at: 'kitchen', cam: 1,
         target: () => { const k = bowlAt(3); if (k < 0) return null; const b = G.bowls[k], w = want(); const id = needs().find(t => have(b, t) < w[t] && !G.flying.some(f => f.d.kind === 'top' && f.d.id === t)); return id ? R.bin(id) : null; },
+        drag: () => bowlR(bowlAt(3)),
         done: () => { const k = bowlAt(3), w = want(); return (k >= 0 && needs().every(t => have(G.bowls[k], t) >= w[t])) || passed(); } },
       { id: 'pass' + n, seg, line: L.pass, at: 'kitchen', cam: 0, target: () => { const k = bowlAt(3); return k >= 0 ? R.bowl(k) : null; }, drag: () => R.pass(), done: passed },
       { id: 'carry' + n, seg, keep: true, target: () => R.edge(-1), done: () => at('serving') || served() },

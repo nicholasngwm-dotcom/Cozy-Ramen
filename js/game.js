@@ -639,6 +639,9 @@
       G.activeBowl = d.spot;
       return;
     }
+    // Aoi's handover teaches dragging: there, a click on a crock, pot, tray, basket or bin only reminds you to drag
+    // (click-to-add works again once the tutorial is over)
+    if (TUT.guiding()) { SFX.tap(); return say(d.kind === 'nest' ? 'Drag a nest from the tray into an empty basket.' : d.kind === 'basket' ? 'Drag the basket over to the bowl.' : 'Drag it into the bowl, chef.'); }
     clickAdd(d, single);
   }
 

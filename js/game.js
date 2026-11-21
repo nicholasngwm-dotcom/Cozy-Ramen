@@ -44,7 +44,8 @@
              ...Object.fromEntries(TOPS.map(id => [id, 6])), [CHILI_OIL]: 10, chashu: 14, egg: 14, nori: 14, scallion: 14, menma: 14, cockegg: 2 },
     jobs: [], parts: [], pops: [],
     drag: null, dragBowl: null, mouse: null, hover: null,
-    flash: '', flashT: 0, steamT: 0, stats: newStats()
+    flash: '', flashT: 0, steamT: 0, stats: newStats(),
+    tut: null, tutGu: null, tutPulse: null   // Aoi's tutorial (js/tutorial.js): its saved progress, the guided bowl's guest, a ticket to pulse
   });
   const G = fresh();
   window.G = G;
@@ -54,9 +55,14 @@
   const SETTINGS = Object.assign({ music: 6, sfx: 8, textSpeed: 1, snap: true, hints: false, reduceMotion: false }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; } })());
   function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS)); } catch (e) { /* storage may be blocked */ } }
   if ('blindClick' in SETTINGS) { delete SETTINGS.blindClick; saveSettings(); }   // an old setting: the blinds now move by themselves
+  // Hints are on for days 1-3 of a new save, then off, unless the player set them (hintsUser). Hints already turned on
+  // before this rule count as the player's choice.
+  if (SETTINGS.hints && !('hintsUser' in SETTINGS)) { SETTINGS.hintsUser = true; saveSettings(); }
+  const hintsOn = () => (SETTINGS.hintsUser ? !!SETTINGS.hints : !!(G.mode === 'play' && G.tut && G.tut.fresh && G.day <= 3));
   // (night: the title shows the night scene for a save made after closing)
   // Continue always resumes at the start of a morning: `day` is the morning to resume on.
-  function saveGame(day) { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, aff: G.aff, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned, quest: G.quest, gear: G.gear, aoiMet: G.aoiMet, region: G.region, life: G.life, menu: G.menu, pick: G.pick, night: G.shop === 'night' })); } catch (e) { /* storage may be blocked */ } }
+  // (nothing saves during Aoi's handover: it is not a real day)
+  function saveGame(day) { if (G.tut && G.tut.handover) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, aff: G.aff, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned, quest: G.quest, gear: G.gear, aoiMet: G.aoiMet, region: G.region, life: G.life, menu: G.menu, pick: G.pick, night: G.shop === 'night', tut: TUT.saveData() })); } catch (e) { /* storage may be blocked */ } }
   function loadSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.day ? s : null; } catch (e) { return null; } }
   function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage may be blocked */ } }
 
@@ -179,7 +185,7 @@
   };
 
   /* ---------- feedback helpers ---------- */
-  function say(msg) { G.flash = msg; G.flashT = 2.8; SFX.bad(); }
+  function say(msg) { if (TUT.gentle(msg)) return; G.flash = msg; G.flashT = 2.8; SFX.bad(); }   // (during Aoi's guided bowl: a gentle note instead)
   const pop = (str, x, y, c = '#ffd76a') => G.pops.push({ str, x, y, c, life: 1.2 });
   const spark = (x, y, n, c) => { for (let i = 0; i < n; i++) G.parts.push({ type: 'spark', c, x: x + rand(-20, 20), y: y + rand(-14, 14), vx: rand(-24, 24), vy: rand(-52, -16), life: rand(0.4, 0.9), max: 0.9 }); };
   const splash = (x, y, c, n = 10) => { for (let i = 0; i < n; i++) G.parts.push({ type: 'drop', c, x: x + rand(-24, 24), y: y + rand(-4, 4), vx: rand(-50, 50), vy: rand(-90, -30), life: 0.5, max: 0.5 }); };
@@ -235,6 +241,8 @@
   const seatRect = i => SERVING.seatRect(i);       // a seated guest and their bit of counter
   const dropRect = i => SERVING.dropRect(i);       // where a bowl can be dropped for that seat (guest, counter, ticket)
   const trashRect = { x: K(KL.TRASH.x) - 6, y: KL.TRASH.y - 6, w: KL.TRASH.w + 12, h: KL.TRASH.h + 12 };
+  const coinRect = i => ({ x: SL.X0 + SL.stallCX(i) + 22, y: SL.COUNTER_Y - 26, w: 36, h: 30 });   // a paid guest's coins on the counter
+  const bookRect = { x: K(KL.BOOK.x) - 4, y: KL.BOOK.y - 4, w: KL.BOOK.w + 8, h: KL.BOOK.h + 30 };     // the cookbook lying open on the kitchen counter
   function jobPos(id) { const [x, y] = KL.badge(id); return [K(x), y - 22]; }
 
   // Things you can pick up. start() returns the drag, or null (after explaining why not).
@@ -746,7 +754,7 @@
     // what this guest may change: an extra only if the kitchen has it on its rack and it suits the bowl (EXTRA_OK, or
     // the recipe already has it); taking one off only if the recipe has it
     const can = (id, n) => n < (base[id] || 0) ? true : rack.includes(id) && topOn(id) && (base[id] || EXTRA_OK.includes(id));
-    const vary = Math.min(0.9, 0.35 + 0.15 * (G.day - 1));
+    const vary = G.day === 1 && G.tut && G.tut.fresh ? 0 : Math.min(0.9, 0.35 + 0.15 * (G.day - 1));   // a new save's first day: plain bowls only
     if (t.tops && Math.random() < vary) { for (const id in t.tops) if (can(id, t.tops[id])) tops[id] = t.tops[id]; }
     else if (Math.random() < vary * 0.55) {
       // a random change: often a second portion of something in the bowl, sometimes a new topping, now and then one fewer
@@ -755,10 +763,30 @@
         ...['scallion', 'menma', 'nori'].filter(id => base[id]).map(id => [id, 0])].filter(([id, n]) => can(id, n));
       if (opts.length) { const [id, n] = pick(opts); tops[id] = n; }
     }
-    // the bill: the bowl's price, plus each extra portion asked for (removals never lower it)
-    let extra = 0;
+    return billed(type, tops);
+  }
+  // the bill: the bowl's price, plus each extra portion asked for (removals never lower it)
+  function billed(type, tops) {
+    const m = MENU[type], base = m.tops; let extra = 0;
+    tops = { ...tops };
     for (const id of Object.keys(tops)) { extra += Math.max(0, tops[id] - (base[id] || 0)) * extraPrice(id); if (!tops[id]) delete tops[id]; }
     return { type, tops, price: m.price + extra, extra };
+  }
+  /* Orders Aoi's tutorial sets up: the handover's guests (a plain Miso Ramen; one with an extra egg and no scallion; a
+     plain one cooked alone), and on a new save's Day 3 one order for a ramen the shop cannot make yet. (gu.tutKind
+     marks them for the notes.) */
+  function tutOrder(gu) {
+    const T = G.tut; if (!T) return null;
+    if (gu.tut === 'extra') { gu.tutKind = 'plus'; return billed('miso', { ...MENU.miso.tops, egg: 2, scallion: 0 }); }
+    if (gu.tut === 'decline') { gu.tutKind = 'cancel'; return billed('dragon', MENU.dragon.tops); }   // the very last bowl on the road: one to turn away
+    if (gu.tut) return billed('miso', MENU.miso.tops);
+    if (!T.fresh || !G.tut.done) return null;
+    T.forced = T.forced || {};
+    if (G.day === 3 && !T.forced.cancel && !TUT.seen('d.cancel')) {   // (players who did the handover already turned one away)
+      const stop = STOPS.find(s => s.kind === 'recipe' && !menuOn(s.menu) && !MENU[s.menu].night);
+      if (stop) { T.forced.cancel = true; gu.tutKind = 'cancel'; return billed(stop.menu, MENU[stop.menu].tops); }
+    }
+    return null;
   }
   // toppings a guest never asks to double (one is the whole point: a single egg to slice, one oil swirl...)
   const SPECIAL_ONE = ['mayu', 'cockegg', 'mandrake', 'sesame', 'sunpetal', 'glowcap', 'frostleaf', 'kraken', 'wyvern', 'emberpep', 'chili', 'butter'];
@@ -772,13 +800,14 @@
     return out;
   }
   const joinList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
-  function seatGuest(i) {
+  function seatGuest(i, tut) {
     const used = G.stalls.map(s => s.guest && s.guest.gt.id);
-    const pool = GUESTS.filter(gt => !used.includes(gt.id) && (!gt.taste.night || isNight()) && !(gt.id === 'aoi' && G.shop === 'night'));
+    const pool = GUESTS.filter(gt => !used.includes(gt.id) && (!gt.taste.night || isNight()) && !(gt.id === 'aoi' && (G.shop === 'night' || TUT.guiding() || (G.day === 1 && G.tut && G.tut.fresh))));   // (not Aoi while she is the one showing you around)
     const gt = pick(pool);
     // arrive: the guest fades in behind the lowered blind (a silhouette through the slats), the blind rolls up, they read the menu board, then call
     const gu = { gt, img: IMG[gt.id], stall: i, state: 'arrive', t: 0, mood: null, order: null };
-    gu.asksRec = Math.random() < (gt.taste.pref ? 0.25 : 0.55);
+    gu.asksRec = !tut && Math.random() < (gt.taste.pref ? 0.25 : 0.55);
+    if (tut) { gu.tut = tut; G.tutGu = gu; }   // one of the handover's guests ('plain', 'extra' or 'solo')
     clearSeat(i);
     G.stalls[i].guest = gu;
     return gu;
@@ -814,14 +843,19 @@
   const ARRIVE_GAP = 20;   // average gap at the 12:00-15:00 peak (the whole open day is 150s): about 5 guests a day
   function nextArrival() {
     const busy = G.stalls.filter(s => s.guest && ['call', 'ordering', 'wait'].includes(s.guest.state)).length;
-    const mean = ARRIVE_GAP * pace(hour()) * Math.max(0.75, 1 - 0.03 * (G.day - 1)) * (1 + 0.45 * busy) / rainBoost();   // rain brings 25% more guests
+    const rush = G.day === 4 && G.tut && G.tut.fresh ? 0.75 : 1;   // a new save's Day 4: a slightly bigger rush (Aoi leaves a note)
+    const mean = ARRIVE_GAP * pace(hour()) * Math.max(0.75, 1 - 0.03 * (G.day - 1)) * (1 + 0.45 * busy) / rainBoost() * rush;   // rain brings 25% more guests
     const MAX_GAP = 60;   // never more than a minute without a guest, however quiet the hour or busy the kitchen
     return clamp(-Math.log(1 - Math.random()) * mean, Math.min(MAX_GAP, Math.max(2, mean * 0.08)), Math.min(MAX_GAP, mean * 3.5));   // a wide spread: sometimes two guests a couple of seconds apart, sometimes a long lull
   }
   function updateGuests(dt) {
     G.spawnT -= dt; G.seatCD -= dt;
     const free = () => G.stalls.findIndex((s, i) => !s.guest && stallOpen(i));
-    if (G.shop === 'morning') G.spawnT = Math.max(G.spawnT, 3);
+    if (TUT.guiding()) {   // Aoi's handover: only her guests, one at a time, at the first free stall
+      const kind = TUT.wantGuest();
+      if (kind && G.tutWant !== kind) { G.tutWant = kind; G.spawnT = 1.8; }   // they come in a moment after Aoi asks for them
+      if (kind && G.shop === 'open' && free() >= 0 && G.spawnT <= 0) seatGuest(free(), kind);
+    } else if (G.shop === 'morning') G.spawnT = Math.max(G.spawnT, 3);
     else if (G.shop === 'night') {     // closed, but the odd late-night walk-in knocks until 04:00 (gold only, never on a receipt)
       if (shutHours()) G.spawnT = Math.max(G.spawnT, 3);   // 04:00-09:00: fully closed, nobody comes in
       else if (G.spawnT <= 0) { if (free() >= 0) seatGuest(free()); G.spawnT = rand(40, 60); }
@@ -830,7 +864,7 @@
       else if (G.waiting < maxWait()) G.waiting++;
       G.spawnT = nextArrival();
     }
-    if (G.shop === 'open' && G.waiting > 0 && G.seatCD <= 0 && free() >= 0) { G.waiting--; G.seatCD = rand(3, 8); seatGuest(free()); }   // the queue sits down unhurried
+    if (G.shop === 'open' && !TUT.guiding() && G.waiting > 0 && G.seatCD <= 0 && free() >= 0) { G.waiting--; G.seatCD = rand(3, 8); seatGuest(free()); }   // the queue sits down unhurried
     G.stalls.forEach((st, i) => {
       const gu = st.guest; if (!gu) return;
       gu.t += dt;
@@ -863,7 +897,7 @@
             const L = G.life; L.served++; if (perfect) L.perfect++; L.sold[type] = (L.sold[type] || 0) + 1;
             if (!G.met.includes(gu.gt.id)) G.met.push(gu.gt.id);
             { const id = gu.gt.id, was = affLevel(G.aff[id]); G.aff[id] = (G.aff[id] || 0) + (perfect ? 2 : 1); const now = affLevel(G.aff[id]);
-              if (now > was) { hearts(cx, 150, 10); SFX.ding(); toast(gu.gt.name + ' is now a ' + AFFINITY[now].name.toLowerCase() + ' of the shop! (affinity ' + (now + 1) + ')'); } }
+              if (now > was) { hearts(cx, 150, 10); SFX.ding(); toast(gu.gt.name + ' is now a ' + AFFINITY[now].name.toLowerCase() + ' of the shop! (affinity ' + (now + 1) + ')'); TUT.event('rankup'); } }
             pop('+' + gu.pay + 'G', cx, 220);
             gainXP(Math.round(6 + 10 * gu.q), cx);
             if (perfect) { hearts(cx, 170, 6); SFX.ding(); } else SFX.coin();
@@ -881,7 +915,7 @@
     // guests fading out, and what they left on the counter
     for (const w of G.walkers) w.t += dt;
     G.walkers = G.walkers.filter(w => w.t < 0.5);
-    G.stalls.forEach((st, i) => { if (!st.guest && st.left > 0) { st.left -= dt; if (st.left <= 0) { st.left = 0.001; clearSeat(i); } } });
+    G.stalls.forEach((st, i) => { if (!st.guest && st.left > 0 && !TUT.holdCoins(i)) { st.left -= dt; if (st.left <= 0) { st.left = 0.001; clearSeat(i); } } });   // (the guided bowl's coins wait to be collected)
     // the blinds: up once a guest has faded in, down again after they have gone (0.9s each way, eased when drawn)
     G.stalls.forEach((st, i) => {
       if (st.blind === undefined) st.blind = 1;
@@ -959,8 +993,10 @@
     gu.state = 'ordering';
     steps.push({ text: line(gu, 'hi', gt.hi) });
     gu.declined = false;
-    // The order line itself carries the confirm / decline choice.
-    const answer = [{ label: 'Coming right up!' }, { label: 'Sorry, I cannot make that one', fn: () => { gu.declined = true; } }];
+    const forced = tutOrder(gu);   // (Aoi's tutorial sets up a few orders)
+    if (forced) gu.asksRec = false;
+    // The order line itself carries the confirm / decline choice (the guided bowl's guest gets just the yes).
+    const answer = [{ label: 'Coming right up!' }].concat(gu.tut === 'plain' || gu.tut === 'extra' ? [] : [{ label: 'Sorry, I cannot make that one', fn: () => { gu.declined = true; } }]);   // (the two guided bowls only get the yes)
     const modsTpl = () => p.mods ? (Array.isArray(p.mods) ? pick(p.mods) : p.mods) : 'With {mods}, please.';
     const orderText = () => {
       const m = mods(gu.order), dish = 'the ' + MENU[gu.order.type].name;
@@ -980,7 +1016,7 @@
       steps.push({ text: () => (gu.trusted ? (gu.order.type === 'miso' ? line(gu, 'trust', ['The chef\'s pick? Then miso it is!']) : 'The chef\'s pick? Then ' + MENU[gu.order.type].name + ' it is!') : (MENU[gu.order.type].name + ' it is! I like your style.'))
         + (mods(gu.order).length ? ' ' + modsTpl().replace('{mods}', joinList(mods(gu.order))) : ''), choices: answer });
     } else {
-      gu.order = makeOrder(gt);
+      gu.order = forced || makeOrder(gt);
       steps.push({ text: () => orderText(), choices: answer });
     }
     steps.push({ text: () => line(gu, 'decline', DECLINE), skip: () => !gu.declined });
@@ -1062,7 +1098,7 @@
   /* ---------- the two physical books (js/pbook.js): the cookbook and the guest book ---------- */
   const BOOKS = { book: COOKBOOK, guests: GUESTBOOK };
   const bookSound = n => ({ lift: SFX.bookLift, land: SFX.bookLand, open: SFX.bookOpen, close: SFX.bookClose, down: SFX.bookDown, flip: SFX.flip, settle: SFX.pageSettle, tap: SFX.tap }[n] || (() => {}))();
-  const metList = () => (G.mode === 'play' ? G.met : ((loadSave() || {}).met || []));
+  const metList = () => (G.mode === 'play' ? G.met : ((loadSave() || {}).met || []).filter(id => GUESTS.some(gt => gt.id === id)));
   COOKBOOK.init({ sound: bookSound, close: () => closeUI() });
   GUESTBOOK.init({ sound: bookSound, close: () => closeUI(), img: id => IMG[id], met: metList, aff: () => (G.mode === 'play' ? G.aff : ((loadSave() || {}).aff || {})) });
   // Where a book is picked up from: the open cookbook lying on the kitchen counter (when it is on screen), else a HUD button.
@@ -1180,7 +1216,7 @@
       sub = esc(s.desc) + ` On sale at Kitsune-ya for ${s.cost}G.`;
     } else {
       pic = `<img src="${iconURL(g => { PX.ell(g, 13, 13, 11, 11, PX.OUTLINE); PX.ell(g, 13, 13, 10, 10, '#e0b040'); PX.ell(g, 12, 12, 7, 7, '#ffe08a'); PX.textC(g, '\u2605', 13, 6, '#9a6a22'); })}" alt="">`;
-      kind = 'LANDMARK \u00b7 ' + esc(s.place.toUpperCase()); title = `<b>${esc(s.name)}</b>`;
+      kind = 'LANDMARK \u00b7 ' + esc(s.place); title = `<b>${esc(s.name)}</b>`;
       sub = (s.gold ? '+' + s.gold + 'G. ' : '') + esc(s.desc || '');
     }
     return `<li class="lu-item" style="--i:${i}"><span class="lu-pic">${pic}</span><span class="lu-txt"><span class="lu-kind">${kind}</span>${title}<small>${sub}</small>${chips.length ? `<span class="lu-chips">${chips.join('')}</span>` : ''}</span></li>`;
@@ -1257,7 +1293,7 @@
     if (G.mode !== 'play') return;
     if (!G.quest || G.quest.day !== G.day) G.quest = makeQuest(G.day);
     const q = G.quest;
-    if (!q.done && questHave(q) >= q.n) {
+    if (!q.done && !TUT.handover() && questHave(q) >= q.n) {   // (the handover is practice: the quest waits for Day 1)
       q.done = true; G.gold += q.gold; SFX.coin(); SFX.ding(); hearts(VW / 2 + G.cam, 120, 6);
       gainXP(q.xp, undefined, 'Daily quest complete! +' + q.xp + ' XP, +' + q.gold + 'G. ');
     }
@@ -1271,6 +1307,9 @@
   NIGHTSHOP.init({
     sfx: SFX, say, toast, img: IMG.aoi,
     save: () => saveGame(G.shop === 'night' ? G.day + 1 : G.day),
+    // a new save's first visit to Kitsune-ya: Aoi's welcome line (shown once, then pinned to the How to Play board)
+    // (a player who skipped the handover has not heard her name yet, so she introduces herself first)
+    tutGreet: () => { if (TUT.guiding()) return ''; if (!G.tut || TUT.seen('d.shop')) return null; G.tut.seen.push('d.shop'); return (G.tut.fresh ? "I'm Aoi! I used to run your stall. " : '') + TUT.NOTES['d.shop'].t; },
     back: st => { G.where = null; G.drag = null; G.staffT = G.staffDoor = 0; G.st = st; G.cam = camTarget(); SFX.whoosh(); STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === st)); }
   });
   JOURNEY.init({
@@ -1279,32 +1318,88 @@
   });
   $('dialog').addEventListener('pointerdown', advance);
 
+  /* ---------- Aoi's tutorial (js/tutorial.js): where things are, and what the kitchen needs next ---------- */
+  // The step a stalled cook is on (for Aoi's kitchen notes), or null when nothing needs doing.
+  function kPhase() {
+    if (!G.slips.length) return null;
+    for (const b of G.bowls) if (b.s >= 3) { const s = slipFor(b); if (s) { const off = orderDiff(b, s.order); if (!off.length) return 'pass'; if (off.some(o => o.startsWith('extra'))) return 'extra'; } }
+    const best = Math.max(...G.bowls.map(b => b.s));
+    if (best >= 3) return 'tops';
+    if (best === 2) return G.baskets.some(b => b.t >= cookTime()) ? 'ready' : G.baskets.some(b => b.t >= 0) || G.ice > 0 ? null : 'noodle';
+    return best === 1 ? 'broth' : 'tare';
+  }
+  function domSpot(id) {   // an HTML element's centre, in canvas coordinates
+    const r = canvas.getBoundingClientRect(), el = $(id).getBoundingClientRect();
+    return r.width ? { x: (el.left + el.width / 2 - r.left) / r.width * VW, y: (el.top + el.height / 2 - r.top) / r.height * VH } : { x: VW - 80, y: 24 };
+  }
+  TUT.init({
+    sfx: SFX, settings: SETTINGS, img: IMG.aoi, kPhase, guestBtn: () => domSpot('btn-guests'),
+    R: {
+      sign: () => signRect, door: () => doorRect, seat: i => seatRect(i), drop: i => dropRect(i), coins: coinRect,
+      ticket: i => SERVING.ticketRect(i),
+      edge: side => ({ x: side < 0 ? 4 : VW - 44, y: VH / 2 - 24, w: 40, h: 44, screen: true }),   // the edge buttons (screen)
+      tare: type => tareRect(Math.max(0, TARE_SLOTS.indexOf(type))), pot: type => potRect(Math.max(0, BROTH_SLOTS.indexOf(type))),
+      noodle: () => noodleRect, basket: j => basketRect(j), bin: id => (binOf(id) >= 0 ? binRect(binOf(id)) : null), binAt: k => binRect(k),
+      bowl: k => bowlRect(k), pass: () => passRect, tray: i => pickSlot(i), book: () => bookRect,
+      slip: gu => { const s = G.slips.find(o => o.guest === gu); return s && s.x !== undefined ? { x: s.x - 2, y: KL.SLIP_Y - 10, w: ART.SLIP_W + 4, h: ART.slipH(s.order) + 14, screen: true } : null; }   // an order slip on the kitchen rail (screen)
+    },
+    // the guided bowl begins: back to the serving room, a clean kitchen, and enough of each staple for the bowl (Aoi brought some)
+    prep: () => {
+      go(0); G.scam = STATIONS[0].cam; G.drag = null; G.dragBowl = null; G.rmMenu = null;
+      G.bowls = [newBowl(), newBowl()]; G.baskets.forEach(b => { b.t = -1; }); G.pass = []; G.activeBowl = null;
+      for (const id of ['noodle', tareKey('miso'), brothKey('pork'), 'chashu', 'egg', 'scallion']) G.stock[id] = Math.max(G.stock[id] || 0, 2);
+    },
+    after: () => { G.spawnT = rand(4, 8); },
+    PHASE,
+    domRect: sel => {   // an HTML control's box, in canvas coordinates (the HUD: Aoi points at it from below)
+      const el = document.querySelector(sel); if (!el) return null;
+      const r = canvas.getBoundingClientRect(), b = el.getBoundingClientRect(); if (!r.width) return null;
+      return { x: (b.left - r.left) / r.width * VW, y: (b.top - r.top) / r.height * VH, w: b.width / r.width * VW, h: b.height / r.height * VH, screen: true, dom: true };
+    },
+    // the end of the handover (or skipping it): the first real morning, with whatever was earned and bought
+    startDay: () => {
+      const day = (G.tut && G.tut.day0) || G.day;
+      NIGHTSHOP.closePanels(); G.where = null; G.receipt = null; if (G.ui === 'receipt') G.ui = null;
+      G.stalls.forEach(st => { st.guest = null; st.left = 0; st.paid = false; st.bowl = null; st.blind = 1; st.holdUp = 0; });
+      G.walkers = []; G.waiting = 0; G.slips = []; G.pass = []; G.flying = []; G.bowls = [newBowl(), newBowl()]; G.baskets.forEach(b => { b.t = -1; });
+      G.drag = null; G.dragBowl = null; G.rmMenu = null; G.activeBowl = null; G.ticketZoom = -1; G.tutGu = null; G.hold = null;
+      G.day = day; G.time = 0; G.shop = 'morning'; G.signWas = 'night'; G.signT = G.t; G.dayDone = false; G.stats = newStats(); G.quest = null;
+      G.tut.handover = false; G.tut.done = true; G.tut.step = null; delete G.tut.day0;   // (Aoi's last lines play over the morning; the save already counts as handed over)
+      go(0); G.scam = STATIONS[0].cam; G.cam = camTarget(); updateClock(0);
+      saveGame(day);
+    }
+  });
+
   /* ---------- clock (mood only) ---------- */
   /* ---------- shop hours: the sign, closing time, the night ---------- */
   function setShop(state) { G.signWas = G.shop; G.shop = state; G.signT = G.t; SFX.clack(); }
   function openShop() {
     if (G.shop === 'night') { finishDay(); G.day++; G.time = 0; }      // skipping the prep time (04:00-09:00) to the next opening
     saveGame(G.day);
-    setShop('open'); G.stats = newStats(); G.dayDone = false; G.spawnT = rand(4, 10); SFX.bell();   // the first guest of the day, a few seconds after opening
-    toast('Day ' + G.day + ': the shop is open! Guests will start arriving.');
+    setShop('open'); G.stats = newStats(); G.dayDone = false; G.spawnT = TUT.guiding() ? 1.5 : rand(4, 10); SFX.bell();   // the first guest of the day, a few seconds after opening
+    if (!TUT.guiding()) toast('Day ' + G.day + ': the shop is open! Guests will start arriving.');
   }
   function closeShop() {
     setShop('night'); G.waiting = 0; G.spawnT = rand(40, 60);
     saveGame(G.day + 1);
-    toast('21:00, closing time. A few late walk-ins until 04:00, then the day\'s receipt. Aoi\'s supply shop across the street opens at 04:00.');
+    if (!TUT.handover()) toast('21:00, closing time. A few late walk-ins until 04:00, then the day\'s receipt. Aoi\'s supply shop across the street opens at 04:00.');
   }
   // The shop fully closes at 04:00: the day is done and its receipt prints (late walk-ins included). Skipping the night
   // before then prints it straight away. Once per day.
   function finishDay() {
     if (G.dayDone) return;
     G.dayDone = true;
-    G.life.bestDay = Math.max(G.life.bestDay, G.stats.earned); G.life.days++;
+    G.life.bestDay = Math.max(G.life.bestDay, G.stats.earned); if (!TUT.handover()) G.life.days++;   // (the handover is not a day)
     makeReceipt();
   }
   // The sign: opens the shop in the morning; after 04:00 it skips the prep time straight to the next opening.
   function flipSign() {
     if (G.shop === 'open') return say('The shop stays open until 21:00.');
     if (lateOpen()) return say('Late walk-ins until 04:00. Then the shop closes and you can skip the prep time.');
+    if (G.shop === 'night' && TUT.armedFor(G.day + 1)) {   // REPLAY TUTORIAL: skip to the morning, where Aoi is waiting (she has you flip the sign)
+      finishDay(); G.day++; G.time = 0; G.shop = 'morning'; G.signWas = 'night'; G.signT = G.t; SFX.clack(); saveGame(G.day);
+      return;
+    }
     openShop();
   }
   /* ---------- weather: each day may bring one rain spell; while it rains, 25% more guests duck in ---------- */
@@ -1348,16 +1443,16 @@
   function updateClock(dt) {
     updateWeather(dt);
     const wasEvening = isNight();
-    if (G.shop !== 'morning') G.time += dt;                // the clock waits at 09:00 until you open
+    if (G.shop !== 'morning' && !TUT.freeze()) G.time += dt;   // the clock waits at 09:00 until you open (and while Aoi walks you through your first bowl)
     if (G.shop === 'open' && G.time >= PHASE) closeShop();
     else if (G.shop === 'night' && G.time >= PHASE * 2) { G.time = 0; G.day++; G.shop = 'morning'; G.signWas = 'morning'; saveGame(G.day); toast('Good morning! Flip the sign when you are ready to open.'); }
-    else if (G.shop === 'open' && !wasEvening && isNight()) toast('Evening falls. The night crowd is a quieter bunch.');
+    else if (G.shop === 'open' && !wasEvening && isNight() && !TUT.handover()) toast('Evening falls. The night crowd is a quieter bunch.');
     if (G.shop === 'night' && shutHours() && !G.dayDone) {   // 04:00 (or any time after it, if the clock jumped): lights out for the last walk-ins, once a night
       let n = 0;
       G.stalls.forEach((st, i) => { if (st.guest) { G.slips = G.slips.filter(o => o.guest !== st.guest); leaveSeat(i, false); n++; } });
       G.waiting = 0;
       G.signT = G.t; SFX.clack();   // the sign flips to CLOSED
-      toast('04:00. The shop is fully closed until morning' + (n ? ': the last guests head home.' : '.'));
+      if (!TUT.handover()) toast('04:00. The shop is fully closed until morning' + (n ? ': the last guests head home.' : '.'));
       finishDay();
     }
     const h = hour(); G.hour = h;
@@ -1383,6 +1478,7 @@
   function update(dt) {
     G.t += dt;
     updateDialog(dt);
+    TUT.update(dt);
     if (G.receipt && !G.ui && !G.paused && G.mode === 'play' && !G.where) { G.ui = 'receipt'; G.drag = null; G.dragBowl = null; G.receipt.t0 = G.t; SFX.print(); }   // (it waits until you are back from Kitsune-ya)
     if (G.ui === 'receipt') { updateReceipt(dt); return; }
     if (G.lvQueue && G.lvQueue.length && !G.ui && !G.paused && G.mode === 'play' && !G.where && !G.drag && !G.hold) showLevelUp(G.lvQueue.shift());
@@ -1444,7 +1540,7 @@
   // Plain clicks: restock buttons, the recipe book, menu cards, stalls.
   function clicks() {
     const c = [];
-    c.push({ r: { x: K(KL.BOOK.x) - 4, y: KL.BOOK.y - 4, w: KL.BOOK.w + 8, h: KL.BOOK.h + 30 }, fn: () => openUI('book', 'counter') });
+    c.push({ r: bookRect, fn: () => openUI('book', 'counter') });
     c.push({ r: signRect, fn: flipSign });
     // the pass is a doorway: walk through it to the serving room (bowls waiting in it are still picked up as usual)
     const wm = world(G.mouse);
@@ -1452,6 +1548,10 @@
     c.push({ r: doorRect, fn: openStaffDoor });
     c.push({ r: SERVING.MENU_RECT, fn: () => openUI('menu') });   // the menu board on the back wall
     c.push({ r: SERVING.KITCHEN_RECT, fn: () => go(STATIONS.findIndex(s => s.id === 'kitchen')) });   // the kitchen doorway, behind its noren
+    for (let i = 0; i < SL.NSTALL; i++) {   // coins a guest left on the counter: tap to collect them now
+      const st = G.stalls[i];
+      if (!st.guest && st.left > 0 && st.paid) c.push({ r: coinRect(i), fn: () => { clearSeat(i); SFX.coin(); } });
+    }
     for (let i = 0; i < SL.NSTALL; i++) {
       if (!stallOpen(i)) { c.push({ r: SERVING.lockedRect(i), fn: () => lockedStall(i) }); continue; }
       c.push({ r: SERVING.cardRect(i), fn: () => openUI('menu') });   // the stall's own menu card
@@ -1481,8 +1581,10 @@
       return;
     }
     if (G.paused || G.ui) return;
-    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* not supported */ }
     const p = toScreen(e), w = world(p); G.mouse = p;
+    if (TUT.click(p)) return;    // Aoi's bubble (or any click while she is just talking): her next line
+    if (TUT.blocks(p)) return;   // the guided first bowl: clicks outside the highlighted target do nothing
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* not supported */ }
     if (G.where) return NIGHTSHOP.down(p);
     const rc = G.receipt;
     if (rc && !rc.fly && inR(p, receiptRect())) { G.drag = { kind: 'receipt', ox: p.x - rc.x, oy: p.y - rc.y }; SFX.paper(); return; }
@@ -1544,9 +1646,11 @@
     if (G.ui === 'menu' || G.ui === 'road') { if (e.key === 'Escape') closeUI(); return; }
     if (G.paused) { if (e.key === 'Enter') $('modal-btn').click(); return; }
     if (G.where && NIGHTSHOP.key(e)) { e.preventDefault(); return; }
+    if (TUT.key(e.key)) { e.preventDefault(); return; }   // Enter / Space: Aoi's next line
     const k = e.key.toLowerCase(), left = k === 'a' || k === 'arrowleft', right = k === 'd' || k === 'arrowright';
     if (k.length === 1 && cheat(k)) return;
-    if (G.where) { if (k === 'escape') openPause(); else if (k === 'm') { muteBefore = muted; $('mute').click(); } return; }
+    if (TUT.guiding() && !G.where && (/^Digit[0-9]$/.test(e.code) || k === 'tab')) { e.preventDefault(); return; }   // (the guided bowl goes one highlighted thing at a time)
+    if (G.where) { if (k === 'escape') openPause(TUT.guiding() ? 'skiptut' : undefined); else if (k === 'm') { muteBefore = muted; $('mute').click(); } return; }
     if (left || right) {
       const side = right ? 1 : -1;
       if (!e.repeat && atPanEnd(side) && G.st + side >= 0 && G.st + side < STATIONS.length) { e.preventDefault(); go(G.st + side); }   // at the end of a room: walk on
@@ -1558,7 +1662,7 @@
     }
     else if (STATIONS[G.st].id === 'kitchen' && k === 'tab') { e.preventDefault(); G.activeBowl = (activeIndex() + 1) % G.bowls.length; SFX.tap(); }
     else if (k === '1' || k === '2') go(+k - 1);
-    else if (k === 'escape') { if (G.rmMenu) G.rmMenu = null; else if (G.drag) { G.drag = null; G.dragBowl = null; } else openPause(); }
+    else if (k === 'escape') { if (G.rmMenu) G.rmMenu = null; else if (G.drag) { G.drag = null; G.dragBowl = null; } else if (TUT.guiding()) openPause('skiptut'); else openPause(); }   // (during the guided bowl: skip it, after a confirm)
     else if (k === 'm') { muteBefore = muted; $('mute').click(); }
   });
   // held A / D keys (for panning the kitchen page)
@@ -1577,7 +1681,7 @@
     e.preventDefault(); panBy((Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * 0.9);
   }, { passive: false });
   STATIONS.forEach((s, i) => { $('tab-' + s.id).onclick = () => { if (G.where) return NIGHTSHOP.leaveTo(i); go(i); }; });
-  $('tab-street').onclick = () => { if (G.mode === 'play' && !G.ui && !G.where) NIGHTSHOP.enter('street'); };
+  $('tab-street').onclick = () => { if (G.mode === 'play' && !G.ui && !G.where && !TUT.guiding()) NIGHTSHOP.enter('street'); };
   UI.mount();
   $('mute').onclick = () => {
     muted = !muted; const label = muted ? 'Sound off (M)' : 'Sound on (M)';
@@ -1641,7 +1745,7 @@
   function setText(id, v) { if (last[id] !== v) { last[id] = v; $(id).textContent = v; } }
   function hud(dt) {
     const h = hour(), hh = Math.floor(h), mm = Math.floor((h - hh) * 6) * 10;
-    setText('day', 'Day ' + G.day);
+    setText('day', TUT.handover() ? 'Handover' : 'Day ' + G.day);   // (Aoi's practice run is not a numbered day)
     setText('clock', String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0'));
     setText('shopstate', G.shop === 'open' || lateOpen() ? 'Open' : 'Closed');
     $('shopstate').classList.toggle('open', G.shop === 'open' || lateOpen());
@@ -1654,7 +1758,8 @@
     const calling = G.stalls.filter(s => s.guest && s.guest.state === 'call').length;
     setText('badge-kitchen', G.slips.length ? String(G.slips.length) : '');
     setText('badge-serving', calling ? '!' : G.pass.length ? String(G.pass.length) : '');
-    setText('hint', SETTINGS.hints ? hint() : G.flashT > 0 ? G.flash : '');   // hints are optional (off by default); warnings always show briefly
+    const binTip = G.hoverBin && !G.drag && G.flashT <= 0 ? TOP_NAME[G.hoverBin] + (topOn(G.hoverBin) ? ': ' + G.stock[G.hoverBin] + ' left' : ' (locked)') : '';   // a bin's full name while it is hovered
+    setText('hint', TUT.guiding() ? '' : binTip || (hintsOn() ? hint() : G.flashT > 0 ? G.flash : ''));   // hints are optional (on for a new save's first 3 days); warnings always show briefly; quiet while Aoi guides
     $('hint').classList.toggle('warn', G.flashT > 0);
     $('bubbles').style.visibility = !G.where && STATIONS[G.st].id === 'serving' && settled() && G.ui !== 'dialog' ? 'visible' : 'hidden';
     $('tab-street').classList.toggle('gone', !NIGHTSHOP.streetOpen());
@@ -1668,13 +1773,13 @@
       if (bubbleT[i] > 0) { bubbleT[i] -= dt; if (bubbleT[i] <= 0) el.classList.remove('show'); }
     }
     if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').classList.remove('show'); }
-    if (G.where) { G.hover = null; G.tip = null; canvas.style.cursor = NIGHTSHOP.cursor(); return; }
+    if (G.where) { G.hover = null; G.hoverBin = null; G.tip = null; canvas.style.cursor = NIGHTSHOP.cursor(); return; }
     const w = world(G.mouse);
-    G.hover = null; let pointer = false;
+    G.hover = null; G.hoverBin = null; let pointer = false;
     const overPaper = G.mouse && (!G.ui || G.ui === 'receipt') && !G.drag && ((G.receipt && !G.receipt.fly && inR(G.mouse, receiptRect())) || (!G.ui && slipAt(G.mouse)));
-    if (!G.ui && !G.drag && w && !overPaper) {
+    if (!G.ui && !G.drag && w && !overPaper && !TUT.blocks(G.mouse)) {   // (locked things do not light up during the guided bowl)
       const c = clicks().find(c => inR(w, c.r));
-      if (c) { G.hover = c.r; pointer = true; } else { const s = sources().find(s => inR(w, s.r)); if (s) G.hover = s.r; }
+      if (c) { G.hover = c.r; pointer = true; } else { const s = sources().find(s => inR(w, s.r)); if (s) { G.hover = s.r; G.hoverBin = s.binId || null; } }
     }
     G.tip = !G.ui && !G.drag && w && !overPaper ? bowlAt(w) : null;
     canvas.style.cursor = G.drag ? 'grabbing' : pointer ? 'pointer' : (G.hover || overPaper) ? 'grab' : 'default';
@@ -1701,7 +1806,7 @@
         lines.push([MENU[id.type].short, MENU[id.type].c]);
         const mods = ART.slipMods(id);
         for (const md of mods) lines.push([md.t, md.add ? '#2f7a3a' : '#c8302a']);
-        if (!mods.length) lines.push(['AS ON THE MENU', FADED]);
+        if (!mods.length) lines.push(['As on the menu', FADED]);
       }
       if (b.cold) lines.push(['COLD NOODLES', '#2f7aa8']);
     }
@@ -1734,7 +1839,7 @@
     }
     if ((G.shop === 'morning' || (G.shop === 'night' && !lateOpen())) && p >= 1) {   // (no label while late walk-ins keep it OPEN)
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
-      const txt = G.shop === 'night' ? 'TAP: SKIP PREP TIME' : 'TAP TO OPEN', half = PX.textW(txt) / 2 + 14;
+      const txt = G.shop === 'night' ? 'Tap: skip prep time' : 'TAP TO OPEN', half = PX.textW(txt) / 2 + 14;
       SCENE.label(g, txt, Math.max(cx, Math.round(G.cam) + half + 4), S.y + S.h + 5 + bob, '#7a2f1a');   // (kept inside the screen)
     }
   }
@@ -1755,14 +1860,15 @@
   /* ---------- end-of-day receipt: prints at closing, fling it away to toss it ---------- */
   function makeReceipt() {
     const s = G.stats, L = [];
-    L.push({ c: 'COZY RAMEN', col: '#8a2a1a' }, { c: 'DAY ' + G.day + ' TOTAL', col: '#7a5230' }, { hr: 1 });
+    L.push({ c: 'COZY RAMEN', col: '#8a2a1a' }, { c: TUT.handover() ? 'HANDOVER' : 'DAY ' + G.day + ' TOTAL', col: '#7a5230' }, { hr: 1 });
     const soldTypes = Object.keys(MENU).filter(k => s.sold[k] > 0);
     for (const type of soldTypes.length ? soldTypes : ['miso']) L.push({ l: MENU[type].short.split(' ')[0] + ' X' + s.sold[type], r: s.rev[type] + 'G' });
     L.push({ l: 'TIPS', r: s.tips + 'G' }, { hr: 1 }, { l: 'PROFIT', r: (s.sales + s.tips) + 'G', col: '#2f7a3a' }, { hr: 1 });
     L.push({ l: 'BOWLS SOLD', r: String(s.served) }, { l: 'PERFECT', r: String(s.perfect) }, { l: 'TURNED AWAY', r: String(s.declined) }, { hr: 1 });
-    L.push({ c: 'THANK YOU!', col: '#8a2a1a' }, { c: 'FLING AWAY TO TOSS', col: '#a8987a' });
+    L.push({ c: 'THANK YOU!', col: '#8a2a1a' }, { c: 'Fling away to toss', col: '#a8987a' });
     const hx = Math.round(VW / 2 - RW / 2), hy = Math.max(36, Math.round(VH / 2 - (16 + L.length * 17 + 8) / 2));
     G.receipt = { lines: L, x: hx, y: hy, hx, hy, h: 16 + L.length * 17 + 8, t0: G.t, fly: null, px: hx, py: hy, vx: 0, vy: 0 };   // prints once it becomes the active popup
+    if (G.tut && G.tut.fresh && G.day === 1 && !G.tut.handover && !TUT.seen('d.receipt')) { G.receipt.note = true; G.tut.seen.push('d.receipt'); }   // "Not bad for day one! -A"
   }
   const receiptRect = () => { const r = G.receipt; return { x: r.x, y: r.y, w: RW, h: r.h }; };
   function updateReceipt(dt) {
@@ -1806,6 +1912,7 @@
       PX.text(g, L.l, x + 10, ly, L.col || '#4a3226');
       PX.text(g, L.r, x + RW - 10 - PX.textW(L.r), ly, L.col || '#4a3226');
     });
+    if (r.note && p >= 1) TUT.receiptNote(g, x + RW - 86, y + 44);   // a new save's first day: Aoi's memo pinned to the corner
   }
 
   /* ---------- render ---------- */
@@ -1863,7 +1970,7 @@
     const cam = Math.round(G.cam);
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, VW, VH);
-    if (G.where) { NIGHTSHOP.draw(ctx); if (G.ui === 'receipt' && G.receipt) { ctx.fillStyle = 'rgba(14,8,20,0.55)'; ctx.fillRect(0, 0, VW, VH); drawReceipt(ctx); } return; }
+    if (G.where) { NIGHTSHOP.draw(ctx); if (G.ui === 'receipt' && G.receipt) { ctx.fillStyle = 'rgba(14,8,20,0.55)'; ctx.fillRect(0, 0, VW, VH); drawReceipt(ctx); } TUT.draw(ctx); return; }   // (Aoi walks you through Kitsune-ya in the handover)
     ctx.save(); ctx.translate(-cam, 0);
     if (cam < SL.X0 + SL.W) { ctx.save(); ctx.translate(SL.X0, 0); SERVING.frame(ctx, G); ctx.restore(); }
     if (cam + VW > KL.X0) { ctx.save(); ctx.translate(KL.X0, 0); KITCHEN.frame(ctx, G); ctx.restore(); }
@@ -1910,6 +2017,7 @@
       if (hot) { const name = STATIONS[ni].name.toUpperCase(), w = PX.textW(name) + 12; SCENE.label(ctx, name, side < 0 ? 48 + w / 2 : VW - 48 - w / 2, VH / 2 - 7); }
     }
     drawTip(ctx);
+    TUT.draw(ctx);         // Aoi, her highlight and her notes
     NIGHTSHOP.draw(ctx);   // only the fade, while heading out to the street
   }
 
@@ -1945,16 +2053,21 @@
     document.body.classList.add('title'); TITLE.enter(); music(true);
   }
   function startPlay(msg) {
-    G.mode = 'play'; music(false); document.body.classList.remove('title');
+    G.mode = 'play'; music(false); document.body.classList.remove('title'); TUT.reset();
     for (let i = 0; i < SL.NSTALL; i++) { $('bubble-' + i).classList.remove('show'); bubbleT[i] = 0; }
     STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === G.st));
     updateClock(0); canvas.style.cursor = 'default';
-    toast(msg);
+    if (msg) toast(msg);
   }
-  function newGame() { clearSave(); NIGHTSHOP.closePanels(); Object.assign(G, fresh()); startPlay('Welcome to Cozy Ramen! Tap the CLOSED sign on the counter to open.'); }
+  // guided: the player answered "Yes, please" to Aoi's offer to show them around (else "I've got this": notes only)
+  function newGame(guided) {
+    clearSave(); NIGHTSHOP.closePanels(); Object.assign(G, fresh());
+    G.tut = TUT.newState(!!guided); G.aoiMet = true;   // (Aoi handed you the stall: you have met)
+    startPlay(guided ? null : 'Welcome to Cozy Ramen! Tap the CLOSED sign on the counter to open.');
+  }
   function continueGame() {
     const s = loadSave(); if (!s) return newGame();
-    Object.assign(G, fresh()); G.day = s.day; G.gold = s.gold || 0; G.met = s.met || []; G.nextNum = s.nextNum || 1;
+    Object.assign(G, fresh()); G.day = s.day; G.gold = s.gold || 0; G.met = (s.met || []).filter(id => GUESTS.some(gt => gt.id === id)); G.nextNum = s.nextNum || 1;
     G.level = s.level || 1; G.xp = s.xp || 0;
     G.xp = Math.max(G.xp, LEVEL_XP[Math.min(G.level, LEVEL_XP.length) - 1]);   // (older saves were on a gentler XP curve: keep their level, start its bar at zero) G.owned = (s.owned || []).filter(id => nodeFor(id));
     G.life = Object.assign(fresh().life, s.life || {}); G.region = regionOpen(s.region || 0) ? s.region || 0 : 0;
@@ -1976,9 +2089,12 @@
     if ('tare' in st) { st[tareKey('miso')] = st.tare; delete st.tare; }
     if ('broth' in st) { st[brothKey('pork')] = st.broth; delete st.broth; }
     for (const id in st) if (id in G.stock) G.stock[id] = st[id];
-    startPlay('Day ' + G.day + '. Good morning! Flip the sign when you are ready to open.');
+    // Aoi's tutorial: saves from before it never see it (every note counts as pinned); a guided bowl left unfinished starts over this morning
+    G.tut = s.tut ? TUT.load(s.tut) : TUT.oldState();
+    if (!G.tut.done) G.tut.armDay = Math.min(G.tut.armDay || G.day, G.day);
+    startPlay(G.tut.done ? 'Day ' + G.day + '. Good morning! Flip the sign when you are ready to open.' : null);
   }
-  function openPause() { G.ui = 'pause'; G.drag = null; G.dragBowl = null; TITLE.openPause(); }
+  function openPause(screen) { G.ui = 'pause'; G.drag = null; G.dragBowl = null; TITLE.openPause(screen); }
   function applySettings() { saveSettings(); fit(); if (mgain) mgain.gain.value = muted ? 0 : SETTINGS.music / 10 * 0.6; }
   function toggleFullscreen() {
     try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) { /* not supported */ }
@@ -1986,8 +2102,14 @@
   TITLE.init({
     IMG, settings: SETTINGS, applySettings, toggleFullscreen,
     openGuests: () => openUI('guests'),
-    saveInfo: loadSave, met: () => { const s = G.mode === 'play' ? null : loadSave(); return G.mode === 'play' ? G.met : (s && s.met) || []; },
+    saveInfo: loadSave, met: metList,
     onContinue: continueGame, onNew: newGame, onResume: () => { G.ui = null; }, onQuit: enterTitle,
+    // Aoi's tutorial: the hints setting, REPLAY TUTORIAL, skipping the guided bowl, and the notes pinned so far
+    hintsOn, setHints: v => { SETTINGS.hints = v; SETTINGS.hintsUser = true; applySettings(); },
+    tutArmed: () => G.mode === 'play' && TUT.armed(),
+    replayTut: () => { if (G.mode !== 'play' || !G.tut) return; TUT.replay(); toast(G.shop === 'morning' ? 'Aoi is on her way over.' : 'Aoi will drop by first thing tomorrow.'); },
+    onSkipTut: () => { TUT.skip(); G.ui = null; },
+    tutSeen: () => { if (G.mode === 'play' && G.tut) return G.tut.seen; const s = loadSave(); return s ? (s.tut ? s.tut.seen || [] : TUT.ALL_IDS) : []; },
     startMusic: () => { if (G.mode === 'title') music(true); if (actx && actx.state === 'suspended') actx.resume(); },
     cursor: c => { canvas.style.cursor = c; },
     sfx: {
@@ -2048,8 +2170,22 @@
       G.region = STOPS[Math.max(0, upto - 1)].region; KITCHEN.refresh(); openUI('road');
     }
   }
-  Promise.all([PX.loadFont(), ...Object.values(IMG).map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; }))]).then(() => {
-    if (params.has('shot')) shot(params.get('shot')); else enterTitle();
-    requestAnimationFrame(loop);
-  });
+  // the browser-tab icon: the game's emblem
+  try {
+    const ic = PX.mk(32, 32), ig = ic.getContext('2d'); SCENE.emblem(ig, 16, 16, 0.56);
+    const link = document.querySelector('link[rel="icon"]') || Object.assign(document.createElement('link'), { rel: 'icon' });
+    link.type = 'image/png'; link.href = ic.toDataURL(); document.head.appendChild(link);
+  } catch (e) { /* the icon is optional */ }
+
+  // Loading: the font, then every guest's portrait. The loading screen (js/loading.js) shows it as a bowl filling up,
+  // then waits for a tap (which also unlocks sound), then the title screen. (?shot= test pages skip straight in.)
+  let fontDone = false;
+  PX.pixDOM($('stage'));   // numbers in the HTML overlay (HUD, store, books) use the pixel font too
+  const ready = Promise.all([PX.loadFont().then(() => { fontDone = true; }), ...Object.values(IMG).map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; }))]);
+  const imgs = Object.values(IMG);
+  if (params.has('shot')) ready.then(() => { shot(params.get('shot')); requestAnimationFrame(loop); });
+  else document.body.classList.add('title'), LOADING.run(canvas,   // (the title look hides the HUD while it loads)
+    () => { const n = imgs.filter(im => im.complete).length; return { p: (fontDone ? 0.3 : 0) + 0.7 * n / imgs.length, n: imgs.length, done: fontDone && n === imgs.length }; },
+    () => music(true),
+    () => { enterTitle(); prev = performance.now(); requestAnimationFrame(loop); });
 })();

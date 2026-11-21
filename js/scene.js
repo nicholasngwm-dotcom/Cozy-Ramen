@@ -131,6 +131,23 @@ const SCENE = (() => {
     textC(g, s, cx, y + 2, low ? '#ff8a7a' : '#f6e6c0');
   }
 
+  /* Kitchen labels: one style for bins, crocks, pots, the noodle tray and the oil bottle.
+     nameplate: a 13px walnut strip w wide (top at y), its name centred in the pixel font at FS 1.
+     stockBadge: a dark badge with a 1px light outline whose bottom-right corner sits at (rx, by), the count
+     right-aligned in the pixel font at FS 2; red at `low` or less (and at 0). */
+  function nameplate(g, s, cx, y, w, muted) {
+    const x = Math.round(cx - w / 2);
+    rect(g, x - 1, y, w + 2, 13, DK); rect(g, x, y + 1, w, 11, PAL.walnut); rect(g, x, y + 1, w, 1, '#c9962e');
+    PX.setFont(1); textC(g, s, x + w / 2, y + 4, muted ? '#a8967a' : '#f6e6c0'); PX.setFont(2);
+  }
+  function stockBadge(g, n, rx, by, low = 3) {
+    PX.setFont(2, 'pixel');
+    const s = String(n), W = PX.textW(s) + 7, H = 20, x = Math.round(rx - W), y = Math.round(by - H);
+    rect(g, x, y, W, H, DK); rect(g, x + 1, y + 1, W - 2, H - 2, '#e8d4a8'); rect(g, x + 2, y + 2, W - 4, H - 4, '#2a1a1e');
+    PX.textR(g, s, x + W - 3, y + 5, n <= low ? '#ff6a5a' : '#fff6e0');
+    PX.setFont(2);
+  }
+
   function sky(g, G, r) {
     const n = G.nightF, d = G.duskF;
     let top = mix('#9fd4e6', '#151a3a', n), bot = mix('#f4ecc8', '#2c3160', n);
@@ -205,6 +222,57 @@ const SCENE = (() => {
     else if (type === 'note') { rect(g, x + 2, y - 8, 2, 13, '#4a3226'); ell(g, x - 1, y + 5, 4, 3, '#4a3226'); rect(g, x + 2, y - 8, 7, 3, '#4a3226'); }
     else if (type === 'call') { rect(g, x - 1, y - 9, 4, 12, '#d9342b'); rect(g, x - 1, y + 5, 4, 4, '#d9342b'); }
     else if (type === 'dots') { for (let k = -1; k <= 1; k++) rect(g, x + k * 6 - 1, y, 3, 3, '#4a3226'); }
+    else if (type === 'q') { rect(g, x - 3, y - 9, 8, 3, '#3a6ab0'); rect(g, x + 3, y - 7, 3, 5, '#3a6ab0'); rect(g, x, y - 3, 4, 3, '#3a6ab0'); rect(g, x, y + 4, 4, 4, '#3a6ab0'); }
+    else if (type === 'sparkle') { for (const [ox, oy, s] of [[0, -1, 5], [-7, 4, 2], [7, 5, 2]]) { rect(g, x + ox - s, y + oy, 2 * s + 1, 1, '#e0a020'); rect(g, x + ox, y + oy - s, 1, 2 * s + 1, '#e0a020'); dot(g, x + ox, y + oy, '#fff6c0'); } }
+  }
+
+  /* The game's emblem: a steaming bowl of ramen with chopsticks, on a lacquer-and-brass medallion. Used big on the
+     loading screen (k = 1, about 54px across), small on the title banner and as the browser-tab icon (k about 0.55).
+     t animates the steam (big size only). */
+  function emblem(g, cx, cy, k = 1, t = 0) {
+    const s = v => Math.round(v * k), R = s(26), big = k >= 0.8;
+    // the medallion: dark outline, brass ring with a lit top, a lacquer face with a soft highlight
+    ell(g, cx, cy, R + 1, R + 1, DK); ell(g, cx, cy, R, R, '#9a6a22'); ell(g, cx, cy - 1, R, R - 1, '#c9962e'); ell(g, cx - 1, cy - s(2), R - s(4), R - s(5), '#e0b040');
+    ell(g, cx, cy, R - s(3), R - s(3), DK); ell(g, cx, cy, R - s(4), R - s(4), '#6e1a14'); ell(g, cx - s(3), cy - s(5), R - s(11), R - s(13), '#8a2418');
+    const by = cy + s(4), rx = s(16), ry = Math.max(2, s(5));
+    // steam: three wisps curling up from the broth
+    if (big) for (let i = 0; i < 3; i++) for (let q = 0; q < 7; q++) {
+      const x = cx - 8 + i * 8 + Math.round(Math.sin(t * 2.6 + q * 0.8 + i * 2.1) * 2), y = by - 5 - q * 2 - (i === 1 ? 2 : 0);
+      if ((q + Math.floor(t * 6) + i) % 7 < 6) rect(g, x, y, 1, 2, q > 4 ? '#e8d8c8' : '#fffaf0');
+    }
+    // chopsticks, resting across the bowl (behind the far rim)
+    for (const d of [0, s(5)]) { line(g, cx + s(2) + d, by - s(1), cx + s(19) + d, by - s(19), DK, big ? 3 : 2); line(g, cx + s(2) + d, by - s(1), cx + s(19) + d, by - s(19), '#e8c890'); }
+    // the bowl: a cream body with a red band, on a little foot
+    lathe(g, cx, [[by, rx + 1], [by + s(6), rx], [by + s(10), rx - s(4)], [by + s(13), rx - s(9)]], DK);
+    lathe(g, cx, [[by, rx], [by + s(6), rx - 1], [by + s(10), rx - s(5)], [by + s(12), rx - s(10)]], '#f6ead0');
+    lathe(g, cx, [[by + s(4), rx - 1], [by + s(6), rx - 1]], '#c8302a');
+    if (big) lathe(g, cx, [[by + s(9), rx - s(4)], [by + s(11), rx - s(7)]], '#d8c8a8');
+    rect(g, cx - s(6), by + s(13), s(12) + 1, Math.max(1, s(2)), DK);
+    // the rim, the broth and what floats in it
+    ell(g, cx, by, rx + 1, ry + 1, DK); ell(g, cx, by, rx, ry, '#fbf2dc');
+    ell(g, cx, by, rx - s(2), Math.max(1, ry - 1), '#c8792e'); ell(g, cx - 1, by - (big ? 1 : 0), rx - s(4), Math.max(1, ry - 2), '#e09a3a');
+    if (!big) {   // the small size (title banner, browser tab): just a few clear pixels
+      rect(g, cx - 2, by, 4, 1, '#ffe9a0');                                                       // noodles
+      rect(g, cx - 7, by - 2, 4, 3, DK); rect(g, cx - 6, by - 1, 2, 1, '#fffaf0'); dot(g, cx - 5, by - 2, '#f0a020');   // egg
+      rect(g, cx + 3, by - 4, 3, 4, DK); rect(g, cx + 4, by - 3, 1, 3, '#2f5a3a');               // nori
+      return;
+    }
+    for (const [ox, oy] of [[-9, 1], [-4, 2], [1, 1], [6, 2], [-6, -1], [3, -1]]) { rect(g, cx + ox, by + oy, 3, 1, '#ffe9a0'); dot(g, cx + ox + 1, by + oy - 1, '#fff6c8'); }   // noodles
+    ell(g, cx - 7, by - 1, 4, 3, DK); ell(g, cx - 7, by - 1, 3, 2, '#fffaf0'); ell(g, cx - 7, by - 1, 2, 1, '#f0a020');   // a halved egg
+    rect(g, cx + 6, by - 6, 4, 6, DK); rect(g, cx + 7, by - 5, 2, 5, '#1c3626');                // nori
+    ell(g, cx + 1, by, 4, 2, '#c8705a'); ell(g, cx + 1, by - 1, 3, 1, '#f0b098');                // chashu
+    for (const [ox, oy] of [[-2, -2], [4, 2], [-11, 1], [9, -1]]) { dot(g, cx + ox, by + oy, '#5fbf40'); dot(g, cx + ox + 1, by + oy, '#2f7a2a'); }   // spring onion
+  }
+
+  // The white glove pointer (title menus, settings, and Aoi's tutorial). dir -1 points left, 1 points right.
+  function glove(g, x, y, dir) {
+    g.save(); g.translate(Math.round(x), Math.round(y)); if (dir > 0) g.scale(-1, 1);
+    rect(g, -8, -3, 13, 6, DK); rect(g, 3, -6, 14, 13, DK); rect(g, 15, -4, 5, 9, DK);
+    rect(g, -7, -2, 12, 4, '#fff6e0'); rect(g, -7, -2, 12, 1, '#ffffff');
+    rect(g, 4, -5, 12, 11, '#fff6e0'); rect(g, 4, 3, 12, 3, '#e2d2b2'); rect(g, 4, -5, 12, 1, '#ffffff');
+    for (const k of [7, 10, 13]) rect(g, k, -2, 1, 4, '#d2c09c');
+    rect(g, 16, -3, 3, 7, '#c8443a'); rect(g, 16, -3, 3, 1, '#e2685c');
+    g.restore();
   }
 
   // Corner brackets around a rectangle; strong = brighter and thicker.
@@ -315,5 +383,5 @@ const SCENE = (() => {
     }
   }
 
-  return { soft, rain, wood, plaster, tiles, ao, pool, contact, frameRect, lantern, label, tag, tagInk, chip, sky, clock, part, emote, brackets, night, rnd, view };
+  return { soft, rain, wood, plaster, tiles, ao, pool, contact, frameRect, lantern, label, tag, tagInk, chip, nameplate, stockBadge, sky, clock, part, emote, emblem, glove, brackets, night, rnd, view };
 })();

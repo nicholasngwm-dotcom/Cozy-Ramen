@@ -19,7 +19,7 @@ const GUESTBOOK = (() => {
     naida: [87, 0, 75], kira: [37, 21, 81], mara: [45, 0, 76], misty: [33, 6, 75], morticia: [26, 0, 75], vyra: [101, 20, 80],
     sylva: [77, 0, 66], fae: [67, 18, 85], mortis: [21, 55, 85],
     lucaria: [14, 20, 67], maddy: [51, 4, 80], snailia: [41, 47, 78], ursula: [118, 16, 80], aurora: [113, 43, 61], talia: [50, 77, 64],
-    lilith: [102, 6, 66], abyzara: [76, 64, 82], adeline: [44, 13, 71], aurelia: [61, 0, 85], calista: [28, 0, 75], ember: [46, 16, 69], aoi: [44, 12, 72],
+    lilith: [102, 6, 66], abyzara: [76, 64, 82], adeline: [44, 13, 71], aurelia: [61, 0, 85], calista: [28, 0, 75], aoi: [44, 12, 72],
     fynja: [48, 22, 78], glacia: [62, 29, 80], rizz: [32, 0, 66], willka: [63, 2, 75], zyra: [82, 28, 80]
   };
   function faceOf(gt) {

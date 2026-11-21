@@ -248,6 +248,11 @@ const TOP_NAME = { chashu: 'Chashu', egg: 'Ramen egg', nori: 'Nori', scallion: '
 const TOP_SHORT = { chashu: 'CHASHU', egg: 'EGG', nori: 'NORI', scallion: 'SCALLION', menma: 'BAMBOO', chili: 'CHILI', corn: 'CORN', butter: 'BUTTER', moyashi: 'SPROUTS', bokchoy: 'BOK CHOY', kikurage: 'WOOD EAR', naruto: 'NARUTO',
   torichashu: 'CHICKEN', wakame: 'WAKAME', benishoga: 'GINGER', yuzupeel: 'YUZU', minced: 'MINCE', garlicchip: 'GARLIC', sesame: 'SESAME', aburaage: 'ABURAAGE', kakuni: 'KAKUNI', shiitake: 'SHIITAKE',
   clam: 'CLAMS', shrimp: 'SHRIMP', mayu: 'MAYU', sunpetal: 'SUNPETAL', mandrake: 'MANDRAKE', glowcap: 'GLOWCAP', frostleaf: 'FROST', emberpep: 'EMBER', kraken: 'KRAKEN', cockegg: 'GOLD EGG', wyvern: 'WYVERN' };
+// Bin labels: the kitchen prints each name under its bin in the 5x7 pixel font, and a bin is 44px wide (42px of text).
+// Names too wide for that get a short form here (the hint bar shows the full name while the bin is hovered).
+const TOP_BIN = { scallion: 'SCALL.', bokchoy: 'BOK CH.', kikurage: 'WD EAR', aburaage: 'ABURA.', shiitake: 'SHIITA.',
+  sunpetal: 'SUNPET.', mandrake: 'MANDR.', cockegg: 'G. EGG' };
+const binName = id => TOP_BIN[id] || TOP_SHORT[id];
 const TOP_DESC = {
   chashu: 'Slow-braised pork belly', egg: 'Soft egg marinated in soy', nori: 'Toasted seaweed sheet', scallion: 'Fresh sliced spring onion',
   menma: 'Seasoned bamboo shoots', chili: 'Fiery chili threads', corn: 'Sweet butter corn', butter: 'A melting pat of butter',

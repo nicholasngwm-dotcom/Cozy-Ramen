@@ -125,7 +125,7 @@ const NIGHTSHOP = (() => {
     cam: 0, camT: 0, pan: 0, drag: null, fade: 0, fadeDir: 0, then: null,
     door: 0, doorT: 0, sdoor: 0, sdoorT: 0, rdoor: 0, rdoorT: 0,
     aoi: { x: 400, tx: 400, face: -1, walk: 0, next: 3, hop: 0 }, bubble: null,
-    basket: [], ui: null, sel: null, qty: 1, view: 'menu', hover: null, edge: 0, closing: 0,
+    basket: [], ui: null, sel: null, qty: 1, view: 'menu', hover: null, edge: 0, closing: 0, focus: null,
     talk: { full: '', shown: 0 }, parts: [], pops: [], flys: [], cartT: -9, receipt: null, lastSale: null, bagT: -9, ringT: -9, keys: { l: false, r: false }
   };
   const W = p => p && { x: p.x + (G.where === 'store' ? S.cam : 0), y: p.y };
@@ -148,7 +148,7 @@ const NIGHTSHOP = (() => {
     }
   }
   function leaveStore() {
-    closePanels(); S.doorT = 1; H.sfx.slide();
+    closePanels(); S.doorT = 1; H.sfx.slide(); S.focus = null;
     if (S.basket.length) bubble('I will keep your cart by the till until you come back.');
     setTimeout(() => fadeTo(() => { G.where = 'street'; S.sdoor = 1; S.sdoorT = 0; H.sfx.slide(); }), 300);
   }
@@ -157,7 +157,10 @@ const NIGHTSHOP = (() => {
   /* ---------- Aoi ---------- */
   const GREET = ['Irasshaimase! Welcome to Kitsune-ya.', 'Ah, the ramen chef. Take your time, the night is long.', 'Welcome back! The cooler is full tonight.', 'Evening, chef. Mind the step. And my tail.'];
   function greet() {
-    if (!G.aoiMet) { G.aoiMet = true; bubble('Welcome to Kitsune-ya! I am Aoi. Ingredients, tools, the odd rare thing. Pay me at the counter.'); }
+    const tl = H.tutGreet ? H.tutGreet() : null;   // a new save's first visit: Aoi points out a staple to restock (tutorial.js)
+    if (tl === '') { G.aoiMet = true; }   // (Aoi's handover: her tutorial panel does the talking)
+    else if (tl) { G.aoiMet = true; bubble(tl, 6); focusRestock(); }
+    else if (!G.aoiMet) { G.aoiMet = true; bubble('Welcome to Kitsune-ya! I am Aoi. Ingredients, tools, the odd rare thing. Pay me at the counter.'); }
     else bubble(pick(GREET));
     S.aoi.hop = 0.5;
     rescue();
@@ -171,6 +174,12 @@ const NIGHTSHOP = (() => {
     G.aoiGift = G.day; for (const id of dry) G.stock[id] = (G.stock[id] || 0) + packSize(id);
     H.save();
     setTimeout(() => bubble('Your kitchen looks bare, chef. A pack of each staple, on the house. Just this once!'), 3800);
+  }
+  // The tutorial's restock highlight: the staple you have least of, brought into view (it goes once something is in the cart).
+  function focusRestock() {
+    const id = ['noodle', 'chashu', 'egg', 'scallion'].reduce((a, b) => ((G.stock[b] || 0) < (G.stock[a] || 0) ? b : a));
+    const s = SLOTS.find(o => o.id === id); if (!s) return;
+    S.focus = id; S.camT = clamp(s.x - VW / 2, 0, SW - VW);
   }
   function bubble(msg, t = 4.2) { S.bubble = { msg, t, max: t }; }
   function updateAoi(dt) {
@@ -197,6 +206,7 @@ const NIGHTSHOP = (() => {
     if (n <= 0) { H.sfx.bad(); bubble(it.kind === 'gear' ? 'One of those is plenty, chef.' : 'That is all I have of that tonight.'); return false; }
     const b = S.basket.find(b => b.id === id);
     if (b) b.n += n; else S.basket.push({ id, n });
+    S.focus = null;
     H.sfx.add();
     const sl = SLOTS.find(q => real(q.id) === id), from = S.ui === 'talk' || !sl ? { x: S.aoi.x, y: CTOP - 60 } : { x: sl.x, y: sl.base - 18 };
     S.flys.push({ id, x: from.x - S.cam, y: from.y, t: 0, n });
@@ -220,7 +230,7 @@ const NIGHTSHOP = (() => {
       else if (it.kind === 'gear' && !G.gear.includes(b.id)) { G.gear.push(b.id); H.toast(it.name + ' installed in your kitchen!'); }
       if (it.kind !== 'gear') M.left[b.id] -= b.n;
     }
-    S.basket = []; S.bagT = G.t; S.ringT = G.t; S.aoi.hop = 0.5;
+    S.basket = []; S.bagT = G.t; S.ringT = G.t; S.aoi.hop = 0.5; S.paidT = G.t;
     H.sfx.coin(); H.sfx.ring();
     for (let i = 0; i < 10; i++) S.parts.push({ x: COUNTER.x + 70 + Math.random() * 120, y: CTOP - 8, k: -i * 0.05, x0: 0, y0: 0 });
     S.pops.push({ str: '-' + total + 'G', x: REG.x + 16, y: CTOP - 60, c: '#ffd76a', life: 1.4 });
@@ -441,7 +451,7 @@ const NIGHTSHOP = (() => {
     if (inR(w, { x: a.x - 46, y: 216, w: 92, h: CTOP - 216 }) || inR(w, COUNTER)) return { kind: 'aoi', x: a.x, y: 196, label: S.basket.length ? 'AOI: PAY' : 'AOI' };
     for (const s of SLOTS) if (inR(w, s.r)) {
       const it = item(s.id);
-      const lab = !it.on ? 'LOCKED' : it.bought ? 'IN YOUR KITCHEN' : (it.sale ? 'SALE: ' : '') + it.name.toUpperCase() + ' ' + it.price + 'G';
+      const lab = !it.on ? 'LOCKED' : it.bought ? 'IN YOUR KITCHEN' : (it.sale ? 'SALE: ' : '') + it.name + ' ' + it.price + 'G';   // (item names as written: long ones read better than in capitals)
       return { kind: 'item', id: real(s.id), x: s.x, y: s.base - 78, r: s.r, label: lab, muted: !it.on || it.bought || it.left <= 0 };
     }
     for (const p of PROPS) if (inR(w, p.r)) return { kind: 'prop', p, x: p.r.x + p.r.w / 2, y: p.r.y - 22, r: p.r };
@@ -860,8 +870,9 @@ const NIGHTSHOP = (() => {
       if (S.hover.r) SCENE.brackets(g, S.hover.r);
       if (S.hover.label) SCENE.label(g, S.hover.label, clamp(S.hover.x, cam + 90, cam + VW - 90), S.hover.y, S.hover.muted ? 'muted' : undefined);
     }
-    drawBubble(g, cam);
     g.restore();
+    if (S.focus && !S.ui) { const s = SLOTS.find(o => o.id === S.focus); if (s) TUT.spot(g, { x: s.r.x - cam, y: s.r.y, w: s.r.w, h: s.r.h }); }   // the tutorial's restock highlight
+    g.save(); g.translate(-cam, 0); drawBubble(g, cam); g.restore();
     edges(g);
     if (S.ui !== 'receipt' || (S.receipt && S.receipt.out)) drawCart(g);
     drawFlys(g);
@@ -875,13 +886,13 @@ const NIGHTSHOP = (() => {
   }
   function drawBubble(g, cam) {
     const b = S.bubble; if (!b || S.ui === 'talk') return;
-    const lines = wrap(b.msg, 250), w = Math.max(...lines.map(l => textW(l))) + 20, h = lines.length * 16 + 12;
+    const lines = PX.wrap(b.msg, 330), lh = PX.lineH(), w = Math.max(...lines.map(l => textW(l))) + 20, h = (lines.length - 1) * lh + 28;   // (1.5x line spacing, about 40 characters a line)
     const ax = Math.round(S.aoi.x), x = Math.round(clamp(ax - w / 2, cam + 8, cam + VW - w - 8)), y = 192 - h - Math.round(S.aoi.hop * 4);
     const a = Math.min(1, (b.max - b.t) * 6, b.t * 3); g.globalAlpha = a;
     rect(g, x + 3, y + 3, w, h, 'rgba(20,8,12,0.3)');
     rect(g, x - 1, y - 1, w + 2, h + 2, DK); rect(g, x, y, w, h, '#fff5e0'); rect(g, x, y + h - 2, w, 2, '#ead9b5');
     poly(g, [[ax - 7, y + h], [ax + 7, y + h], [ax, y + h + 10]], DK); poly(g, [[ax - 5, y + h], [ax + 5, y + h], [ax, y + h + 7]], '#fff5e0');
-    lines.forEach((l, i) => text(g, l, x + 10, y + 8 + i * 16, '#2a1a26'));
+    lines.forEach((l, i) => text(g, l, x + 10, y + 8 + i * lh, '#2a1a26'));
     g.globalAlpha = 1;
   }
   function edges(g) {
@@ -1021,7 +1032,10 @@ const NIGHTSHOP = (() => {
     artURL, streetOpen, storeOpen, item, market, addToBasket, pay, inspect, talk, closePanels, hours: HOURS,
     receipt: () => S.receipt, tuckReceipt, giveReceipt, goCheckout, cart: () => ({ ...CART }),
     setDoors: (r, sd) => { S.rdoor = S.rdoorT = r; S.sdoor = S.sdoorT = sd; },
-    state: () => ({ cam: S.cam, camT: S.camT, fade: S.fade, ui: S.ui, view: S.view, sel: S.sel, basket: S.basket.map(b => ({ ...b })), aoi: { ...S.aoi }, bubble: S.bubble && S.bubble.msg, door: S.door, sdoor: S.sdoor, hover: S.hover, closing: S.closing }),
+    state: () => ({ cam: S.cam, camT: S.camT, fade: S.fade, ui: S.ui, view: S.view, sel: S.sel, basket: S.basket.map(b => ({ ...b })), aoi: { ...S.aoi }, bubble: S.bubble && S.bubble.msg, door: S.door, sdoor: S.sdoor, hover: S.hover, closing: S.closing, paidT: S.paidT }),
+    // for Aoi's handover (tutorial.js): where she stands (store coordinates), and bringing a shelf (or a store x) into view
+    aoiRect: () => ({ x: S.aoi.x - 46, y: 216, w: 92, h: CTOP - 216 }),
+    look: v => { const s = typeof v === 'string' ? SLOTS.find(o => o.id === v) : null, x = s ? s.x : typeof v === 'number' ? v : null; if (x !== null) S.camT = clamp(x - VW / 2, 0, SW - VW); },
     slots: () => SLOTS.map(s => ({ id: s.id, x: s.x, base: s.base, r: { ...s.r } })), DOOR, SDOOR, RDOOR, COUNTER
   };
 })();

@@ -434,7 +434,7 @@ const JOURNEY = (() => {
     if (st === 'open' && stopReady(s)) { const b = Math.round(Math.sin(t * 6) * 2); rect(g, x - 2, y - R - 18 + b, 5, 9, DK); rect(g, x - 1, y - R - 17 + b, 3, 7, '#ffe680'); rect(g, x - 2, y - R - 7 + b, 5, 4, DK); rect(g, x - 1, y - R - 6 + b, 3, 2, '#ffe680'); }
     if (i === sel) { const b = Math.round(Math.sin(t * 5) * 2) - (s.kind === 'recipe' && st !== 'done' && near ? 74 : 0); poly(g, [[x - 6, y - R - 26 + b], [x + 6, y - R - 26 + b], [x, y - R - 18 + b]], DK); poly(g, [[x - 4, y - R - 25 + b], [x + 4, y - R - 25 + b], [x, y - R - 20 + b]], '#ffffff'); }
     if (s.kind === 'recipe' && st !== 'done' && near) SCENE.label(g, 'NEW RECIPE: ' + MENU[s.menu].short, x, y + R + 16, st === 'locked' ? 'muted' : MENU[s.menu].c);
-    else if (i === sel || i === hover || st === 'open' || i === currentIdx()) SCENE.label(g, s.place.toUpperCase(), x, y + R + 16, st === 'locked' ? 'muted' : undefined);
+    else if (i === sel || i === hover || st === 'open' || i === currentIdx()) SCENE.label(g, s.place, x, y + R + 16, st === 'locked' ? 'muted' : undefined);
   }
   function drawCart(g) {
     const p = at(cartS), x = Math.round(p.x - cam), y = Math.round(p.y) - 4;

@@ -6,7 +6,7 @@
    One light logic: paper lanterns and the hearth fire are warm key lights; corners fall off into soft shade. */
 const KITCHEN = (() => {
   const { mk, rect, dot, ell, lathe, poly, line, shade, mix, text, textC, textW } = PX;
-  const { wood, plaster, frameRect, lantern, label, sky, ao, pool, contact, rnd, tag, tagInk } = SCENE;
+  const { wood, plaster, frameRect, lantern, label, sky, ao, pool, contact, rnd, tag, tagInk, nameplate, stockBadge } = SCENE;
   const DK = PX.OUTLINE, W = KL.W;
   const C = {   // every colour here comes from the shared palette (PAL in ui.js)
     beam: PAL.beam, beamHi: PAL.beamHi, post: PAL.post, plaster: PAL.plaster, hinoki: '#dcae70', panel: PAL.panel,
@@ -459,8 +459,8 @@ const KITCHEN = (() => {
     rect(g, N.x + 4, N.y + 4, N.w - 8, N.h - 8, DK); rect(g, N.x + 5, N.y + 5, N.w - 10, N.h - 10, '#e9cf9c');
     const shown = Math.min(6, Math.ceil(n / 2));
     for (let k = 0; k < shown; k++) ART.top(g, 'noodle', N.x + 20 + (k % 3) * 26, N.y + 14 + Math.floor(k / 3) * 12, 0.8);
-    label(g, 'NOODLES', N.x + N.w / 2, N.y - 22);
-    chip(g, n, N.x + 16, N.y + N.h - 8);
+    nameplate(g, 'NOODLES', N.x + N.w / 2, N.y + N.h + 3, 50);
+    stockBadge(g, n, N.x + N.w, N.y + N.h);
     badge(g, G, 'noodle');
   }
 
@@ -534,8 +534,8 @@ const KITCHEN = (() => {
         line(g, hx, hy, ex, cy - 16, DK, 4); line(g, hx + 1, hy, ex + 1, cy - 16, PAL.copper, 2);
         line(g, ex, cy - 16, tx, cy - 40, DK, 5); line(g, ex + 1, cy - 16, tx + 1, cy - 40, '#9a6a3a', 3); line(g, ex + 1, cy - 17, tx + 1, cy - 41, '#c08a52', 1);
       }
-      PX.setFont(1); tag(g, def.short, cx, cy + 18, undefined, 6, 2 * rx - 2); PX.setFont(2);
-      chip(g, n, cx, cy + 37);
+      nameplate(g, def.short, cx, cy + 14, 2 * rx - 2);
+      stockBadge(g, n, cx + rx + 1, cy + 50);
       badge(g, G, id);
     });
   }
@@ -553,8 +553,8 @@ const KITCHEN = (() => {
     if (!chiliOilOn()) return;
     const O = KL.OIL, n = G.stock[CHILI_OIL] || 0;
     if (!(G.drag && G.drag.kind === 'oil')) oilBottle(g, O.cx, O.by, 10);
-    PX.setFont(1); tag(g, 'CHILI OIL', O.cx, O.by + 12, undefined, 8, 44); PX.setFont(2);
-    chip(g, n, O.cx + 30, O.by - 22);
+    nameplate(g, 'CHILI OIL', O.cx, O.by + 4, 50);
+    stockBadge(g, n, O.cx + 36, O.by);
   }
 
   /* The ice bath (once a cold recipe is learned): a hinoki tub of ice water on the counter. Chilled nests wait in it
@@ -576,7 +576,7 @@ const KITCHEN = (() => {
     for (let k = 0; k < G.ice; k++) { const nx = cx - 12 + k * 22; ell(g, nx, cy + 1, 10, 4, '#7aa8b8'); ART.pile(g, nx, cy, 9, 3, G.t * 0.3, 3, ['#ffffff', '#e8f0e0', '#9ab8c0', '#b8d0d0']); }
     if (G.ice > 0 && Math.sin(G.t * 3) > 0) for (let k = 0; k < 3; k++) dot(g, cx - 30 + k * 30, cy - 12 - (k % 2) * 3, '#e8fbff');   // a cold sparkle
     label(g, 'ICE BATH', cx, cy + 46);
-    if (G.ice > 0) chip(g, G.ice, cx + rx + 4, cy - 14);
+    if (G.ice > 0) stockBadge(g, G.ice, cx + rx + 14, cy + 4, 0);
   }
 
   // Glazed tare crocks, one per TARE_SLOTS entry. A locked slot is wrapped in indigo cloth.
@@ -605,8 +605,8 @@ const KITCHEN = (() => {
         line(g, hx, hy, cx + 22, y - 28, DK, 5); line(g, hx + 1, hy, cx + 23, y - 28, '#d8b07a', 3); line(g, hx + 1, hy - 1, cx + 23, y - 29, '#f2d6a2', 1);
         line(g, cx + 20, y - 23, cx + 22, y - 28, '#7a1e18', 3);
       }
-      chip(g, n, cx, y + 26);
-      PX.setFont(1); tag(g, def.short, cx, y + 63, undefined, 8, 44); PX.setFont(2);
+      nameplate(g, def.short, cx, y + 56, 44);
+      stockBadge(g, n, cx + 22, y + 50);
       badge(g, G, id);
     });
   }
@@ -685,7 +685,7 @@ const KITCHEN = (() => {
       return;
     }
     const n = G.stock[id], job = G.jobs.find(j => j.id === id);
-    PX.setFont(1); textC(g, TOP_SHORT[id], x + w / 2, y - (k % 2 ? 11 : 20), topOn(id) ? '#f6e6c0' : '#8a7a68'); PX.setFont(2);   // names alternate between two lines on the rail
+    nameplate(g, binName(id), x + w / 2, y + h + 3, w, !topOn(id));   // every name on one row, under its own bin
     if (!topOn(id)) {
       rect(g, x - 1, y - 1, w + 2, h + 2, DK); rect(g, x, y, w, h, C.indigo);
       for (let fx = x + 8; fx < x + w; fx += 12) { rect(g, fx, y + 2, 1, h - 4, C.indigoLo); rect(g, fx + 1, y + 2, 1, h - 4, '#4a5c9a'); }
@@ -698,7 +698,8 @@ const KITCHEN = (() => {
     rect(g, x + 4, y + 4, w - 8, h - 8, '#5a3a22'); rect(g, x + 4, y + 4, w - 8, 3, '#3e2616');
     const shown = Math.min(5, Math.ceil(n / 2));
     for (let i = 0; i < shown; i++) ART.top(g, id, x + PILE[i][0], y + PILE[i][1], 0.72);
-    chip(g, n, x + 11, y + h - 20);
+    if (n <= 0) rect(g, x + 2, y + 2, w - 4, h - 4, 'rgba(20,8,12,0.55)');   // empty: the bin dims
+    stockBadge(g, n, x + w, y + h);
     if (job) {
       const ky = y - 6 + Math.round(Math.abs(Math.sin(job.t * 12)) * 14);
       rect(g, x + 40, ky - 1, 10, 26, DK); rect(g, x + 41, ky, 8, 24, '#dfe6ee'); rect(g, x + 41, ky, 2, 24, '#ffffff'); rect(g, x + 47, ky, 2, 24, '#aab4c4');
@@ -721,8 +722,8 @@ const KITCHEN = (() => {
     PX.setFont(1);
     for (let k = 0; k < Math.min(9, rack.length); k++) {   // each bin's number key (1-9), a small tag on its top-left corner
       const { x, y } = KL.bin(k);
-      rect(g, x - 4, y - 4, 12, 12, DK); rect(g, x - 3, y - 3, 10, 10, '#f6e6c0'); rect(g, x - 3, y + 5, 10, 2, '#d8c8a0');
-      textC(g, String(k + 1), x + 2, y - 4, '#4a3226');
+      rect(g, x - 4, y - 4, 13, 13, DK); rect(g, x - 3, y - 3, 11, 11, '#f6e6c0'); rect(g, x - 3, y + 7, 11, 1, '#d8c8a0');
+      textC(g, String(k + 1), x + 2.5, y, '#4a3226');
     }
     PX.setFont(2);
     drawBowls(g, G);

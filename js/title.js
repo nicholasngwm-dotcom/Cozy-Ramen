@@ -77,16 +77,7 @@ const TITLE = (() => {
     if (hi) { g.save(); g.beginPath(); g.rect(x - 2, y - fs - 2, w + 4, fs * 3); g.clip(); text(g, s, x, y, hi); g.restore(); }
     setFont(2);
   }
-  // White glove pointer. dir -1 points left, 1 points right.
-  function glove(g, x, y, dir) {
-    g.save(); g.translate(Math.round(x), Math.round(y)); if (dir > 0) g.scale(-1, 1);
-    rect(g, -8, -3, 13, 6, DK); rect(g, 3, -6, 14, 13, DK); rect(g, 15, -4, 5, 9, DK);
-    rect(g, -7, -2, 12, 4, '#fff6e0'); rect(g, -7, -2, 12, 1, '#ffffff');
-    rect(g, 4, -5, 12, 11, '#fff6e0'); rect(g, 4, 3, 12, 3, '#e2d2b2'); rect(g, 4, -5, 12, 1, '#ffffff');
-    for (const k of [7, 10, 13]) rect(g, k, -2, 1, 4, '#d2c09c');
-    rect(g, 16, -3, 3, 7, '#c8443a'); rect(g, 16, -3, 3, 1, '#e2685c');
-    g.restore();
-  }
+  const glove = SCENE.glove;   // the white glove pointer (shared with Aoi's tutorial)
   function post(g, x, y, w, h, c) {
     rect(g, x - 1, y, w + 2, h, DK); rect(g, x, y, w, h, c);
     rect(g, x, y, 2, h, shade(c, 1.3)); rect(g, x + w - 3, y, 3, h, shade(c, 0.65));
@@ -416,15 +407,9 @@ const TITLE = (() => {
     poly(g, [[44, 28], [516, 28], [512, 36], [48, 36]], '#c8483a');
     poly(g, [[48, 90], [512, 90], [516, 96], [44, 96]], '#7a1e18');
     rect(g, 70, 31, 420, 2, '#e0b040'); rect(g, 70, 91, 420, 2, '#e0b040');
-    // the emblem in the banner's centre: crossed chopsticks and a sword on a brass medallion
-    { const cx = 280, cy = 22;
-      ell(g, cx, cy, 15, 15, DK); ell(g, cx, cy, 14, 14, '#c9962e'); ell(g, cx, cy, 12, 12, '#7a1e18'); ell(g, cx - 3, cy - 4, 5, 3, '#a8302a');
-      line(g, cx - 8, cy + 8, cx + 8, cy - 8, DK, 4); line(g, cx - 8, cy + 8, cx + 8, cy - 8, '#dfe6ee', 2); rect(g, cx - 6, cy + 2, 6, 2, '#e0b040');   // the sword, with its guard
-      line(g, cx + 7, cy + 8, cx - 6, cy - 9, DK, 3); line(g, cx + 7, cy + 8, cx - 6, cy - 9, '#e8c890', 1);           // two chopsticks
-      line(g, cx + 9, cy + 7, cx - 3, cy - 10, DK, 3); line(g, cx + 9, cy + 7, cx - 3, cy - 10, '#e8c890', 1);
-      dot(g, cx - 5, cy - 6, '#ffe08a'); }
+    SCENE.emblem(g, 280, 22, 0.56);   // the game's emblem (a bowl of ramen on a brass medallion) in the banner's centre
     rect(g, 106, 108, 348, 26, DK); wood(g, 107, 109, 346, 24, '#6e4a2c', 12, false, 91); rect(g, 107, 109, 346, 1, '#a57a4c');
-    textC(g, "AN ADVENTURERS' NOODLE STALL", 280, 116, '#f6e6c0');
+    textC(g, "An Adventurers' Noodle Stall", 280, 116, '#f6e6c0');
     // each title letter on its own little canvas, placed where the whole word would put it
     setFont(5); const total = textW(TITLE_TXT), x0 = 280 - total / 2;
     letters = [...TITLE_TXT].map((ch, i) => {
@@ -991,7 +976,7 @@ const TITLE = (() => {
     const save = saveInfo();
     return [
       { label: 'CONTINUE', tag: tag(), off: !save, act: () => H.onContinue() },
-      { label: 'NEW GAME', act: () => (save ? go('confirm') : H.onNew()) },
+      { label: 'NEW GAME', act: () => go(save ? 'confirm' : 'tutask') },
       { label: 'HOW TO PLAY', act: () => go('help') },
       { label: 'SETTINGS', act: () => go('settings') }
     ];
@@ -1004,8 +989,11 @@ const TITLE = (() => {
       { label: 'TEXT SPEED', type: 'choice', opts: ['SLOW', 'NORMAL', 'FAST'], get: () => st.textSpeed, set: v => { st.textSpeed = v; H.applySettings(); } },
       { label: 'FULLSCREEN', type: 'toggle', get: () => !!document.fullscreenElement, set: () => H.toggleFullscreen() },
       { label: 'PIXEL SNAP', type: 'toggle', get: () => st.snap, set: v => { st.snap = v; H.applySettings(); } },
-      { label: 'HINTS', type: 'toggle', get: () => !!st.hints, set: v => { st.hints = v; H.applySettings(); } },
+      { label: 'HINTS', type: 'toggle', get: () => H.hintsOn(), set: v => H.setHints(v) },
       { label: 'REDUCE MOTION', type: 'toggle', get: () => !!st.reduceMotion, set: v => { st.reduceMotion = v; H.applySettings(); } },
+      // during play: Aoi comes back to walk you through a bowl at the start of the next day
+      ...(S.overlay ? [{ label: H.tutArmed() ? 'Tutorial: Aoi is on her way' : 'REPLAY TUTORIAL', act: () => { if (!H.tutArmed()) H.replayTut(); } }] : []),
+      { label: 'CREDITS', act: () => go('credits') },
       { label: 'BACK', act: backOut }
     ];
   };
@@ -1016,20 +1004,18 @@ const TITLE = (() => {
     { label: 'QUIT TO TITLE', act: () => H.onQuit() }
   ];
   const CONFIRM = () => [
-    { label: 'YES, START OVER', act: () => H.onNew() },
+    { label: 'YES, START OVER', act: () => go('tutask') },
     { label: 'NO, GO BACK', act: backOut }
   ];
-  const HELP = [
-    "WELCOME TO COZY RAMEN, A LITTLE NOODLE STALL FOR WEARY ADVENTURERS.",
-    '',
-    '1. OPEN UP: TAP THE CLOSED SIGN ON THE SERVING COUNTER. THE SHOP RUNS FROM 9:00 TO 21:00.',
-    '2. TAKE ORDERS: GUESTS SIT IN A STALL AND ITS BLIND ROLLS UP. WHEN ONE CALLS, TAP THEM TO CHAT. YOU CAN DECLINE ORDERS YOU CANNOT MAKE.',
-    "3. COOK: CLICK THE RECIPE'S TARE CROCK, THEN ITS BROTH POT, THEN A READY BASKET: EACH GOES INTO THE GLOWING BOWL (CLICK A BOWL OR PRESS TAB TO CHOOSE). DRAGGING WORKS TOO.",
-    '4. TOP IT: CLICK THE TOPPINGS ON THE SLIP (OR PRESS 1-9; SHIFT ADDS JUST ONE), THEN DRAG THE BOWL INTO THE PASS. SOME RECIPES HAVE A SPECIAL TOUCH: HOLD TO POUR CHILI OIL OR TORCH CHASHU, CLICK TO SLICE THE EGG.',
-    "5. SERVE: CARRY THE TRAY OUT AND DROP THE BOWL IN FRONT OF THE GUEST. THEIR TICKET SHOWS THE ORDER AND EVERY CHANGE TO IT.",
-    '',
-    'AT 21:00 THE DOORS CLOSE TO THE CROWD, BUT LATE WALK-INS COME UNTIL 04:00. THEN THE SHOP CLOSES AND THE DAY\'S RECEIPT PRINTS. FROM 04:00, TAP THE SIGN TO SKIP THE PREP TIME TO THE NEXT OPENING.',
-    'SWITCH ROOMS WITH THE TABS OR EDGE ARROWS. IN THE KITCHEN, HOLD A / D OR SCROLL TO LOOK AROUND. ESC PAUSES. YOUR DAY SAVES AT OPENING AND CLOSING.'
+  // after NEW GAME: Aoi offers to walk the player through their first bowl
+  const TUTASK = () => [
+    { label: 'YES, PLEASE', act: () => H.onNew(true) },
+    { label: "I'VE GOT THIS", act: () => H.onNew(false) }
+  ];
+  // Esc during the guided bowl
+  const SKIPTUT = () => [
+    { label: 'NO, KEEP GOING', act: () => { H.sfx.back(); H.onResume(); } },
+    { label: 'YES, SKIP IT', act: () => H.onSkipTut() }
   ];
   function wrap(s, maxW) {
     if (!s) return [''];
@@ -1039,12 +1025,14 @@ const TITLE = (() => {
     return out;
   }
   function rows() {
-    return S.screen === 'main' ? MAIN() : S.screen === 'settings' ? SET() : S.screen === 'pause' ? PAUSE() : S.screen === 'confirm' ? CONFIRM() : [];
+    return S.screen === 'main' ? MAIN() : S.screen === 'settings' ? SET() : S.screen === 'pause' ? PAUSE() : S.screen === 'confirm' ? CONFIRM()
+      : S.screen === 'tutask' ? TUTASK() : S.screen === 'skiptut' ? SKIPTUT() : [];
   }
   function go(screen) { S.screen = screen; S.sel = 0; S.open = 0; H.sfx.page(); }
   function backOut() {
     H.sfx.back();
-    if (S.screen === 'pause') return H.onResume();
+    if (S.screen === 'pause' || S.screen === 'skiptut') return H.onResume();
+    if (S.screen === 'credits') return go('settings');
     if (S.screen === 'settings' || S.screen === 'help') return go(S.overlay ? 'pause' : 'main');
     go('main');
   }
@@ -1210,26 +1198,76 @@ const TITLE = (() => {
     }
     if (S.screen === 'main') drawMain(g);
     else if (S.screen === 'book') drawBook(g);
-    else if (S.screen === 'help') {
-      const R = scroll(g, VW / 2, 70, 700, 400, 'HOW TO PLAY');
-      if (R) {
-        let y = R.y + 44;
-        for (const para of HELP) for (const l of wrap(para, R.w - 60)) { text(g, l, R.x + 30, y, '#4a3226'); y += para ? 17 : 8; }
-        const by = R.y + R.h - 30; textC(g, 'BACK', VW / 2, by, '#8a2a1a'); hits.push({ r: { x: VW / 2 - 40, y: by - 6, w: 80, h: 22 }, fn: backOut });
-        glove(g, VW / 2 - 34 + Math.round(Math.sin(S.t * 6) * 2), by + 5, 1);
-      }
-    } else {
-      const list = rows(), title = { settings: 'SETTINGS', pause: 'PAUSED', confirm: 'START A NEW GAME?' }[S.screen];
-      const h = 70 + list.length * 34 + (S.screen === 'confirm' || S.screen === 'pause' ? 30 : 0);
+    else if (S.screen === 'help') drawPinboard(g);
+    else if (S.screen === 'credits') drawCredits(g);
+    else {
+      const list = rows(), title = { settings: 'SETTINGS', pause: 'PAUSED', confirm: 'Start a new game?', tutask: 'Want Aoi to show you around?', skiptut: "SKIP AOI'S TOUR?" }[S.screen];
+      const EXTRA = { confirm: 'Your saved day will be lost.', pause: 'Your day saves at opening and closing.', tutask: 'She ran this stall before you.', skiptut: 'Your first day starts right away.' };
+      const h = 70 + list.length * 34 + (EXTRA[S.screen] ? 30 : 0);
       const R = scroll(g, VW / 2, Math.round(VH / 2 - h / 2), S.screen === 'settings' ? 600 : 480, h, title);
       if (R) {
-        const extra = S.screen === 'confirm' ? 'YOUR SAVED DAY WILL BE LOST.' : S.screen === 'pause' ? 'YOUR DAY SAVES AT OPENING AND CLOSING.' : '';
+        const extra = EXTRA[S.screen] || '';
         if (extra) textC(g, extra, VW / 2, R.y + 44, '#7a5230');
         drawRows(g, R, list, R.y + (extra ? 74 : 54));
       }
     }
     // the opening: a fade in from the dark
     if (!S.overlay && S.intro < 0.8) { g.fillStyle = 'rgba(10,6,16,' + (1 - S.intro / 0.8).toFixed(3) + ')'; g.fillRect(0, 0, VW, VH); }
+  }
+  /* How to Play: a corkboard of Aoi's notes, grouped by station. A note is pinned once the player has seen it in play;
+     the rest are empty pins. (From the title, the board shows the save's notes.) */
+  // One station at a time (tabs, or the left / right keys), two notes to a row, so the notes have room to breathe.
+  function drawPinboard(g) {
+    const R = scroll(g, VW / 2, 54, 760, 430, 'HOW TO PLAY'); if (!R) return;
+    setFont(1); textC(g, "Aoi's notes, pinned as you find them in the shop.", VW / 2, R.y + 36, '#7a5230'); setFont(2);
+    const seen = H.tutSeen() || [], bx = R.x + 18, ty = R.y + 52, by = R.y + 82, bw = R.w - 36, bh = R.h - 82 - 40;
+    // the tabs: SERVING, KITCHEN, EVENINGS (with how many of each are pinned)
+    S.pinTab = clamp(S.pinTab || 0, 0, TUT.GROUPS.length - 1);
+    let tx = bx;
+    TUT.GROUPS.forEach((grp, c) => {
+      const on = c === S.pinTab, got = grp.ids.filter(id => seen.includes(id)).length, lab = grp.name + ' ' + got + '/' + grp.ids.length;
+      setFont(1); const tw = textW(lab) + 20;
+      rect(g, tx - 1, ty - 1, tw + 2, (on ? 28 : 24) + 2, DK); rect(g, tx, ty, tw, on ? 28 : 24, on ? '#8a2a1a' : '#c9a468'); if (on) rect(g, tx, ty, tw, 2, '#b04a3a');
+      text(g, lab, tx + 10, ty + 7, on ? '#fbf2dc' : '#4a3226'); setFont(2);
+      hits.push({ r: { x: tx, y: ty, w: tw, h: 26 }, fn: () => { if (S.pinTab !== c) { S.pinTab = c; H.sfx.page(); } } });
+      tx += tw + 8;
+    });
+    rect(g, bx - 4, by - 4, bw + 8, bh + 8, DK); rect(g, bx - 3, by - 3, bw + 6, bh + 6, '#7a5230'); rect(g, bx - 3, by - 3, bw + 6, 1, '#b07c48');   // the frame
+    rect(g, bx, by, bw, bh, '#b88a58');
+    for (let i = 0; i < bw * bh / 60; i++) dot(g, bx + Math.floor(rnd(i * 3.1 + 2) * bw), by + Math.floor(rnd(i * 1.3 + 7) * bh), rnd(i + 11) > 0.5 ? '#a47648' : '#c89a68');   // cork
+    const grp = TUT.GROUPS[S.pinTab], NW = Math.floor((bw - 48) / 2);
+    let y = by + 16;
+    for (let r = 0; r * 2 < grp.ids.length; r++) {
+      const pair = grp.ids.slice(r * 2, r * 2 + 2), hs = pair.map(id => (seen.includes(id) ? TUT.noteSize(TUT.NOTES[id].t, NW).h : 28));
+      pair.forEach((id, c) => {
+        const x = bx + 16 + c * (NW + 16);
+        if (seen.includes(id)) TUT.drawNote(g, x, y, TUT.NOTES[id].t, { w: NW });
+        else TUT.blankPin(g, x, y, NW, 28);
+      });
+      y += Math.max(...hs) + 14;
+    }
+    const n = Object.keys(TUT.NOTES).filter(id => seen.includes(id)).length;
+    setFont(1); text(g, n + ' / ' + Object.keys(TUT.NOTES).length + ' PINNED', bx, R.y + R.h - 26, '#7a5230'); setFont(2);
+    const ky = R.y + R.h - 30; textC(g, 'BACK', VW / 2, ky, '#8a2a1a'); hits.push({ r: { x: VW / 2 - 40, y: ky - 6, w: 80, h: 22 }, fn: backOut });
+    glove(g, VW / 2 - 34 + Math.round(Math.sin(S.t * 6) * 2), ky + 5, 1);
+  }
+  /* Credits. (The fonts the game uses, with their licences; the OFL text sits next to the font files in assets/fonts.) */
+  const CREDITS = [
+    ['Cozy Ramen: An Adventurers\' Noodle Stall', null],
+    ['FONTS', null],
+    ['Pixelify Sans', 'by Stefie Justprince. SIL Open Font License (assets/fonts/OFL.txt).']
+  ];
+  function drawCredits(g) {
+    const R = scroll(g, VW / 2, 110, 560, 300, 'CREDITS'); if (!R) return;
+    let y = R.y + 52;
+    for (const [head, body] of CREDITS) {
+      if (!body) { setFont(head === head.toUpperCase() ? 1 : 2); textC(g, head, VW / 2, y, '#8a2a1a'); setFont(2); y += head === head.toUpperCase() ? 26 : 34; continue; }
+      textC(g, head, VW / 2, y, '#4a3226'); y += PX.lineH();
+      setFont(1); for (const l of PX.wrap(body, R.w - 80)) { textC(g, l, VW / 2, y, '#7a5230'); y += PX.lineH(); } setFont(2);
+      y += 10;
+    }
+    const ky = R.y + R.h - 30; textC(g, 'BACK', VW / 2, ky, '#8a2a1a'); hits.push({ r: { x: VW / 2 - 40, y: ky - 6, w: 80, h: 22 }, fn: backOut });
+    glove(g, VW / 2 - 34 + Math.round(Math.sin(S.t * 6) * 2), ky + 5, 1);
   }
   function regionLiveFar(g) { void g; }   // (far details are cached in far2; the lighthouse beam and gulls draw with the street)
   // A menu plank, drawn once per look into its own canvas so it can swing (rotated with nearest-neighbour, it stays crisp).
@@ -1268,7 +1306,7 @@ const TITLE = (() => {
       if (sel && Math.abs(S.ang[i]) < 0.2) glove(g, x0 + w + 12 + Math.round(Math.sin(S.t * 6) * 3), y + hh / 2, -1);
     });
     dtIntro = S.intro;
-    text(g, 'ARROW KEYS + ENTER, OR CLICK', 14, 518, '#c9b8e0');
+    PX.textO(g, 'Arrow keys + Enter, or click', 14, 518, '#c9b8e0');   // (outlined: it sits over the street)
   }
   let dtIntro = 99;
 
@@ -1306,7 +1344,12 @@ const TITLE = (() => {
       if (k === 'ArrowUp' && S.pick >= 5) { S.pick -= 5; H.sfx.move(); }
       return;
     }
-    if (S.screen === 'help') { if (['Escape', 'Enter', ' ', 'Backspace'].includes(k)) backOut(); return; }
+    if (S.screen === 'help') {   // the pinboard: left / right change the station tab
+      if (k === 'ArrowLeft' || k === 'ArrowRight') { S.pinTab = clamp((S.pinTab || 0) + (k === 'ArrowLeft' ? -1 : 1), 0, TUT.GROUPS.length - 1); H.sfx.page(); }
+      else if (['Escape', 'Enter', ' ', 'Backspace'].includes(k)) backOut();
+      return;
+    }
+    if (S.screen === 'credits') { if (['Escape', 'Enter', ' ', 'Backspace'].includes(k)) backOut(); return; }
     const list = rows(), it = list[S.sel];
     if (k === 'ArrowUp') select((S.sel + list.length - 1) % list.length);
     else if (k === 'ArrowDown') select((S.sel + 1) % list.length);

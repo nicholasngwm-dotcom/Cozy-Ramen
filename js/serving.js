@@ -608,6 +608,10 @@ const SERVING = (() => {
     b.names.forEach((ln, k) => text(g, ln, x + 9, y + 26 + k * 16, b.m.c));
     const my = y + 26 + b.names.length * 16;
     if (b.mods.length) {
+      if (window.G && G.tutPulse === gu) {   // Aoi's Day 2 note: the + and - lines pulse
+        g.fillStyle = `rgba(255,200,80,${(0.25 + 0.25 * Math.sin(G.t * 6)).toFixed(3)})`;
+        b.mods.forEach((md, k) => g.fillRect(x + 4, my + 3 + k * 16, w - 8, 16));
+      }
       for (let k = 0; k < w - 10; k += 6) rect(g, x + 5 + k, my + 1, 3, 1, '#b8a890');
       b.mods.forEach((md, k) => text(g, md.t, x + 9, my + 6 + k * 16, md.add ? '#2f7a3a' : '#c8302a'));
     }

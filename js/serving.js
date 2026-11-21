@@ -585,7 +585,7 @@ const SERVING = (() => {
   function ticketBox(i, gu) {
     const m = MENU[gu.order.type], names = tNames(m), mods = ART.slipMods(gu.order);
     const w = Math.max(76, ...names.map(t => textW(t) + 36), ...mods.map(md => textW(md.t) + 36));   // room on the right for a check mark
-    const h = 26 + names.length * 16 + (mods.length ? 6 + mods.length * 16 : 0) + 6;
+    const h = 26 + names.length * 22 + (mods.length ? 6 + mods.length * 22 : 0) + 6;
     return { x: Math.round(SL.stallCX(i) - w / 2), y: CY + 22, w, h, names, mods, m };
   }
   // Does the bowl match each ticket line? [the ramen itself (tare, broth, its usual toppings), then each change]
@@ -605,19 +605,19 @@ const SERVING = (() => {
     rect(g, x - 1, y - 1, w + 2, h + 2, DK); rect(g, x, y, w, h, C.washi); rect(g, x, y + h - 3, w, 3, '#e8dcc0');
     textC(g, '#' + gu.num, x + w / 2, y + 5, INK);
     for (let k = 0; k < w - 10; k += 6) rect(g, x + 5 + k, y + 21, 3, 1, '#b8a890');
-    b.names.forEach((ln, k) => text(g, ln, x + 9, y + 26 + k * 16, b.m.c));
-    const my = y + 26 + b.names.length * 16;
+    b.names.forEach((ln, k) => text(g, ln, x + 9, y + 26 + k * 22, b.m.c));
+    const my = y + 26 + b.names.length * 22;
     if (b.mods.length) {
       if (window.G && G.tutPulse === gu) {   // Aoi's Day 2 note: the + and - lines pulse
         g.fillStyle = `rgba(255,200,80,${(0.25 + 0.25 * Math.sin(G.t * 6)).toFixed(3)})`;
-        b.mods.forEach((md, k) => g.fillRect(x + 4, my + 3 + k * 16, w - 8, 16));
+        b.mods.forEach((md, k) => g.fillRect(x + 4, my + 3 + k * 22, w - 8, 22));
       }
       for (let k = 0; k < w - 10; k += 6) rect(g, x + 5 + k, my + 1, 3, 1, '#b8a890');
-      b.mods.forEach((md, k) => text(g, md.t, x + 9, my + 6 + k * 16, md.add ? '#2f7a3a' : '#c8302a'));
+      b.mods.forEach((md, k) => text(g, md.t, x + 9, my + 6 + k * 22, md.add ? '#2f7a3a' : '#c8302a'));
     }
     if (checks) {
       mark(g, x + w - 15, y + 30, checks[0]);
-      b.mods.forEach((md, k) => mark(g, x + w - 15, my + 10 + k * 16, checks[k + 1]));
+      b.mods.forEach((md, k) => mark(g, x + w - 15, my + 10 + k * 22, checks[k + 1]));
     }
   }
   const ticketGuest = (G, i) => { const gu = stallOpen(i) && G.stalls[i].guest; return gu && gu.order && (gu.state === 'wait' || gu.state === 'ordering') && gu.num ? gu : null; };

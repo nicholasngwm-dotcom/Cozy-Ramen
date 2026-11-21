@@ -9,6 +9,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const inR = (p, r) => p && p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
   const params = new URLSearchParams(location.search);
+  if (params.has('facetool')) return FACETOOL.start();   // index.html?facetool: the dev page for guest face anchors (js/facetool.js)
 
   const IMG = {};
   for (const gt of GUESTS) { const im = new Image(); im.src = 'assets/guests/' + gt.id + '.png'; IMG[gt.id] = im; }
@@ -28,7 +29,8 @@
   const newStats = () => ({ served: 0, perfect: 0, earned: 0, sales: 0, tips: 0, declined: 0, sold: zeroes(), rev: zeroes() });
   const fresh = () => ({
     menu: ['miso'], pick: 'miso',   // the menu the shop sells from (in order), and the chef's pick
-    mode: 'title', met: [], aff: {}, level: 1, xp: 0, owned: [], gear: [], where: null, aoiMet: false, region: 0, life: { served: 0, perfect: 0, sold: {}, bestDay: 0, days: 0 },
+    mode: 'title', met: [], aff: {}, level: 1, xp: 0, owned: [], gear: [], where: null, aoiMet: false, region: 0,
+    aoi: { seen: 0, visit: 0, buy: 0, chat: 0, notes: 0 }, aoiDay: 0,   // Aoi's story (js/aoi.js): scenes seen, tonight's markers, notes left; the day she last ate here life: { served: 0, perfect: 0, sold: {}, bestDay: 0, days: 0 },
     t: 0, time: 0, day: 1, gold: 0, paused: false, ui: null, nightF: 0, duskF: 0, rain: 0, wx: null, quest: null,
     shop: 'morning', signT: -9, signWas: 'morning', receipt: null,   // shop: morning (closed, waiting for the sign) | open | night
     st: 0, cam: -960, kcam: 960, scam: -960, pan: 0, edge: 0, edgeSide: 0,   // the serving room starts at its far left
@@ -62,7 +64,7 @@
   // (night: the title shows the night scene for a save made after closing)
   // Continue always resumes at the start of a morning: `day` is the morning to resume on.
   // (nothing saves during Aoi's handover: it is not a real day)
-  function saveGame(day) { if (G.tut && G.tut.handover) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, aff: G.aff, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned, quest: G.quest, gear: G.gear, aoiMet: G.aoiMet, region: G.region, life: G.life, menu: G.menu, pick: G.pick, night: G.shop === 'night', tut: TUT.saveData() })); } catch (e) { /* storage may be blocked */ } }
+  function saveGame(day) { if (G.tut && G.tut.handover) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, aff: G.aff, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned, quest: G.quest, gear: G.gear, aoiMet: G.aoiMet, aoi: G.aoi, region: G.region, life: G.life, menu: G.menu, pick: G.pick, night: G.shop === 'night', tut: TUT.saveData() })); } catch (e) { /* storage may be blocked */ } }
   function loadSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.day ? s : null; } catch (e) { return null; } }
   function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage may be blocked */ } }
 
@@ -78,6 +80,7 @@
   const DECLINE = ['Oh, that is all right. Maybe next time!', 'No worries at all. I will come back another day.', 'I understand. Thanks for being honest!'];
   const line = (gu, key, fallback) => {
     const p = PERSONA[gu.gt.id] || {}, phase = p[isNight() ? 'night' : 'day'];
+    if (gu.gt.id === 'aoi') { const a = AOI.stall(key); if (a) return a; }   // Aoi warms up as her hearts grow
     const own = (phase && phase[key] && phase[key].length && phase[key]) || (p[key] && p[key].length && p[key]);
     if (own) return pick(own);
     if (isNight() && NIGHT_FALLBACK[key]) fallback = NIGHT_FALLBACK[key];
@@ -193,7 +196,9 @@
   const bubbleT = {};
   function bubble(i, msg) { const el = $('bubble-' + i); el.textContent = msg; el.classList.add('show'); bubbleT[i] = 3.4; }
   let toastT = 0;
-  function toast(msg) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); toastT = 3.5; }
+  function toast(msg, t = 3.5) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); toastT = t; }
+  // Aoi's story (js/aoi.js): a new heart chimes and says so; hearts float up when you are in the shop
+  AOI.init({ toast: m => toast(m, 6), ding: () => SFX.ding(), hearts: () => { if (!G.where) hearts(VW / 2 + G.cam, 140, 10); }, save: () => saveGame(G.shop === 'night' ? G.day + 1 : G.day) });
 
   /* ---------- stations ---------- */
   function go(i) {
@@ -711,7 +716,7 @@
     takeBowl(d);
     if (d.bowl.butterAt !== undefined) (d.bowl.fx = d.bowl.fx || {}).butter = G.t - d.bowl.butterAt < ART.BUTTER_MELT ? 'perfect' : 'melted';   // served before it melted away?
     const off = orderDiff(d.bowl, gu.order), q = grade(d.bowl, gu.order), perfect = q > 0.99;
-    gu.q = q; gu.sale = Math.round(gu.order.price * q); gu.pay = gu.sale + (perfect ? perfectTip() + affLevel(G.aff[gu.gt.id]) : 0) + (gu.trusted && perfect ? 3 : 0);
+    gu.q = q; gu.sale = Math.round(gu.order.price * q); gu.pay = gu.sale + (perfect ? perfectTip() + Math.min(4, affLevel(G.aff[gu.gt.id], gu.gt.id)) : 0) + (gu.trusted && perfect ? 3 : 0);
     st.bowl = d.bowl; gu.state = 'react'; gu.t = 0; gu.wrong = off.length > 0;
     G.slips = G.slips.filter(s => s.guest !== gu);
     if (G.ticketZoom === i) G.ticketZoom = -1;
@@ -803,7 +808,10 @@
   function seatGuest(i, tut) {
     const used = G.stalls.map(s => s.guest && s.guest.gt.id);
     const pool = GUESTS.filter(gt => !used.includes(gt.id) && (!gt.taste.night || isNight()) && !(gt.id === 'aoi' && (G.shop === 'night' || TUT.guiding() || (G.day === 1 && G.tut && G.tut.fresh))));   // (not Aoi while she is the one showing you around)
-    const gt = pick(pool);
+    // Aoi drops by once a day at most, and more often the fonder of the chef she grows
+    const aoiOk = pool.find(g => g.id === 'aoi') && G.aoiDay !== G.day;
+    const gt = aoiOk && Math.random() < AOI.visitChance() ? pool.find(g => g.id === 'aoi') : pick(pool.filter(g => g.id !== 'aoi').length ? pool.filter(g => g.id !== 'aoi') : pool);
+    if (gt.id === 'aoi') G.aoiDay = G.day;
     // arrive: the guest fades in behind the lowered blind (a silhouette through the slats), the blind rolls up, they read the menu board, then call
     const gu = { gt, img: IMG[gt.id], stall: i, state: 'arrive', t: 0, mood: null, order: null };
     gu.asksRec = !tut && Math.random() < (gt.taste.pref ? 0.25 : 0.55);
@@ -896,7 +904,10 @@
             S.sales += gu.sale; S.tips += gu.pay - gu.sale; S.sold[type]++; S.rev[type] += gu.sale;
             const L = G.life; L.served++; if (perfect) L.perfect++; L.sold[type] = (L.sold[type] || 0) + 1;
             if (!G.met.includes(gu.gt.id)) G.met.push(gu.gt.id);
-            { const id = gu.gt.id, was = affLevel(G.aff[id]); G.aff[id] = (G.aff[id] || 0) + (perfect ? 2 : 1); const now = affLevel(G.aff[id]);
+            if (gu.gt.id === 'aoi') {   // Aoi: her own ten hearts (js/aoi.js), and now and then a note under her bowl
+              AOI.gain(perfect ? 4 : gu.q >= 0.6 ? 2 : 1);
+              const n = AOI.note(); if (n) setTimeout(() => { toast(n, 7); SFX.ding(); }, 2600);
+            } else { const id = gu.gt.id, was = affLevel(G.aff[id]); G.aff[id] = (G.aff[id] || 0) + (perfect ? 2 : 1); const now = affLevel(G.aff[id]);
               if (now > was) { hearts(cx, 150, 10); SFX.ding(); toast(gu.gt.name + ' is now a ' + AFFINITY[now].name.toLowerCase() + ' of the shop! (affinity ' + (now + 1) + ')'); TUT.event('rankup'); } }
             pop('+' + gu.pay + 'G', cx, 220);
             gainXP(Math.round(6 + 10 * gu.q), cx);
@@ -1288,6 +1299,17 @@
     return Object.assign(q, { day, done: false, xp: 20 + L * 6 + (k === 'perfect' || k === 'earn' ? 10 : 0), gold: 15 + L * 5 });
   }
   const questHave = q => G.shop === 'morning' ? 0 : q.k === 'served' ? G.stats.served : q.k === 'sold' ? G.stats.sold[q.type] || 0 : q.k === 'perfect' ? G.stats.perfect : G.stats.earned;
+  // the quest card folds down to a chip from its header; the choice is a per-player convenience, kept in localStorage
+  let questShown = '';
+  function setQuestMin(min) {
+    $('quest').classList.toggle('min', min);
+    $('quest-head').setAttribute('aria-expanded', String(!min));
+    $('quest-head').title = min ? 'Show quest' : 'Hide quest';
+    try { localStorage.setItem('cozyramen.questMin', min ? '1' : '0'); } catch (e) { /* storage blocked: fine */ }
+  }
+  try { if (localStorage.getItem('cozyramen.questMin') === '1') setQuestMin(true); } catch (e) { /* storage blocked: start open */ }
+  $('quest-head').addEventListener('click', () => { setQuestMin(!$('quest').classList.contains('min')); SFX.tap(); });
+  $('quest').addEventListener('animationend', () => $('quest').classList.remove('ping'));
   const questText = q => q.k === 'served' ? `Serve ${q.n} guests` : q.k === 'sold' ? `Serve ${q.n} ${MENU[q.type].name}` : q.k === 'perfect' ? `Serve ${q.n} perfect bowls` : `Earn ${q.n}G today`;
   function updateQuest() {
     if (G.mode !== 'play') return;
@@ -1297,9 +1319,11 @@
       q.done = true; G.gold += q.gold; SFX.coin(); SFX.ding(); hearts(VW / 2 + G.cam, 120, 6);
       gainXP(q.xp, undefined, 'Daily quest complete! +' + q.xp + ' XP, +' + q.gold + 'G. ');
     }
-    const have = Math.min(questHave(q), q.n);
+    const have = Math.min(questHave(q), q.n), shown = q.done ? 'Done' : have + '/' + q.n, el = $('quest');
+    if (el.classList.contains('min') && questShown && questShown !== shown) { el.classList.remove('ping'); void el.offsetWidth; el.classList.add('ping'); }
+    questShown = shown;
     setText('quest-text', questText(q));
-    setText('quest-n', q.done ? 'Done' : have + '/' + q.n);
+    setText('quest-n', shown);
     setText('quest-reward', '+' + q.xp + ' XP  +' + q.gold + 'G');
     $('quest-fill').style.width = Math.round(100 * (q.done ? 1 : have / q.n)) + '%';
     $('quest').classList.toggle('done', q.done);
@@ -1766,6 +1790,7 @@
     $('tab-street').classList.toggle('on', !!G.where);
     STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', !G.where && k === G.st));
     $('nshop').classList.toggle('hide', G.ui === 'pause' || G.mode !== 'play');
+    $('quest').classList.toggle('hide', G.mode !== 'play' || !TUT.questShown() || !!G.where || G.ui === 'dialog');   // out of the way of the night street and Aoi's dialogue box
     for (let i = 0; i < SL.NSTALL; i++) {
       const el = $('bubble-' + i);
       el.style.left = `calc(${(SL.X0 + SL.stallCX(i) - G.cam) / 2}px * var(--s))`;
@@ -1810,7 +1835,7 @@
       }
       if (b.cold) lines.push(['COLD NOODLES', '#2f7aa8']);
     }
-    const LH = 17, w = Math.max(...lines.map(l => PX.textW(l[0]))) + 20, h = lines.length * LH + 10;   // 10px side and 5px top/bottom padding
+    const LH = PX.lineH(), w = Math.max(...lines.map(l => PX.textW(l[0]))) + 20, h = lines.length * LH + 10;   // 10px side and 5px top/bottom padding
     const x = Math.round(Math.min(VW - w - 4, G.mouse.x + 16)), y = Math.round(Math.max(4, Math.min(VH - h - 4, G.mouse.y - h - 6)));
     PX.rect(g, x + 3, y + 3, w, h, 'rgba(40,20,10,0.3)');
     PX.rect(g, x - 1, y - 1, w + 2, h + 2, PX.OUTLINE); PX.rect(g, x, y, w, h, '#fbf6ea'); PX.rect(g, x, y, w, 2, '#e8dcc0');
@@ -1866,8 +1891,8 @@
     L.push({ l: 'TIPS', r: s.tips + 'G' }, { hr: 1 }, { l: 'PROFIT', r: (s.sales + s.tips) + 'G', col: '#2f7a3a' }, { hr: 1 });
     L.push({ l: 'BOWLS SOLD', r: String(s.served) }, { l: 'PERFECT', r: String(s.perfect) }, { l: 'TURNED AWAY', r: String(s.declined) }, { hr: 1 });
     L.push({ c: 'THANK YOU!', col: '#8a2a1a' }, { c: 'Fling away to toss', col: '#a8987a' });
-    const hx = Math.round(VW / 2 - RW / 2), hy = Math.max(36, Math.round(VH / 2 - (16 + L.length * 17 + 8) / 2));
-    G.receipt = { lines: L, x: hx, y: hy, hx, hy, h: 16 + L.length * 17 + 8, t0: G.t, fly: null, px: hx, py: hy, vx: 0, vy: 0 };   // prints once it becomes the active popup
+    const hx = Math.round(VW / 2 - RW / 2), hy = Math.max(36, Math.round(VH / 2 - (16 + L.length * 22 + 8) / 2));
+    G.receipt = { lines: L, x: hx, y: hy, hx, hy, h: 16 + L.length * 22 + 8, t0: G.t, fly: null, px: hx, py: hy, vx: 0, vy: 0 };   // prints once it becomes the active popup
     if (G.tut && G.tut.fresh && G.day === 1 && !G.tut.handover && !TUT.seen('d.receipt')) { G.receipt.note = true; G.tut.seen.push('d.receipt'); }   // "Not bad for day one! -A"
   }
   const receiptRect = () => { const r = G.receipt; return { x: r.x, y: r.y, w: RW, h: r.h }; };
@@ -1905,7 +1930,7 @@
     PX.rect(g, x + RW / 2 - 3, y - 4, 7, 7, DK); PX.rect(g, x + RW / 2 - 2, y - 3, 5, 5, PAL.brass); PX.rect(g, x + RW / 2 - 2, y - 3, 2, 2, PAL.brassHi);   // brass pin
     for (let k = 0; k < RW; k += 8) { PX.poly(g, [[x + k - 1, y + H], [x + k + 9, y + H], [x + k + 4, y + H + 5]], DK); PX.poly(g, [[x + k, y + H - 1], [x + k + 8, y + H - 1], [x + k + 4, y + H + 3]], '#fbf6ea'); }
     r.lines.forEach((L, i) => {
-      const ly = y + 14 + i * 17;
+      const ly = y + 14 + i * 22;
       if (L.hr) { for (let k = x + 8; k < x + RW - 8; k += 4) PX.rect(g, k, ly + 4, 2, 1, '#c9b892'); return; }
       if (i === 0 && L.c) return PX.textC(g, L.c, x + RW / 2, ly - 4, PAL.cream);   // shop name sits on the header
       if (L.c) return PX.textC(g, L.c, x + RW / 2, ly, L.col || '#4a3226');
@@ -2025,7 +2050,13 @@
   function fit() {
     let cs = Math.min(window.innerWidth / VW, window.innerHeight / VH);
     if (SETTINGS.snap && cs >= 2) cs = Math.floor(cs);   // fill the window; snap to whole pixels only when there is room for 2x+
-    document.documentElement.style.setProperty('--s', cs * 2);
+    const root = document.documentElement.style;
+    root.setProperty('--s', cs * 2);
+    // HTML text sizes: FS k on the canvas is k * cs CSS pixels per font pixel; the web font is 10px per font pixel, so
+    // snap to whole multiples of 10px (the font is only crisp on whole pixels). Snap DOWN (with 5% leeway): rounding up
+    // made text up to 25% bigger than the boxes it was laid out for, and it ran out of them.
+    // Tiny labels (FS 1) are short, so they may grow up to 25% to stay readable.
+    for (let k = 1; k <= 4; k++) root.setProperty('--fs' + k, Math.max(1, Math.floor(k * cs * (k === 1 ? 1.25 : 1.05))) * 10 + 'px');
   }
   window.addEventListener('resize', fit); fit();
 
@@ -2075,6 +2106,7 @@
     G.gear = (s.gear || G.owned.filter(id => GEAR.includes(id))).filter(id => GEAR.includes(id));
     if (s.pantry) for (const id in s.pantry) if (id in G.stock) G.stock[id] += (s.pantry[id] || 0) * STOCK[id].add;   // saves from the pantry days: packs go in the bins
     G.aoiMet = !!s.aoiMet;
+    G.aoi = Object.assign({ seen: 0, visit: 0, buy: 0, chat: 0, notes: 0 }, s.aoi || {});
     // the menu: saves from before the menu editor sell every recipe they had unlocked (up to the menu's slots)
     G.menu = Array.isArray(s.menu) ? s.menu.slice() : Object.keys(MENU).filter(menuOn);
     G.pick = s.pick || 'miso';
@@ -2124,6 +2156,7 @@
   // ?shot=kitchen|toppings|serving|dialog|night|drag sets up a scene for screenshots
   function shot(kind) {
     $('modal').classList.remove('show'); G.paused = false; G.ui = null; G.shop = 'open'; G.mode = 'play'; document.body.classList.remove('title');
+    document.body.classList.add('shot');   // (screenshot pages: no CSS fades, so a capture shows the finished state)
     if (kind === 'night' || kind === 'nightkitchen') G.time = PHASE * 1.3;
     if (kind.startsWith('evening')) G.time = PHASE * 0.93;
     if (kind === 'kitchenall') { G.owned = STOPS.filter(n => n.kind !== 'start').map(n => n.id); KITCHEN.refresh(); }   // ?shot=kitchenall: every pot and crock unlocked   // ?shot=evening: still open, lamps lit
@@ -2151,6 +2184,22 @@
     if (kind === 'drag') { G.drag = { kind: 'top', id: 'chashu' }; G.mouse = { x: K(KL.bowlX[0]) - G.cam + 10, y: KL.BOWL_Y - 8 }; }
     if (kind.startsWith('book')) { COOKBOOK.goToSpread(+kind.slice(4) || 0); openBook('book', 'counter', true); }   // ?shot=book, book1, book2 ... (spread)
     if (kind === 'guests') openBook('guests', null, true);
+    // ?shot=profile (a guest's page, everyone met; profileN for the Nth guest), guests2 (a contents page, everyone met)
+    if (kind.startsWith('profile') || kind === 'guests2') {
+      G.met = GUESTS.map(gt => gt.id); G.aff = { calista: 9 };
+      if (kind === 'guests2') GUESTBOOK.goToSpread(1);
+      else GUESTBOOK.showGuest((GUESTS[+kind.slice(7) - 1] || GUESTS.find(gt => gt.id === 'calista')).id);
+      openBook('guests', null, true);
+    }
+    if (kind === 'menu') openUI('menu');   // ?shot=menu: the menu editor
+    if (kind === 'levelup') { G.level = 4; showLevelUp({ from: 3, to: 4, stops: ['spicy', 'quick'], notes: [] }); }
+    if (kind === 'receipt') { G.stats = { ...G.stats, served: 9, perfect: 6, tips: 14, sales: 118, sold: { miso: 5, shoyu: 4 } }; makeReceipt(); }
+    if (kind === 'tut') {   // ?shot=tut: a fresh save's first morning, Aoi walking in
+      G.stalls.forEach(st => { st.guest = null; }); G.slips = []; G.pass = []; G.bowls = G.bowls.map(() => newBowl());
+      G.shop = 'morning'; G.time = 0; G.tut = TUT.newState(true); updateClock(0);
+    }
+    if (kind === 'title') enterTitle();
+    if (kind.startsWith('title') && kind.length > 5) { enterTitle(); TITLE.openPause(kind.slice(5)); }   // ?shot=titlesettings, titlecredits, titlehelp
     if (kind.startsWith('street') || kind.startsWith('store')) {   // ?shot=street, store, store1..store3 (panned), storecard, storetalk
       G.stalls.forEach(st => { st.guest = null; }); G.slips = []; G.shop = 'night'; G.time = PHASE * 1.08; G.receipt = null; G.gold = 140; updateClock(0);
       G.owned = kind === 'store3' ? STOPS.filter(n => n.kind !== 'start').map(n => n.id) : ['spicy', 'quick']; KITCHEN.refresh();
@@ -2180,10 +2229,15 @@
   // Loading: the font, then every guest's portrait. The loading screen (js/loading.js) shows it as a bowl filling up,
   // then waits for a tap (which also unlocks sound), then the title screen. (?shot= test pages skip straight in.)
   let fontDone = false;
-  PX.pixDOM($('stage'));   // numbers in the HTML overlay (HUD, store, books) use the pixel font too
   const ready = Promise.all([PX.loadFont().then(() => { fontDone = true; }), ...Object.values(IMG).map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; }))]);
   const imgs = Object.values(IMG);
-  if (params.has('shot')) ready.then(() => { shot(params.get('shot')); requestAnimationFrame(loop); });
+  if (params.has('shot')) ready.then(() => {
+    shot(params.get('shot'));
+    // &warm=N: run N seconds of the game first (headless browsers barely tick requestAnimationFrame, so fades and
+    // walk-ins would never finish before the capture)
+    for (let k = Math.round((+params.get('warm') || 0) * 30); k > 0; k--) { if (G.mode === 'title') TITLE.update(1 / 30); else { update(1 / 30); hud(1 / 30); } }
+    prev = performance.now(); requestAnimationFrame(loop);
+  });
   else document.body.classList.add('title'), LOADING.run(canvas,   // (the title look hides the HUD while it loads)
     () => { const n = imgs.filter(im => im.complete).length; return { p: (fontDone ? 0.3 : 0) + 0.7 * n / imgs.length, n: imgs.length, done: fontDone && n === imgs.length }; },
     () => music(true),

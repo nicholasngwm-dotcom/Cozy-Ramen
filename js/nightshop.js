@@ -149,19 +149,19 @@ const NIGHTSHOP = (() => {
   }
   function leaveStore() {
     closePanels(); S.doorT = 1; H.sfx.slide(); S.focus = null;
-    if (S.basket.length) bubble('I will keep your cart by the till until you come back.');
+    if (S.basket.length) bubble(AOI.leaveCart());
     setTimeout(() => fadeTo(() => { G.where = 'street'; S.sdoor = 1; S.sdoorT = 0; H.sfx.slide(); }), 300);
   }
   function backHome(st = 0) { closePanels(); fadeTo(() => { G.where = null; H.back(st); }); }
 
   /* ---------- Aoi ---------- */
-  const GREET = ['Irasshaimase! Welcome to Kitsune-ya.', 'Ah, the ramen chef. Take your time, the night is long.', 'Welcome back! The cooler is full tonight.', 'Evening, chef. Mind the step. And my tail.'];
+  // (what Aoi says warms up with her hearts: js/aoi.js)
   function greet() {
     const tl = H.tutGreet ? H.tutGreet() : null;   // a new save's first visit: Aoi points out a staple to restock (tutorial.js)
     if (tl === '') { G.aoiMet = true; }   // (Aoi's handover: her tutorial panel does the talking)
     else if (tl) { G.aoiMet = true; bubble(tl, 6); focusRestock(); }
     else if (!G.aoiMet) { G.aoiMet = true; bubble('Welcome to Kitsune-ya! I am Aoi. Ingredients, tools, the odd rare thing. Pay me at the counter.'); }
-    else bubble(pick(GREET));
+    else { bubble(AOI.greet()); AOI.gain(1, 'visit'); }
     S.aoi.hop = 0.5;
     rescue();
   }
@@ -234,6 +234,7 @@ const NIGHTSHOP = (() => {
     H.sfx.coin(); H.sfx.ring();
     for (let i = 0; i < 10; i++) S.parts.push({ x: COUNTER.x + 70 + Math.random() * 120, y: CTOP - 8, k: -i * 0.05, x0: 0, y0: 0 });
     S.pops.push({ str: '-' + total + 'G', x: REG.x + 16, y: CTOP - 60, c: '#ffd76a', life: 1.4 });
+    AOI.gain(2, 'buy');
     H.save(); H.refresh && H.refresh();
     return names;
   }
@@ -242,7 +243,7 @@ const NIGHTSHOP = (() => {
   function giveReceipt() {
     closePanels(); G.kitsuneNo = (G.kitsuneNo || 41) + 1;
     const hr = G.hour || 0, hh = Math.floor(hr) % 24, mm = Math.floor((hr % 1) * 60);
-    S.receipt = { ...S.lastSale, no: G.kitsuneNo, when: 'DAY ' + G.day + '  ' + pad2(hh) + ':' + pad2(mm), t0: G.t, out: 0, stamped: false };
+    S.receipt = { ...S.lastSale, thanks: AOI.receipt(), no: G.kitsuneNo, when: 'DAY ' + G.day + '  ' + pad2(hh) + ':' + pad2(mm), t0: G.t, out: 0, stamped: false };
     S.ui = 'receipt'; S.aoi.tx = REG.x - 20; H.sfx.paper && H.sfx.paper();
   }
   function tuckReceipt() { if (S.receipt && !S.receipt.out) { S.receipt.out = G.t; H.sfx.paper && H.sfx.paper(); } }
@@ -257,7 +258,7 @@ const NIGHTSHOP = (() => {
   }
   function drawReceipt(g) {
     const r = S.receipt; if (!r) return;
-    const rows = receiptRows(r), H0 = 76, rowsH = rows.length * 17, H1 = H0 + rowsH + (r.saved ? 18 : 0) + 44 + 88;
+    const rows = receiptRows(r), H0 = 76, rowsH = rows.length * 22, H1 = H0 + rowsH + (r.saved ? 18 : 0) + 44 + 88;
     const ap = clamp((G.t - r.t0) / 0.45, 0, 1), ease = 1 - Math.pow(1 - ap, 3);
     const op = r.out ? clamp((G.t - r.out) / 0.45, 0, 1) : 0;
     const x0 = Math.round(VW / 2 - RCW / 2), yRest = Math.max(30, Math.round((VH - H1) / 2) - 6);
@@ -283,9 +284,9 @@ const NIGHTSHOP = (() => {
     for (const row of rows) {
       if (row.small) {
         text(g, row.l, x + 18, yy - 1, '#7a8aa8');
-        if (row.sale) { const w = textW('SALE') + 6, sx = x + RCW - 14 - w; rect(g, sx, yy - 2, w, 13, RED); text(g, 'SALE', sx + 3, yy - 1, '#fbf6ea'); }
+        if (row.sale) { const w = textW('SALE') + 6, sx = x + RCW - 14 - w; rect(g, sx, yy - 4, w, 18, RED); text(g, 'SALE', sx + 3, yy, '#fbf6ea'); }
       } else { text(g, row.l, x + 14, yy, INK); text(g, row.r, x + RCW - 14 - textW(row.r), yy, INK); }
-      yy += 17;
+      yy += 22;
     }
     if (r.saved) { text(g, 'YOU SAVED', x + 14, yy + 2, RED); text(g, r.saved + 'G', x + RCW - 14 - textW(r.saved + 'G'), yy + 2, RED); yy += 18; }
     dots(yy + 2); yy += 10;
@@ -293,7 +294,7 @@ const NIGHTSHOP = (() => {
     text(g, 'YOUR PURSE', x + 14, yy + 18, '#7a8aa8'); text(g, r.purse + 'G', x + RCW - 14 - textW(r.purse + 'G'), yy + 18, '#7a8aa8');
     yy += 42; dots(yy - 4);
     // footer: thanks in ink, then the red fox seal, which thumps down a moment after the slip arrives
-    textC(g, 'ARIGATOU! COME AGAIN', x + RCW / 2, yy + 4, INK);
+    textC(g, r.thanks || 'ARIGATOU! COME AGAIN', x + RCW / 2, yy + 4, INK);
     text(g, '- Aoi', x + 18, yy + 30, '#2f6ab0');
     for (const [px, py] of [[x + 30, yy + 54], [x + 46, yy + 62]]) { ell(g, px, py, 4, 3, '#c8d0e0'); for (const [tx, ty] of [[-4, -5], [0, -7], [4, -5]]) ell(g, px + tx, py + ty, 1, 1, '#c8d0e0'); }   // little paw prints
     const st = G.t - r.t0 - 0.8;
@@ -388,14 +389,23 @@ const NIGHTSHOP = (() => {
     if (add) add.onclick = () => { if (addToBasket(it.id, it.kind === 'gear' ? 1 : S.qty)) { S.qty = 1; renderCard(); } };
   }
   // The talk panel: Aoi's lines on top, then either choices, her order list (the whole catalogue) or the checkout.
-  const ABOUT = ['I have kept this shop for three hundred years. The prices have changed a little.', 'Blue tails are rare. So is a good ramen chef. We should stick together.',
-    'I close at dawn. Foxes need their beauty sleep too.', 'My best customer is the snail lady. She buys one nori sheet. Every night. For years.'];
   function say(msg) { S.talk.full = msg; S.talk.shown = 0; }
+  // Aoi's heart scenes (js/aoi.js): one line at a time in the talk panel, with your replies as choices
+  function startScene(k) { S.scene = { k, steps: AOI.scene(k).slice(), i: 0 }; S.aoi.hop = 0.5; talk('scene'); }
+  function sceneStep() { const sc = S.scene, s = sc && sc.steps[sc.i]; return s == null ? null : typeof s === 'string' ? { a: s } : s; }
+  function sceneNext(reply) {
+    const sc = S.scene; if (!sc) return;
+    if (reply) sc.steps.splice(sc.i + 1, 0, reply);   // her answer to what you said comes next
+    sc.i++;
+    if (sc.i >= sc.steps.length) { AOI.finishScene(sc.k); AOI.gain(2, 'chat'); S.scene = null; S.aoi.hop = 0.5; talk('menu', AOI.menuLine()); return; }
+    S.aoi.hop = 0.3; talk('scene');
+  }
   function talk(view = 'menu', msg) {
     S.ui = 'talk'; S.view = view; $('ns-card').classList.remove('show');
     S.aoi.tx = view === 'checkout' || view === 'confirm' ? REG.x - 20 : 420;
     if (msg) say(msg);
-    else if (view === 'menu') say(S.basket.length ? 'Ready to pay, chef? Or shall I fetch something from the back?' : pick(['What can I get you?', 'Looking for anything in particular?', 'Mm? Ask away.']));
+    else if (view === 'scene') say(sceneStep().a);
+    else if (view === 'menu') say(S.basket.length ? 'Ready to pay, chef? Or shall I fetch something from the back?' : AOI.menuLine());
     else if (view === 'list') say('Tell me what you need and I will fetch it.');
     else if (view === 'checkout') say(S.basket.length ? 'Let me see what you have...' : 'Your cart is empty, chef.');
     renderTalk(); $('ns-talk').classList.add('show');
@@ -403,12 +413,18 @@ const NIGHTSHOP = (() => {
   function renderTalk() {
     const body = $('ns-body'), ch = $('ns-choices'), total = basketTotal();
     let html = '', choices = [];
-    if (S.view === 'menu') {
+    if (S.view === 'scene') {
+      const s = sceneStep();
+      if (s.r) s.r.forEach(([lab, ans]) => choices.push([lab, () => sceneNext(ans), 'heart']));
+      else choices.push(['...', () => sceneNext()]);
+    } else if (S.view === 'menu') {
+      const k = AOI.sceneReady();   // a new heart: she has something to tell you (top of the list, with a heart)
+      if (k) choices.push([k === 1 ? 'You seem thoughtful tonight, Aoi.' : 'Is something on your mind, Aoi?', () => startScene(k), 'heart']);
       if (S.basket.length) choices.push(['Pay for my cart (' + total + 'G)', () => talk('checkout')]);
       choices.push(['Could you fetch something?', () => talk('list')]);
       choices.push(["What's the special tonight?", () => { const it = item(market().special); talk('menu', it.left ? 'Tonight it is ' + it.name.toLowerCase() + ', ' + it.price + 'G a pack instead of ' + it.full + 'G. Look for the red SALE tag.' : 'The special is all gone tonight. You have good taste, chef.'); }]);
-      choices.push(['Tell me about yourself', () => talk('menu', pick(ABOUT))]);
-      choices.push(['Goodbye', () => { closePanels(); bubble(pick(['Come again!', 'Mind the tail on your way out.', 'Good night, chef.'])); H.sfx.tap(); }]);
+      if (!k) choices.push([AOI.tier() ? 'Chat with Aoi' : 'Tell me about yourself', () => { AOI.gain(2, 'chat'); S.aoi.hop = 0.3; talk('menu', AOI.chat()); }]);
+      choices.push(['Goodbye', () => { closePanels(); bubble(AOI.bye()); H.sfx.tap(); }]);
     } else if (S.view === 'list') {
       html = '<div class="ns-list">' + CATALOGUE().map(([sec, ids]) => `<h4>${sec}</h4>` + ids.map(id => {
         const it = item(id), room = it.left - inBasket(id);
@@ -433,10 +449,10 @@ const NIGHTSHOP = (() => {
       choices.push(['Not yet', () => talk('checkout')]);
     } else if (S.view === 'done') {
       choices.push(['Keep shopping', () => { closePanels(); H.sfx.tap(); }]);
-      choices.push(['Goodbye', () => { closePanels(); bubble('Good night, chef. Cook something lovely.'); }]);
+      choices.push(['Goodbye', () => { closePanels(); bubble(AOI.done()); }]);
     }
     body.innerHTML = html;
-    ch.innerHTML = choices.map(([t, fn], i) => `<button type="button" class="choice${fn ? '' : ' off'}" data-i="${i}"${fn ? '' : ' disabled'}>${esc(t)}</button>`).join('');
+    ch.innerHTML = choices.map(([t, fn, heart], i) => `<button type="button" class="choice${fn ? '' : ' off'}${heart ? ' heart' : ''}" data-i="${i}"${fn ? '' : ' disabled'}>${heart ? '<i class="aff-h on"></i> ' : ''}${esc(t)}</button>`).join('');
     ch.querySelectorAll('.choice').forEach(b => { const fn = choices[+b.dataset.i][1]; if (fn) b.onclick = () => { H.sfx.tap(); fn(); }; });
     body.querySelectorAll('[data-add]').forEach(b => { b.onclick = () => { addToBasket(b.dataset.add, 1); renderTalk(); }; });
     body.querySelectorAll('[data-inc]').forEach(b => { b.onclick = () => { const id = b.dataset.inc; if (!addToBasket(id, 1)) return; renderTalk(); }; });
@@ -516,7 +532,7 @@ const NIGHTSHOP = (() => {
     }
     if (!G.where) return;
     if (G.where === 'store' && !storeOpen() && !S.closing && !S.fadeDir) {
-      S.closing = 3.2; closePanels(); bubble('Three o\'clock, chef. Kitsune-ya is closing. Come back at four in the morning!', 3.2); S.aoi.hop = 0.4;
+      S.closing = 3.2; closePanels(); bubble(AOI.closing(), 3.2); S.aoi.hop = 0.4;
     }
     if (S.closing > 0) { S.closing -= dt; if (S.closing <= 0) leaveStore(); }
     S.door += clamp(S.doorT - S.door, -dt * 3.2, dt * 3.2);

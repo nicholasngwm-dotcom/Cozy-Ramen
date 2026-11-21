@@ -1138,7 +1138,7 @@ const TITLE = (() => {
         ...(gt.taste.tops ? wrap('LIKES: ' + Object.keys(gt.taste.tops).map(id => (gt.taste.tops[id] ? '' : 'NO ') + TOP_NAME[id].toUpperCase()).join(', '), 38) : []),
         ...(gt.taste.night ? ['ONLY VISITS AT NIGHT'] : [])
       ] : ['NOT MET YET.', '', 'SERVE THEM A BOWL TO', 'ADD THEM TO THE BOOK.'];
-      info.forEach((s, i) => textC(g, s, rx + 181, y + 246 + i * 16, i === 0 && known ? '#4a3226' : '#6a5038'));
+      info.forEach((s, i) => textC(g, s, rx + 181, y + 246 + i * 22, i === 0 && known ? '#4a3226' : '#6a5038'));
     }
     nav('BACK', rx + 300, backOut);
   }
@@ -1251,11 +1251,11 @@ const TITLE = (() => {
     const ky = R.y + R.h - 30; textC(g, 'BACK', VW / 2, ky, '#8a2a1a'); hits.push({ r: { x: VW / 2 - 40, y: ky - 6, w: 80, h: 22 }, fn: backOut });
     glove(g, VW / 2 - 34 + Math.round(Math.sin(S.t * 6) * 2), ky + 5, 1);
   }
-  /* Credits. (The fonts the game uses, with their licences; the OFL text sits next to the font files in assets/fonts.) */
+  /* Credits. */
   const CREDITS = [
     ['Cozy Ramen: An Adventurers\' Noodle Stall', null],
-    ['FONTS', null],
-    ['Pixelify Sans', 'by Stefie Justprince. SIL Open Font License (assets/fonts/OFL.txt).']
+    ['FONT', null],
+    ['CozyPixel', "The game's own 5x7 pixel font, drawn for Cozy Ramen."]
   ];
   function drawCredits(g) {
     const R = scroll(g, VW / 2, 110, 560, 300, 'CREDITS'); if (!R) return;

@@ -594,7 +594,9 @@ const TUT = (() => {
       return;
     }
     if (r.dom) {   // a HUD control (HTML, drawn over the canvas): the glove points up at it from just below
-      g.save(); g.translate(Math.round(x + w / 2), y + h + 16 + bob); g.rotate(Math.PI / 2); SCENE.glove(g, 0, 0, -1); g.restore();
+      // (or, for one near the bottom edge like the quest card, down at it from just above)
+      const below = y + h + 40 < VH;
+      g.save(); g.translate(Math.round(x + w / 2), below ? y + h + 16 + bob : y - 16 - bob); g.rotate(below ? Math.PI / 2 : -Math.PI / 2); SCENE.glove(g, 0, 0, -1); g.restore();
       return;
     }
     const gy = clamp(y + h / 2, 12, VH - 12);
@@ -670,6 +672,8 @@ const TUT = (() => {
     holdCoins: i => T.on && !!tg() && tg().stall === i && !!STEPS[T.idx] && /^(eat|coins)\d/.test(STEPS[T.idx].id),   // a guided guest's coins wait to be collected
     wantGuest: () => (T.on && T.want && !G.tutGu ? T.want : null),                     // the handover's next guest: 'plain' | 'extra' | 'decline' | 'solo'
     handover: () => !!(tut() && tut().handover),
+    // the daily quest card stays hidden until Aoi has introduced it (or the handover is over or skipped)
+    questShown: () => (T.on ? T.idx >= STEPS.findIndex(s => s.id === 'quest') : !tut() || !!tut().done),
     talking: () => !!(T.aoi && !T.aoi.out),
     debug: () => ({ on: T.on, step: T.on && STEPS[T.idx] ? STEPS[T.idx].id : null, tgt: T.tgt, drag: T.drag, text: T.aoi && T.aoi.text, notes: T.ev.map(e => e.id).concat(T.stall ? [T.stall.id] : []) })   // (read-only, for test pages)
   };

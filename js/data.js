@@ -304,8 +304,15 @@ function rackTops() {
 const AFFINITY = [
   { at: 0, name: 'Stranger' }, { at: 3, name: 'Regular' }, { at: 8, name: 'Friend' }, { at: 15, name: 'Close friend' }, { at: 25, name: 'Family' }
 ];
-const affLevel = pts => { let l = 0; AFFINITY.forEach((a, i) => { if ((pts || 0) >= a.at) l = i; }); return l; };   // 0-based
-const affNext = pts => { const l = affLevel(pts); return l >= AFFINITY.length - 1 ? null : AFFINITY[l + 1].at; };
+// Aoi is not a guest like the others: ten hearts, and her points also come from visiting, shopping and chatting at
+// Kitsune-ya (js/aoi.js). Each heart opens one scene of her story.
+const AOI_AFFINITY = [
+  { at: 0, name: 'Customer' }, { at: 4, name: 'Regular' }, { at: 10, name: 'Friendly face' }, { at: 18, name: 'Friend' }, { at: 28, name: 'Good friend' },
+  { at: 40, name: 'Close friend' }, { at: 54, name: 'Confidant' }, { at: 70, name: 'Someone special' }, { at: 88, name: 'Sweetheart' }, { at: 110, name: 'Beloved' }
+];
+const affRanks = id => (id === 'aoi' ? AOI_AFFINITY : AFFINITY);
+const affLevel = (pts, id) => { let l = 0; affRanks(id).forEach((a, i) => { if ((pts || 0) >= a.at) l = i; }); return l; };   // 0-based
+const affNext = (pts, id) => { const R = affRanks(id), l = affLevel(pts, id); return l >= R.length - 1 ? null : R[l + 1].at; };
 
 /* Stock comes from Aoi's night supply shop across the street (js/nightshop.js), open SHOP_HOURS after closing:
    a pack bought there goes straight into the kitchen's bin, crock, pot or noodle tray (packSize portions, no cap).

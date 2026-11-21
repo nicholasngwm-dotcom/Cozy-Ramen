@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cozy Ramen</title>
-  <link rel="preload" href="assets/fonts/PixelifySans-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/fonts/CozyPixel.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -21,10 +21,6 @@
         <span class="sep"></span>
         <span class="coin" data-icon="coin"></span><span id="gold"></span>
         <span class="sep"></span>
-        <span class="sep"></span>
-        <span id="quest" tabindex="0" aria-label="Daily quest"><span class="q-ico"></span><span id="quest-n"></span>
-          <span class="q-pop washi"><span class="q-tag">Daily quest</span><span id="quest-text"></span><span class="q-bar"><i id="quest-fill"></i></span><span id="quest-reward"></span></span>
-        </span>
         <button id="lvl" class="lvlbtn" type="button" title="Level road" aria-label="Level road"><span id="lvnum">Lv 1</span><span class="xpbar"><i id="xpfill"></i></span></button>
       </div>
       <span class="grow"></span>
@@ -66,6 +62,14 @@
       <button id="tab-kitchen" class="tag" type="button"><span class="ti" data-icon="kitchen"></span>Kitchen<span class="badge" id="badge-kitchen"></span></button>
       <button id="tab-street" class="tag gone" type="button" title="Night street: Aoi's supply shop"><span class="ti" data-icon="street"></span>Street</button>
       <span id="hint"></span>
+    </div>
+
+    <!-- the daily quest: a card in the bottom-right corner; the header button folds it down to a small chip -->
+    <div id="quest" class="washi hide" aria-label="Daily quest">
+      <button id="quest-head" type="button" aria-expanded="true" title="Hide quest">
+        <span class="q-ico"></span><span class="q-tag">Daily quest</span><span id="quest-n"></span><span class="q-tog"></span>
+      </button>
+      <div class="q-body"><span id="quest-text"></span><span class="q-bar"><i id="quest-fill"></i></span><span id="quest-reward"></span></div>
     </div>
 
     <div id="menu" class="overlay">
@@ -127,10 +131,12 @@
   </div>
 
   <script src="js/ui.js"></script>
+  <script src="js/fontdata.js"></script>
   <script src="js/px.js"></script>
   <script src="js/data.js"></script>
   <script src="js/guests.js"></script>
   <script src="js/personas.js"></script>
+  <script src="js/aoi.js"></script>
   <script src="js/art.js"></script>
   <script src="js/scene.js"></script>
   <script src="js/kitchen.js"></script>
@@ -144,6 +150,7 @@
   <script src="js/journey.js"></script>
   <script src="js/nightshop.js"></script>
   <script src="js/tutorial.js"></script>
+  <script src="js/facetool.js"></script>
   <script src="js/game.js"></script>
 </body>
 </html>

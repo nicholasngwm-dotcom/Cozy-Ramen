@@ -7,42 +7,62 @@ const GUESTBOOK = (() => {
   const PER_GRID = 12, TILT = [-2, 1.5, -1, 2, 0.5, -1.5];
   let hooks = { sound: () => {}, close: () => {}, img: () => null, met: () => [], aff: () => ({}) };
 
-  /* A crop of each guest's head and shoulders: [x, y, size] of a square in the PNG's own pixels. The sprites are
-     drawn at different scales, so each crop was measured from the sprite's pixels (head band and width), then
-     hand-tuned for guests whose weapons widened the measurement.
-     A new guest without an entry gets a crop worked out from ax / head / bottom in guests.js. */
-  const FACE = {
-    annabel: [22, 0, 68], eyvira: [13, 0, 65], iris: [16, 7, 64], leona: [23, 0, 77], lilli: [37, 17, 58], lisara: [18, 11, 62],
-    luna: [46, 0, 73], lyriana: [29, 4, 63], nara: [25, 7, 63], yara: [85, 5, 65], angelica: [68, 19, 80], astrid: [66, 46, 84],
-    celestia: [2, 0, 76], clara: [28, 0, 85], coco: [52, 12, 95], deerlara: [64, 0, 119], elfina: [26, 0, 74], erica: [37, 0, 96],
-    glaire: [41, 0, 70], iguara: [71, 0, 85], imani: [113, 2, 75], kaya: [10, 10, 80], seraphina: [31, 0, 77], tilia: [34, 6, 75],
-    naida: [87, 0, 75], kira: [37, 21, 81], mara: [45, 0, 76], misty: [33, 6, 75], morticia: [26, 0, 75], vyra: [101, 20, 80],
-    sylva: [77, 0, 66], fae: [67, 18, 85], mortis: [21, 55, 85],
-    lucaria: [14, 20, 67], maddy: [51, 4, 80], snailia: [41, 47, 78], ursula: [118, 16, 80], aurora: [113, 43, 61], talia: [50, 77, 64],
-    lilith: [102, 6, 66], abyzara: [76, 64, 82], adeline: [44, 13, 71], aurelia: [61, 0, 85], calista: [28, 0, 75], aoi: [44, 12, 72],
-    fynja: [48, 22, 78], glacia: [62, 29, 80], rizz: [32, 0, 66], willka: [63, 2, 75], zyra: [82, 28, 80]
-  };
-  function faceOf(gt) {
-    if (FACE[gt.id]) return FACE[gt.id];
-    const S = Math.round((gt.bottom - gt.head) * 0.38);
-    return [Math.round(gt.ax - S / 2), Math.max(0, gt.top - 2), S];
+  /* ---------- portraits, anchored on each guest's face ----------
+     guests.js gives every guest face: [eyeX, eyeY, chinY] in the PNG's own pixels (the point between the eyes, and the
+     bottom of the chin; set them with index.html?facetool). The portraits are CSS crops straight from the PNG (copying a
+     PNG through a canvas is blocked by browsers when the game runs from local files). Each frame is sized in layout
+     units; paint() works the crop out in real screen pixels, so thumbnails can zoom by whole-number factors. Pages are
+     drawn on demand, so a MutationObserver paints new frames and a resize repaints them all. */
+  const faceOf = gt => gt.face || [gt.ax, Math.round(gt.head + 0.19 * (gt.bottom - gt.head)), Math.round(gt.head + 0.28 * (gt.bottom - gt.head))];
+  const unitPx = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--s')) || 2;
+  const clampIn = (v, a, b) => Math.max(a, Math.min(b, v));
+  /* Thumbnail (a square T px): the face, eyes to chin * 2.2, fills 45% of the height; the eyes sit 42% from the top,
+     centred across. The zoom snaps to a whole number of device pixels per PNG pixel when that is within 25% of the
+     ideal (pixels stay square and even). The crop never runs past the PNG: it shifts back inside, and any gap left
+     (a PNG smaller than the frame) shows the polaroid's own background. Returns { k, x, y } in CSS px. */
+  function thumbCrop(gt, face, T, dpr = window.devicePixelRatio || 1) {
+    let k = 0.45 * T / Math.max(1, (face[2] - face[1]) * 2.2);
+    const ki = Math.round(k * dpr);
+    if (ki >= 1 && Math.abs(ki / (k * dpr) - 1) <= 0.25) k = ki / dpr;
+    const W = gt.w * k, H = gt.h * k;
+    let x = T / 2 - face[0] * k, y = 0.42 * T - face[1] * k;
+    x = W >= T ? clampIn(x, T - W, 0) : clampIn(x, 0, T - W);
+    y = H >= T ? clampIn(y, T - H, 0) : clampIn(y, 0, T - H);
+    return { k, x: Math.round(x * dpr) / dpr, y: Math.round(y * dpr) / dpr };
   }
-  /* The portrait is a CSS crop straight from the PNG: copying a PNG through a canvas (toDataURL) is blocked by browsers
-     when the game runs from local files. Unmet guests get a CSS silhouette. bw x bh is the frame in layout units. */
-  function portrait(gt, bw, bh, sil) {
-    const im = hooks.img(gt.id), nw = (im && im.naturalWidth) || gt.w, nh = (im && im.naturalHeight) || gt.h;
-    const [x0, y0, S] = faceOf(gt), k = bw / S, u = n => `calc(${(n * k).toFixed(3)} * var(--u))`;
-    return `<span class="gb-pic${sil ? ' sil' : ''}" style="width:calc(${bw} * var(--u));height:calc(${bh} * var(--u))"><i style="background-image:url('assets/guests/${gt.id}.png');background-size:${u(nw)} ${u(nh)};background-position:${u(-x0)} ${u(-y0)}"></i></span>`;
+  /* Profile portrait (bw x bh px). Every sprite in the pack is cut off across the thighs (gt.bottom is that cut line,
+     even where the PNG has empty rows below it), so the cut is placed flush with the frame's bottom edge and the body
+     reads as continuing out of the frame. Scale: the head to the cut fills 94% of the height (the head lands about 6%
+     below the top). Very wide sprites (wings, big weapons) may scale down so they show up to 2.6 frame-widths, but they
+     still sit on the bottom edge, never floating. Then the face is kept inside the frame across. */
+  function fullCrop(gt, face, bw, bh, dpr = window.devicePixelRatio || 1) {
+    const k = Math.min(0.94 * bh / (gt.bottom - gt.head + 1), (bw * 2.6) / gt.w);
+    let x = bw / 2 - gt.ax * k;
+    const y = bh - (gt.bottom + 1) * k;
+    const half = (face[2] - face[1]) * k * 1.3, fx = face[0] * k + x;
+    if (fx - half < 0) x -= fx - half; else if (fx + half > bw) x -= fx + half - bw;
+    return { k, x: Math.round(x * dpr) / dpr, y: Math.round(y * dpr) / dpr };
   }
-
-  /* The detailed portrait for a profile page: the whole character, top of the head (or hat) to the bottom of the
-     sprite, scaled to fit the frame's height and centred on the body. Very wide sprites (big weapons, wings) are
-     scaled down to keep most of the width too; anything left over at the sides is trimmed by the frame. */
-  function fullBody(gt, bw, bh, sil) {
-    const im = hooks.img(gt.id), nw = (im && im.naturalWidth) || gt.w, nh = (im && im.naturalHeight) || gt.h;
-    const tall = gt.bottom - gt.top + 1, k = Math.min(bh / tall, (bw * 1.6) / nw);
-    const x = bw / 2 - gt.ax * k, y = (bh - tall * k) - gt.top * k, u = n => `calc(${n.toFixed(3)} * var(--u))`;
-    return `<span class="gb-pic full${sil ? ' sil' : ''}" style="width:calc(${bw} * var(--u));height:calc(${bh} * var(--u))"><i style="background-image:url('assets/guests/${gt.id}.png');background-size:${u(nw * k)} ${u(nh * k)};background-position:${u(x)} ${u(y)}"></i></span>`;
+  // A frame: bw x bh layout units; kind 't' (thumbnail) or 'f' (full body). paint() fills in the crop.
+  function pic(gt, kind, bw, bh, sil, extra = '') {
+    return `<span class="gb-pic${kind === 'f' ? ' full' : ''}${sil ? ' sil' : ''}${extra}" data-g="${gt.id}" data-k="${kind}" data-bw="${bw}" data-bh="${bh}" style="width:calc(${bw} * var(--u));height:calc(${bh} * var(--u))"><i style="background-image:url('assets/guests/${gt.id}.png')"></i></span>`;
+  }
+  const portrait = (gt, bw, bh, sil) => pic(gt, 't', bw, bh, sil);
+  const fullBody = (gt, bw, bh, sil) => pic(gt, 'f', bw, bh, sil);
+  // Work out one frame's crop from the live screen scale (face, u: a stand-in anchor and scale, for the face tool).
+  function paint(el, face, uOver) {
+    const gt = GUESTS.find(g => g.id === el.dataset.g); if (!gt) return;
+    const u = uOver || unitPx(), bw = +el.dataset.bw * u, bh = +el.dataset.bh * u, f = face || faceOf(gt);
+    const c = el.dataset.k === 'f' ? fullCrop(gt, f, bw, bh) : thumbCrop(gt, f, Math.min(bw, bh));
+    const i = el.firstElementChild;
+    i.style.backgroundSize = `${(gt.w * c.k).toFixed(3)}px ${(gt.h * c.k).toFixed(3)}px`;
+    i.style.backgroundPosition = `${c.x.toFixed(3)}px ${c.y.toFixed(3)}px`;
+  }
+  const paintAll = root => root.querySelectorAll('.gb-pic[data-g]').forEach(el => paint(el));
+  function watchPics(root) {
+    new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.matches('.gb-pic[data-g]')) paint(n); else paintAll(n); } })
+      .observe(root, { childList: true, subtree: true });
+    window.addEventListener('resize', () => paintAll(root));
   }
 
   const TABS = [{ id: 'all', label: 'All' }, { id: 'met', label: 'Met' }, { id: 'unmet', label: 'Not met' }, { id: 'night', label: 'Night owls' }];
@@ -61,14 +81,14 @@ const GUESTBOOK = (() => {
   // A profile page: the full-body portrait on the left, who they are on the right.
   function profile(gt, p, met) {
     const known = met.includes(gt.id), P = PERSONA[gt.id] || {}, no = GUESTS.indexOf(gt) + 1;
-    const photo = `<div class="profile-photo full${known ? '' : ' unmet'}">${fullBody(gt, 74, 146, !known)}</div>`;
+    const photo = `<div class="profile-photo full${known ? '' : ' unmet'}">${fullBody(gt, 66, 124, !known)}</div>`;
     if (!known) return `
       <div class="gb-chap">Guest No. ${no}</div>
       <div class="gb-profile">${photo}<div class="gb-about">
         <div class="ribbon">???</div>
         <p class="gb-title">Not met yet</p>
-        <p class="gb-quote">Serve them a bowl and this page will fill in.</p>
-      </div></div>${num(p)}`;
+      </div></div>
+      <p class="gb-quote">Serve them a bowl and this page will fill in.</p>${num(p)}`;
     const pref = gt.taste.pref && MENU[gt.taste.pref], likes = Object.keys(gt.taste.tops || {});
     return `
       <div class="gb-chap">Guest No. ${no}</div>
@@ -82,14 +102,14 @@ const GUESTBOOK = (() => {
           ${gt.taste.night ? '<dt>Visits</dt><dd>Only at night</dd>' : ''}
           <dt>Affinity</dt><dd>${affRow(gt.id)}</dd>
         </dl>
-        <p class="gb-quote">&ldquo;${esc(gt.hi)}&rdquo;</p>
-      </div></div>${num(p)}`;
+      </div></div>
+      <p class="gb-quote">&ldquo;${esc(gt.hi)}&rdquo;</p>${num(p)}`;
   }
-  // Five hearts (filled up to the guest's rank), the rank's name, and how far it is to the next one.
+  // Five hearts (ten for Aoi), filled up to the guest's rank, the rank's name, and how far it is to the next one.
   function affRow(id) {
-    const pts = (hooks.aff() || {})[id] || 0, l = affLevel(pts), next = affNext(pts);
-    const hearts = AFFINITY.map((a, i) => `<i class="aff-h${i <= l ? ' on' : ''}"></i>`).join('');
-    return `<span class="aff">${hearts}</span> ${esc(AFFINITY[l].name)}${next ? ` <small class="aff-to">${next - pts} to go</small>` : ''}`;
+    const R = affRanks(id), pts = (hooks.aff() || {})[id] || 0, l = affLevel(pts, id), next = affNext(pts, id);
+    const hearts = R.map((a, i) => `<i class="aff-h${i <= l ? ' on' : ''}"></i>`).join('');
+    return `<span class="aff${R.length > 5 ? ' ten' : ''}">${hearts}</span> ${esc(R[l].name)}${next ? `<small class="aff-to">${next - pts} to go</small>` : ''}`;
   }
   function grid(list, k, pageOf, p, total, met, st) {
     const rows = list.slice(k * PER_GRID, (k + 1) * PER_GRID);
@@ -127,6 +147,7 @@ const GUESTBOOK = (() => {
   const coverHTML = `<div class="pb-cover-art"><div class="pb-cover-frame"><div class="pb-cover-title">Guest Book</div><div class="pb-cover-emb gb-emb"></div><div class="pb-cover-sub">Cozy Ramen</div></div></div>`;
   function ensure() {
     if (book) return;
+    watchPics(document.getElementById('guests'));
     book = PBOOK.create(document.getElementById('guests'), { skin: 'skin-album', coverHTML, sound: n => hooks.sound(n), onBackdrop: () => hooks.close(), requestClose: () => hooks.close(), onSettle: s => { lastSpread = s; } });
     tb = BOOKFILTER.toolbar(book.tabs, book.side, { placeholder: 'Search guests', tabs: TABS, select: { label: 'Favourite', any: 'any ramen', options: FAVS }, stamps: [] }, () => rebuild(true));
     book.body.addEventListener('click', e => {
@@ -147,6 +168,17 @@ const GUESTBOOK = (() => {
   return {
     init: h => { hooks = Object.assign(hooks, h); }, open, close,
     next: () => book && book.next(), prev: () => book && book.prev(),
-    get book() { return book; }, get toolbar() { return tb; }, results: () => (tb ? results() : [])
+    get book() { return book; }, get toolbar() { return tb; }, results: () => (tb ? results() : []),
+    // jump to a guest's profile page (screenshots and the face tool)
+    // (before the book opens, it simply opens at that spread)
+    showGuest: id => {
+      ensure(); metNow = hooks.met().slice();
+      const list = results(), i = list.findIndex(gt => gt.id === id); if (i < 0) return;
+      const s = Math.floor((1 + Math.max(1, Math.ceil(list.length / PER_GRID)) + i) / 2);
+      if (book.isOpen()) book.flipToSpread(s); else lastSpread = s;
+    },
+    // the portrait maths, for the face tool (index.html?facetool)
+    pic, paint, faceOf,
+    goToSpread: s => { ensure(); if (book.isOpen()) book.flipToSpread(s); else lastSpread = s; }
   };
 })();

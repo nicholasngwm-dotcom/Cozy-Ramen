@@ -510,7 +510,7 @@ const ART = (() => {
     }
     return out;
   }
-  const slipH = order => { const n = nameLines(MENU[order.type]).length, k = slipMods(order).length; return 30 + n * 16 + (k ? 12 + k * 16 : 0) + 10; };
+  const slipH = order => { const n = nameLines(MENU[order.type]).length, k = slipMods(order).length; return 30 + n * 22 + (k ? 12 + k * 22 : 0) + 10; };
   function dashes(g, x, y, w) { for (let k = 0; k < w; k += 6) rect(g, x + k, y, 3, 1, FADED); }
   // s: { num, stall, order }
   function slip(g, x, y, s) {
@@ -526,11 +526,11 @@ const ART = (() => {
     const st = s.stall >= 0 ? 'SEAT ' + (s.stall + 1) : 'LINE';
     text(g, st, x + SLIP_W - 6 - textW(st), y + 9, INK);
     dashes(g, x + 6, y + 22, SLIP_W - 12);
-    names.forEach((ln, i) => textC(g, ln, x + SLIP_W / 2, y + 30 + i * 16, m.c));
+    names.forEach((ln, i) => textC(g, ln, x + SLIP_W / 2, y + 30 + i * 22, m.c));
     if (mods.length) {
-      const my = y + 30 + names.length * 16;
+      const my = y + 30 + names.length * 22;
       dashes(g, x + 6, my + 2, SLIP_W - 12);
-      mods.forEach((md, i) => text(g, md.t, x + 8, my + 10 + i * 16, md.add ? '#2f7a3a' : '#c8302a'));
+      mods.forEach((md, i) => text(g, md.t, x + 8, my + 10 + i * 22, md.add ? '#2f7a3a' : '#c8302a'));
     }
   }
 

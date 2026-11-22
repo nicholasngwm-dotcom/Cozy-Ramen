@@ -782,19 +782,18 @@ const SERVING = (() => {
     }
     dg.putImageData(di, 0, 0); wg.putImageData(wi, 0, 0);
   }
-  // a cat napping in the sun on the counter's far left end: slow breathing, an occasional flick of the tail
-  function sunCat(g, G) {
-    if ((G.nightF || 0) > 0.5) return;
-    const cx = 120, by = CY - 1, br = Math.sin(G.t * 1.6) > 0 ? 1 : 0, flick = Math.sin(G.t * 0.7) > 0.93 ? -3 : 0;
-    contact(g, cx, by, 22, 2);
-    ell(g, cx, by - 7 - br, 20, 8 + br, DK); ell(g, cx, by - 7 - br, 19, 7 + br, '#e8a858'); ell(g, cx - 3, by - 10 - br, 12, 4, '#f6c47a');
-    for (let k = -12; k <= 12; k += 6) rect(g, cx + k, by - 12 - br, 2, 4, '#c8843a');   // stripes
-    ell(g, cx + 18, by - 12, 8, 7, DK); ell(g, cx + 18, by - 12, 7, 6, '#e8a858');
-    poly(g, [[cx + 12, by - 16], [cx + 13, by - 24], [cx + 17, by - 17]], DK); poly(g, [[cx + 19, by - 17], [cx + 23, by - 24], [cx + 24, by - 15]], DK);
-    poly(g, [[cx + 13, by - 17], [cx + 14, by - 22], [cx + 16, by - 17]], '#e8a858'); poly(g, [[cx + 20, by - 17], [cx + 22, by - 22], [cx + 23, by - 16]], '#e8a858');
-    rect(g, cx + 14, by - 13, 3, 1, DK); rect(g, cx + 20, by - 13, 3, 1, DK); dot(g, cx + 18, by - 10, '#d86a6a');   // sleepy eyes, nose
-    line(g, cx - 18, by - 6, cx - 30, by - 2 + flick, DK, 4); line(g, cx - 18, by - 6, cx - 30, by - 2 + flick, '#e8a858', 2);
-    if (Math.sin(G.t * 0.9) > 0.6) textC(g, 'z', cx + 30, by - 34 - Math.round((G.t * 6) % 8), '#fff6d0');
+  // Casper, your white-and-black striped cat, has the counter's left end by the staff door (js/cats.js): wanders it,
+  // grooms, naps (more once the lamps are lit), comes over to your pointer, and chases its red ball (tap it to roll it)
+  const CSURF = [{ x0: 24, x1: 222, y: CY }];
+  const BALL = CATS.toy(0, 196, CSURF, 0, 14, 230);
+  const CASPER = CATS.make('casper', 120, { surfaces: CSURF, toy: BALL });
+  const catMouse = G => G.mouse && !G.ui && !G.drag ? { x: G.mouse.x + G.cam - SL.X0, y: G.mouse.y } : null;
+  function shopCat(g, G) {
+    CASPER.night = (G.nightF || 0) > 0.5;
+    CASPER.mouse = catMouse(G);
+    CASPER.hover = !!(CASPER.mouse && CATS.hit(CASPER, CASPER.mouse));
+    CATS.drawToy(g, BALL, G.t);
+    CATS.draw(g, CASPER, G.t);
   }
   function lighting(g, G) {
     if (G.duskF > 0.01) { g.fillStyle = `rgba(255,140,60,${0.05 * G.duskF})`; g.fillRect(0, 0, SW, VH); }
@@ -832,9 +831,10 @@ const SERVING = (() => {
     g.drawImage(front, 0, 0);
     for (let i = 0; i < SL.NSTALL; i++) if (stallOpen(i)) ticketClip(g, SL.stallCX(i));
     if (G.waiting > 0) drawQueue(g, G);
-    sunCat(g, G);
+    shopCat(g, G);
     sunlight(g, G);
     lighting(g, G);
+    CATS.fx(g, CASPER, { label: true });
     // the guests, lit on their own: anyone walking out first (they pass behind the stools), then everyone seated
     for (const w of G.walkers || []) figure(g, G, w.gt, w.img, walkerPose(w), w.bay);
     const poses = [];
@@ -883,6 +883,8 @@ const SERVING = (() => {
     MENU_RECT: W({ x: MB.x, y: MB.y, w: MB.w, h: MB.h }),
     cardRect: i => W({ x: SL.stallCX(i) + CARD.dx - 4, y: CY - CARD.h - 4, w: CARD.w + 8, h: CARD.h + 6 }),   // the stall's menu card
     KITCHEN_RECT: W({ x: KIT.x - 6, y: KIT.y - 6, w: KIT.w + 12, h: KIT.h + 6 }),   // the noren doorway at the far right: through it to the kitchen
-    SIGN: { x: SL.X0 + SIGN_X, y: CY + 56, w: 128, h: 44 }
+    SIGN: { x: SL.X0 + SIGN_X, y: CY + 56, w: 128, h: 44 },
+    catRect: () => W(CATS.rect(CASPER)), petCat: () => CATS.pet(CASPER, G.t),   // Casper: tap to pet
+    toyRect: () => W({ x: BALL.x - 13, y: BALL.y - 20, w: 26, h: 24 }), kickToy: () => CATS.poke(BALL, catMouse(G) || { x: BALL.x - 1 }, [CASPER])   // his ball: tap to roll it
   };
 })();

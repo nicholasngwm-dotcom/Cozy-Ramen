@@ -1,7 +1,7 @@
 'use strict';
 /* Game state, rules, input and the main loop. */
 (() => {
-  const PHASE = 150;            // seconds for 12 in-game hours: open 09:00-21:00, then night until 09:00
+  const PHASE = 300;            // seconds for 12 in-game hours (25s an hour): the day 09:00-21:00, late night 21:00-04:00, closed until 09:00
   const RW = 212;               // end-of-day receipt width
   const $ = id => document.getElementById(id);
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -29,7 +29,7 @@
   const newStats = () => ({ served: 0, perfect: 0, earned: 0, sales: 0, tips: 0, declined: 0, sold: zeroes(), rev: zeroes() });
   const fresh = () => ({
     menu: ['miso'], pick: 'miso',   // the menu the shop sells from (in order), and the chef's pick
-    mode: 'title', met: [], aff: {}, level: 1, xp: 0, owned: [], gear: [], where: null, aoiMet: false, region: 0,
+    mode: 'title', visits: { day: 0, n: {} }, met: [], aff: {}, level: 1, xp: 0, owned: [], gear: [], where: null, aoiMet: false, region: 0,
     life: { served: 0, perfect: 0, sold: {}, bestDay: 0, days: 0 },
     aoi: { seen: 0, visit: 0, buy: 0, chat: 0, notes: 0 }, aoiDay: 0,   // Aoi's story (js/aoi.js): scenes seen, tonight's markers, notes left; the day she last ate here
     t: 0, time: 0, day: 1, gold: 0, paused: false, ui: null, nightF: 0, duskF: 0, rain: 0, wx: null, quest: null,
@@ -178,7 +178,7 @@
     slide: () => { noise(0.28, 700, 0.3); noise(0.06, 300, 0.4, 0.26); },
     chime: () => { tone(1568, 0.5, 'sine', 0.04); tone(2093, 0.6, 'sine', 0.03, 0, 0.12); tone(1760, 0.7, 'sine', 0.025, 0, 0.26); },
     ring: () => { tone(1320, 0.08, 'square', 0.03, 0, 0.05); tone(2640, 0.3, 'triangle', 0.05, 0, 0.12); noise(0.1, 600, 0.4, 0.02); },
-    meow: () => tone(700, 0.3, 'triangle', 0.05, 520),
+    meow: () => CATS.meow(),   // a recorded meow (js/cats.js)
     // the staff door: latch, a hinge creak while it swings, a locked rattle; the shop front's double sliding doors
     latch: () => { tone(1100, 0.025, 'square', 0.035); noise(0.03, 2600, 0.35, 0.01); },
     creak: () => { tone(170, 0.32, 'sawtooth', 0.016, 250, 0.06); tone(240, 0.22, 'sawtooth', 0.012, 190, 0.34); tone(205, 0.16, 'sawtooth', 0.01, 230, 0.52); },
@@ -809,13 +809,25 @@
     return out;
   }
   const joinList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  // A guest who already came in today is less likely to come back the same day: each visit today cuts their chance to
+  // a quarter (so a second visit is rare and a third rarer still, though with few guests to choose from it can happen).
+  const REVISIT = 0.25;
+  function pickVisitor(pool) {
+    const n = id => (G.visits && G.visits.day === G.day && G.visits.n[id]) || 0;
+    const w = pool.map(g => REVISIT ** n(g.id)), sum = w.reduce((a, b) => a + b, 0);
+    let r = Math.random() * sum;
+    for (let k = 0; k < pool.length; k++) { r -= w[k]; if (r < 0) return pool[k]; }
+    return pool[pool.length - 1];
+  }
   function seatGuest(i, tut) {
     const used = G.stalls.map(s => s.guest && s.guest.gt.id);
     const pool = GUESTS.filter(gt => !used.includes(gt.id) && (!gt.taste.night || isNight()) && !(gt.id === 'aoi' && (G.shop === 'night' || TUT.guiding() || (G.day === 1 && G.tut && G.tut.fresh))));   // (not Aoi while she is the one showing you around)
     // Aoi drops by once a day at most, and more often the fonder of the chef she grows
     const aoiOk = pool.find(g => g.id === 'aoi') && G.aoiDay !== G.day;
-    const gt = aoiOk && Math.random() < AOI.visitChance() ? pool.find(g => g.id === 'aoi') : pick(pool.filter(g => g.id !== 'aoi').length ? pool.filter(g => g.id !== 'aoi') : pool);
+    const others = pool.filter(g => g.id !== 'aoi');
+    const gt = aoiOk && Math.random() < AOI.visitChance() ? pool.find(g => g.id === 'aoi') : pickVisitor(others.length ? others : pool);
     if (gt.id === 'aoi') G.aoiDay = G.day;
+    if (!tut) { if (G.visits.day !== G.day) G.visits = { day: G.day, n: {} }; G.visits.n[gt.id] = (G.visits.n[gt.id] || 0) + 1; }
     // arrive: the guest fades in behind the lowered blind (a silhouette through the slats), the blind rolls up, they read the menu board, then call
     const gu = { gt, img: IMG[gt.id], stall: i, state: 'arrive', t: 0, mood: null, order: null };
     gu.asksRec = !tut && Math.random() < (gt.taste.pref ? 0.25 : 0.55);
@@ -847,12 +859,14 @@
     if (h < 12) return 2.0 - (h - 11) * 0.88;        // 11-12: ramp into the rush
     if (h < 15) return 1.12;                         // 12-15: peak (a touch calmer than it was)
     if (h < 16.5) return 1.12 + (h - 15) * 0.85;     // 15-16:30: easing off
-    return 2.4 + (h >= 18 ? 0.4 : 0);                // late afternoon, then a quieter evening
+    if (h < 17.5) return 2.4;                        // 16:30-17:30: the afternoon lull
+    if (h < 18) return 2.4 - (h - 17.5) * 2.4;       // 17:30-18: the dinner crowd gathers
+    return 1.2;                                      // 18-21: the dinner rush (after 21:00, only the odd late-night walk-in)
   }
   // Seconds until the next guest. Arrivals are random the way real ones are (an exponential gap: sometimes two close
   // together, sometimes a long lull), around ARRIVE_GAP at the lunch rush and slower at other hours. Every guest still
   // waiting on food stretches the gap, so a busy kitchen gets breathing room; later days get only a little busier.
-  const ARRIVE_GAP = 20;   // average gap at the 12:00-15:00 peak (the whole open day is 150s): about 5 guests a day
+  const ARRIVE_GAP = 20;   // average gap at the 12:00-15:00 peak (the whole open day is PHASE = 300s): about 10 guests a day
   function nextArrival() {
     const busy = G.stalls.filter(s => s.guest && ['call', 'ordering', 'wait'].includes(s.guest.state)).length;
     const rush = G.day === 4 && G.tut && G.tut.fresh ? 0.75 : 1;   // a new save's Day 4: a slightly bigger rush (Aoi leaves a note)
@@ -870,13 +884,13 @@
     } else if (G.shop === 'morning') G.spawnT = Math.max(G.spawnT, 3);
     else if (G.shop === 'night') {     // closed, but the odd late-night walk-in knocks until 04:00 (gold only, never on a receipt)
       if (shutHours()) G.spawnT = Math.max(G.spawnT, 3);   // 04:00-09:00: fully closed, nobody comes in
-      else if (G.spawnT <= 0) { if (free() >= 0) seatGuest(free()); G.spawnT = rand(40, 60); }
+      else if (G.spawnT <= 0) { if (free() >= 0) seatGuest(free()); G.spawnT = rand(40, 60) * PHASE / 150; }   // (night walk-ins: the same few per night however long the night runs)
     } else if (G.spawnT <= 0) {
       if (free() >= 0 && G.waiting === 0) seatGuest(free());
       else if (G.waiting < maxWait()) G.waiting++;
       G.spawnT = nextArrival();
     }
-    if (G.shop === 'open' && !TUT.guiding() && G.waiting > 0 && G.seatCD <= 0 && free() >= 0) { G.waiting--; G.seatCD = rand(3, 8); seatGuest(free()); }   // the queue sits down unhurried
+    if ((G.shop === 'open' || lateOpen()) && !TUT.guiding() && G.waiting > 0 && G.seatCD <= 0 && free() >= 0) { G.waiting--; G.seatCD = rand(3, 8); seatGuest(free()); }   // the queue sits down unhurried
     G.stalls.forEach((st, i) => {
       const gu = st.guest; if (!gu) return;
       gu.t += dt;
@@ -1011,7 +1025,8 @@
     const forced = tutOrder(gu);   // (Aoi's tutorial sets up a few orders)
     if (forced) gu.asksRec = false;
     // The order line itself carries the confirm / decline choice (the guided bowl's guest gets just the yes).
-    const answer = [{ label: 'Coming right up!' }].concat(gu.tut === 'plain' || gu.tut === 'extra' ? [] : [{ label: 'Sorry, I cannot make that one', fn: () => { gu.declined = true; } }]);   // (the two guided bowls only get the yes)
+    gu.askDecline = false;
+    const answer = [{ label: 'Coming right up!' }].concat(gu.tut === 'plain' || gu.tut === 'extra' ? [] : [{ label: 'Sorry, I cannot make that one', fn: () => { gu.askDecline = true; } }]);   // (the two guided bowls only get the yes)
     const modsTpl = () => p.mods ? (Array.isArray(p.mods) ? pick(p.mods) : p.mods) : 'With {mods}, please.';
     const orderText = () => {
       const m = mods(gu.order), dish = 'the ' + MENU[gu.order.type].name;
@@ -1034,8 +1049,12 @@
       gu.order = forced || makeOrder(gt);
       steps.push({ text: () => orderText(), choices: answer });
     }
+    // turning an order down is asked twice (the confirm defaults to taking the order after all)
+    steps.push({ sys: true, text: () => `Turn down ${gu.gt.name}'s ${MENU[gu.order.type].name}? They'll leave without ordering.`, skip: () => !gu.askDecline, def: 0,
+      choices: [{ label: 'No, I will make it' }, { label: 'Yes, turn it down', fn: () => { gu.declined = true; } }] });
     steps.push({ text: () => line(gu, 'decline', DECLINE), skip: () => !gu.declined });
     talk(gu, steps, () => {
+      gu.askDecline = false;
       if (gu.declined) return sendHome(gu);
       gu.num = G.nextNum++; gu.state = 'wait'; gu.t = 0;   // the ticket goes in the seat's clip and on the kitchen rail
       G.slips.push({ num: gu.num, guest: gu, order: gu.order, age: 0 });
@@ -1178,7 +1197,7 @@
     if (cheatBuf.endsWith('night')) {
       if (G.shop !== 'night') { if (G.shop === 'morning') G.stats = newStats(); G.time = PHASE; closeShop(); }
       else G.time = PHASE;
-      updateClock(0); SFX.bell(); toast('Cheat: 21:00. Closing time; Kitsune-ya is open across the street.'); cheatBuf = ''; return true;
+      updateClock(0); SFX.bell(); toast('Cheat: 21:00. Late-night hours.'); cheatBuf = ''; return true;
     }
     if (cheatBuf.endsWith('shower')) {
       G.forceRain = G.rain >= 0.5 ? 0 : 1; SFX.whoosh(); toast(G.forceRain ? 'Cheat: here comes the rain' : 'Cheat: the rain clears'); cheatBuf = ''; return true;
@@ -1332,6 +1351,7 @@
     $('quest-fill').style.width = Math.round(100 * (q.done ? 1 : have / q.n)) + '%';
     $('quest').classList.toggle('done', q.done);
   }
+  CATS.init({ muted: () => muted, vol: () => SETTINGS.sfx / 10 });   // the cats' meows follow the sound settings
   NIGHTSHOP.init({
     sfx: SFX, say, toast, img: IMG.aoi,
     save: () => saveGame(G.shop === 'night' ? G.day + 1 : G.day),
@@ -1391,7 +1411,7 @@
       G.stalls.forEach(st => { st.guest = null; st.left = 0; st.paid = false; st.bowl = null; st.blind = 1; st.holdUp = 0; });
       G.walkers = []; G.waiting = 0; G.slips = []; G.pass = []; G.flying = []; G.bowls = [newBowl(), newBowl()]; G.baskets.forEach(b => { b.t = -1; });
       G.drag = null; G.dragBowl = null; G.rmMenu = null; G.activeBowl = null; G.ticketZoom = -1; G.tutGu = null; G.hold = null;
-      G.day = day; G.time = 0; G.shop = 'morning'; G.signWas = 'night'; G.signT = G.t; G.dayDone = false; G.stats = newStats(); G.quest = null;
+      G.day = day; G.time = 0; G.shop = 'morning'; G.signWas = 'night'; G.signT = G.t; G.dayDone = false; G.lastCall = false; G.stats = newStats(); G.quest = null;
       G.tut.handover = false; G.tut.done = true; G.tut.step = null; delete G.tut.day0;   // (Aoi's last lines play over the morning; the save already counts as handed over)
       go(0); G.scam = STATIONS[0].cam; G.cam = camTarget(); updateClock(0);
       saveGame(day);
@@ -1404,13 +1424,13 @@
   function openShop() {
     if (G.shop === 'night') { finishDay(); G.day++; G.time = 0; }      // skipping the prep time (04:00-09:00) to the next opening
     saveGame(G.day);
-    setShop('open'); G.stats = newStats(); G.dayDone = false; G.spawnT = TUT.guiding() ? 1.5 : rand(4, 10); SFX.bell();   // the first guest of the day, a few seconds after opening
+    setShop('open'); G.stats = newStats(); G.dayDone = false; G.lastCall = false; G.spawnT = TUT.guiding() ? 1.5 : rand(4, 10); SFX.bell();   // the first guest of the day, a few seconds after opening
     if (!TUT.guiding()) toast('Day ' + G.day + ': the shop is open! Guests will start arriving.');
   }
   function closeShop() {
-    setShop('night'); G.waiting = 0; G.spawnT = rand(40, 60);
+    setShop('night'); G.spawnT = rand(40, 60) * PHASE / 150;   // (the dinner queue still sits down as seats free up)
     saveGame(G.day + 1);
-    if (!TUT.handover()) toast('21:00, closing time. A few late walk-ins until 04:00, then the day\'s receipt. Aoi\'s supply shop across the street opens at 04:00.');
+    if (!TUT.handover()) toast('21:00. The dinner rush is over: late-night walk-ins now and then until 04:00, then the day\'s receipt. Aoi\'s supply shop across the street opens at 04:00.');
   }
   // The shop fully closes at 04:00: the day is done and its receipt prints (late walk-ins included). Skipping the night
   // before then prints it straight away. Once per day.
@@ -1422,8 +1442,9 @@
   }
   // The sign: opens the shop in the morning; after 04:00 it skips the prep time straight to the next opening.
   function flipSign() {
-    if (G.shop === 'open') return say('The shop stays open until 21:00.');
+    if (G.shop === 'open') return say('The shop stays open until 04:00.');
     if (lateOpen()) return say('Late walk-ins until 04:00. Then the shop closes and you can skip the prep time.');
+    if (G.shop === 'night' && G.stalls.some(s => s.guest)) return say('Serve the last guests first. Once they have gone home you can skip ahead.');
     if (G.shop === 'night' && TUT.armedFor(G.day + 1)) {   // REPLAY TUTORIAL: skip to the morning, where Aoi is waiting (she has you flip the sign)
       finishDay(); G.day++; G.time = 0; G.shop = 'morning'; G.signWas = 'night'; G.signT = G.t; SFX.clack(); saveGame(G.day);
       return;
@@ -1465,7 +1486,7 @@
       rainGain.gain.value = want;
     } catch (e) { /* audio is optional */ }
   }
-  // 04:00 until the 09:00 opening: the shop is fully closed (no late walk-ins; anyone still seated heads home at 04:00).
+  // 04:00 until the 09:00 opening: the shop is fully closed (no late walk-ins; anyone still seated is served first).
   const lateOpen = () => G.shop === 'night' && !shutHours();   // 21:00-04:00: the sign stays OPEN for late walk-ins
   const shutHours = () => { const h = hour(); return G.shop !== 'open' && h >= 4 && h < 9; };
   function updateClock(dt) {
@@ -1473,15 +1494,19 @@
     const wasEvening = isNight();
     if (G.shop !== 'morning' && !TUT.freeze()) G.time += dt;   // the clock waits at 09:00 until you open (and while Aoi walks you through your first bowl)
     if (G.shop === 'open' && G.time >= PHASE) closeShop();
+    else if (G.shop === 'night' && G.time >= PHASE * 2 && !G.dayDone) G.time = PHASE * 2 - 0.01;   // last guests still being served: the morning waits for them
     else if (G.shop === 'night' && G.time >= PHASE * 2) { G.time = 0; G.day++; G.shop = 'morning'; G.signWas = 'morning'; saveGame(G.day); toast('Good morning! Flip the sign when you are ready to open.'); }
-    else if (G.shop === 'open' && !wasEvening && isNight() && !TUT.handover()) toast('Evening falls. The night crowd is a quieter bunch.');
-    if (G.shop === 'night' && shutHours() && !G.dayDone) {   // 04:00 (or any time after it, if the clock jumped): lights out for the last walk-ins, once a night
-      let n = 0;
-      G.stalls.forEach((st, i) => { if (st.guest) { G.slips = G.slips.filter(o => o.guest !== st.guest); leaveSeat(i, false); n++; } });
-      G.waiting = 0;
-      G.signT = G.t; SFX.clack();   // the sign flips to CLOSED
-      if (!TUT.handover()) toast('04:00. The shop is fully closed until morning' + (n ? ': the last guests head home.' : '.'));
-      finishDay();
+    else if (G.shop === 'open' && !wasEvening && isNight() && !TUT.handover()) toast('Evening falls. Here comes the dinner rush!');
+    // 04:00 (or any time after it, if the clock jumped): the sign flips to CLOSED and nobody new comes in, but guests
+    // already seated stay until they have their bowl. The day's receipt prints once the last of them has gone home.
+    if (G.shop === 'night' && shutHours() && !G.dayDone) {
+      const n = G.stalls.filter(st => st.guest).length;
+      if (!G.lastCall) {
+        G.lastCall = true; G.waiting = 0;
+        G.signT = G.t; SFX.clack();
+        if (!TUT.handover()) toast(n ? '04:00. Closed to new guests. Finish serving the ' + (n > 1 ? n + ' still seated' : 'last guest') + ', then the receipt prints.' : '04:00. The shop is fully closed until morning.');
+      }
+      if (!n) finishDay();
     }
     const h = hour(); G.hour = h;
     let f = 0;
@@ -1568,6 +1593,8 @@
   // Plain clicks: restock buttons, the recipe book, menu cards, stalls.
   function clicks() {
     const c = [];
+    c.push({ r: SERVING.catRect(), fn: SERVING.petCat, quiet: true });   // Casper on the counter: tap to pet
+    c.push({ r: SERVING.toyRect(), fn: SERVING.kickToy, quiet: true });  // and his ball: tap to roll it
     c.push({ r: bookRect, fn: () => openUI('book', 'counter') });
     c.push({ r: signRect, fn: flipSign });
     // the pass is a doorway: walk through it to the serving room (bowls waiting in it are still picked up as usual)
@@ -1624,7 +1651,7 @@
     if (tk >= 0) { G.ticketZoom = G.ticketZoom === tk ? -1 : tk; SFX.paper(); return; }
     G.ticketZoom = -1;
     const c = clicks().find(c => inR(w, c.r));
-    if (c) { SFX.tap(); return c.fn(); }
+    if (c) { if (!c.quiet) SFX.tap(); return c.fn(); }
     const s = sources().find(s => inR(w, s.r));
     if (s) {
       const d = s.start();
@@ -1795,6 +1822,7 @@
     STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', !G.where && k === G.st));
     $('nshop').classList.toggle('hide', G.ui === 'pause' || G.mode !== 'play');
     $('quest').classList.toggle('hide', G.mode !== 'play' || !TUT.questShown() || !!G.where || G.ui === 'dialog');   // out of the way of the night street and Aoi's dialogue box
+    { const at = TUT.aoiTop(); $('quest').style.bottom = at == null ? '' : `calc(${Math.ceil((540 - at) / 2) + 4} * var(--u))`; }   // Aoi in the bottom-right corner: the card steps up above her bubble
     for (let i = 0; i < SL.NSTALL; i++) {
       const el = $('bubble-' + i);
       el.style.left = `calc(${(SL.X0 + SL.stallCX(i) - G.cam) / 2}px * var(--s))`;
@@ -2104,7 +2132,8 @@
     const s = loadSave(); if (!s) return newGame();
     Object.assign(G, fresh()); G.day = s.day; G.gold = s.gold || 0; G.met = (s.met || []).filter(id => GUESTS.some(gt => gt.id === id)); G.nextNum = s.nextNum || 1;
     G.level = s.level || 1; G.xp = s.xp || 0;
-    G.xp = Math.max(G.xp, LEVEL_XP[Math.min(G.level, LEVEL_XP.length) - 1]);   // (older saves were on a gentler XP curve: keep their level, start its bar at zero) G.owned = (s.owned || []).filter(id => nodeFor(id));
+    G.xp = Math.max(G.xp, LEVEL_XP[Math.min(G.level, LEVEL_XP.length) - 1]);   // (older saves were on a gentler XP curve: keep their level, start its bar at zero)
+    G.owned = (s.owned || []).filter(id => nodeFor(id));   // (saves from a faster road keep whatever they had already unlocked)
     G.life = Object.assign(fresh().life, s.life || {}); G.region = regionOpen(s.region || 0) ? s.region || 0 : 0;
     // saves from before the night shop: upgrades already claimed (and paid for) on the road count as bought
     G.gear = (s.gear || G.owned.filter(id => GEAR.includes(id))).filter(id => GEAR.includes(id));
@@ -2196,7 +2225,7 @@
       openBook('guests', null, true);
     }
     if (kind === 'menu') openUI('menu');   // ?shot=menu: the menu editor
-    if (kind === 'levelup') { G.level = 4; showLevelUp({ from: 3, to: 4, stops: ['spicy', 'quick'], notes: [] }); }
+    if (kind === 'levelup') { G.level = 3; showLevelUp({ from: 2, to: 3, stops: ['spicy', 'quick'], notes: [] }); }
     if (kind === 'receipt') { G.stats = { ...G.stats, served: 9, perfect: 6, tips: 14, sales: 118, sold: { miso: 5, shoyu: 4 } }; makeReceipt(); }
     if (kind === 'tut') {   // ?shot=tut: a fresh save's first morning, Aoi walking in
       G.stalls.forEach(st => { st.guest = null; }); G.slips = []; G.pass = []; G.bowls = G.bowls.map(() => newBowl());
@@ -2213,7 +2242,7 @@
       if (kind === 'storecart') { NIGHTSHOP.addToBasket('chashu', 3); NIGHTSHOP.addToBasket('egg', 2); NIGHTSHOP.addToBasket('special', 1); }
       if (kind === 'storereceipt') { G.gold = 400; NIGHTSHOP.addToBasket('chashu', 3); NIGHTSHOP.addToBasket('special', 1); NIGHTSHOP.addToBasket('quick', 1); if (NIGHTSHOP.pay()) NIGHTSHOP.giveReceipt(); }
       if (kind === 'streetdoor') NIGHTSHOP.setDoors(0.55, 0.5);
-      if (kind === 'streetdawn') { G.time = 256; updateClock(0); }
+      if (kind === 'streetdawn') { G.time = PHASE * 1.707; updateClock(0); }
       if (kind === 'storetalk') { NIGHTSHOP.addToBasket('chashu', 3); NIGHTSHOP.addToBasket('special', 1); NIGHTSHOP.addToBasket('quick', 1); NIGHTSHOP.talk('checkout'); }
     }
     if (kind.startsWith('road')) {   // ?shot=road, road2 (Kyoto, with progress), road4 (the coast)

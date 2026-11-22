@@ -461,7 +461,14 @@ const NIGHTSHOP = (() => {
   }
 
   /* ---------- input ---------- */
+  // Eevee, Aoi's tabby, has the shop floor (js/cats.js): she follows Aoi up and down behind the counter, snacks from her
+  // tin by the specials cabinet, bats her ball about, and comes to see you
+  const ESURF = [{ x0: 180, x1: 1150, y: FLOOR + 22 }];
+  const EBALL = CATS.toy(1, 850, ESURF), EDISH = CATS.dish(664, ESURF);
+  const EEVEE = CATS.make('eevee', 598, { surfaces: ESURF, toy: EBALL, dish: EDISH, dir: -1 });
   function hitStore(w) {
+    if (CATS.hit(EEVEE, w)) { const r = CATS.rect(EEVEE); return { kind: 'cat', cat: EEVEE, x: EEVEE.x, y: r.y - 22, label: CATS.petting(EEVEE, G.t) ? null : 'EEVEE' }; }
+    if (CATS.hitToy(EBALL, w)) return { kind: 'toy', toy: EBALL, x: EBALL.x, y: EBALL.y - 40 };
     if (inR(w, DOOR)) return { kind: 'door', x: DOOR.x + DOOR.w / 2, y: DOOR.y - 6, label: 'EXIT TO STREET' };
     const a = S.aoi;
     if (inR(w, { x: a.x - 46, y: 216, w: 92, h: CTOP - 216 }) || inR(w, COUNTER)) return { kind: 'aoi', x: a.x, y: 196, label: S.basket.length ? 'AOI: PAY' : 'AOI' };
@@ -473,11 +480,20 @@ const NIGHTSHOP = (() => {
     for (const p of PROPS) if (inR(w, p.r)) return { kind: 'prop', p, x: p.r.x + p.r.w / 2, y: p.r.y - 22, r: p.r };
     return null;
   }
-  const RDOOR = { x: 120, y: 222, w: 180, h: 208 }, SDOOR = { x: 762, y: 226, w: 136, h: 204 }, VEND = { x: 410, y: 300, w: 52, h: 130 }, CAT = { x: 412, y: 278, w: 46, h: 24 };
+  const RDOOR = { x: 120, y: 222, w: 180, h: 208 }, SDOOR = { x: 762, y: 226, w: 136, h: 204 }, VEND = { x: 410, y: 300, w: 52, h: 130 };
+  // The street's strays (js/cats.js) share the pavement, the top of the vending machine (Mochi's bed) and the ledge on
+  // Kitsune-ya's opening-hours plate: they roam, nap, hop up and down, greet each other, and Miso chases a red ball.
+  const SSURF = [{ x0: 24, x1: 936, y: FLOOR + 16, cap: 9 }, { x0: 428, x1: 444, y: VEND.y, cap: 1 }, { x0: 606, x1: 720, y: 389, cap: 2 }];
+  const SBALL = CATS.toy(0, 770, SSURF);
+  const STRAYS = CATS.group([
+    CATS.make('mochi', 436, { surfaces: SSURF, surf: 1, state: 'sleep' }), CATS.make('miso', 62, { surfaces: SSURF, toy: SBALL }), CATS.make('nori', 352, { surfaces: SSURF }),
+    CATS.make('maple', 532, { surfaces: SSURF, dir: -1 }), CATS.make('yuki', 660, { surfaces: SSURF, surf: 2, dir: -1 })
+  ]);
   function hitStreet(w) {
     if (inR(w, RDOOR)) return { kind: 'home', x: RDOOR.x + RDOOR.w / 2, y: RDOOR.y - 26, label: 'COZY RAMEN' };
     if (inR(w, SDOOR)) return { kind: 'shop', x: SDOOR.x + SDOOR.w / 2, y: SDOOR.y - 26, label: storeOpen() ? 'KITSUNE-YA' : 'CLOSED UNTIL ' + pad2(SHOP_HOURS.open) + ':00', muted: !storeOpen() };
-    if (inR(w, CAT)) return { kind: 'cat', x: CAT.x + 23, y: CAT.y - 24, label: 'MOCHI' };
+    for (const c of STRAYS.slice().sort((a, b) => b.y - a.y)) if (CATS.hit(c, w)) return { kind: 'cat', cat: c, x: c.x, y: CATS.rect(c).y - 22, label: CATS.petting(c, G.t) ? null : c.name.toUpperCase() };
+    if (CATS.hitToy(SBALL, w)) return { kind: 'toy', toy: SBALL, x: SBALL.x, y: SBALL.y - 40 };
     if (inR(w, VEND)) return { kind: 'vend', x: VEND.x + 26, y: VEND.y - 50, label: 'VENDING MACHINE' };
     return null;
   }
@@ -493,7 +509,8 @@ const NIGHTSHOP = (() => {
       const h = hitStreet(p); if (!h) return;
       if (h.kind === 'home') { if (S.rdoorT) return; S.rdoorT = 1; H.sfx.rumble(); setTimeout(() => backHome(0), 420); return; }
       if (h.kind === 'shop') return enter('store');
-      if (h.kind === 'cat') { H.sfx.meow(); S.catT = G.t; return; }
+      if (h.kind === 'cat') return CATS.pet(h.cat, G.t);
+      if (h.kind === 'toy') return CATS.poke(h.toy, p, STRAYS);
       if (h.kind === 'vend') { H.sfx.tap(); return H.say(pick(['Hot corn soup, iced barley tea... and a tiny can of ramen broth. Rude.', 'The machine hums a little tune. Someone left a coin in the slot.'])); }
       return;
     }
@@ -503,6 +520,8 @@ const NIGHTSHOP = (() => {
     const e = edgeAt(p);
     if (e) { S.camT = clamp(S.camT + e * 480, 0, SW - VW); H.sfx.tap(); return; }
     const w = W(p), h = hitStore(w);
+    if (h && h.kind === 'cat') return CATS.pet(h.cat, G.t);
+    if (h && h.kind === 'toy') return CATS.poke(h.toy, w, [EEVEE]);
     if (h && h.kind === 'door') { H.sfx.tap(); return leaveStore(); }
     if (h && h.kind === 'aoi') { H.sfx.tap(); return talk(S.basket.length ? 'checkout' : 'menu'); }
     if (h && h.kind === 'item') return inspect(h.id);
@@ -875,6 +894,9 @@ const NIGHTSHOP = (() => {
       else priceTag(g, s.x, ty, it.price + 'G');
     }
     drawCounterTop(g);
+    EEVEE.friendX = S.aoi.x; EEVEE.mouse = S.ui ? null : W(G.mouse); EEVEE.hover = !!(S.hover && S.hover.cat === EEVEE); EEVEE.night = (G.nightF || 0) > 0.5;
+    CATS.drawDish(g, EDISH); CATS.drawToy(g, EBALL, G.t);
+    CATS.draw(g, EEVEE, G.t);
     signBoard(g, 'CHECKOUT', 396, 44, '#7a1e18'); signBoard(g, 'SPECIALS', 720, 132, '#7a1e18'); signBoard(g, 'FRESH', 1070, 150, '#2f4a6a', '#e8f6ff'); signBoard(g, 'PANTRY', 1497, 108); signBoard(g, 'UPGRADES', 1970, 52, '#7a1e18'); signBoard(g, 'MARKET', 2530, 150, '#2f4a6a', '#e8f6ff'); signBoard(g, 'CURIOS', 3028, 110, '#4a2a5a', '#f0e0ff');
     lanterns(g, LANTERNS, 40);
     dim(g, cam, VW, [[100, 300, 120, 150], [400, 290, 220, 160], [720, 290, 150, 160], [1500, 290, 240, 160], [1970, 300, 260, 160], [3028, 290, 220, 170]].concat(LANTERNS.map(x => [x, 70, 46, 40])), 0.1 + 0.36 * (G.nightF || 0), [[1070, 300, 240, 150], [2530, 300, 270, 150]]);
@@ -882,6 +904,7 @@ const NIGHTSHOP = (() => {
     for (const p of S.parts) { if (p.k < 0) continue; const e = p.k * p.k, x = p.x + (REG.x + 20 - p.x) * e, y = p.y + (CTOP - 30 - p.y) * e - Math.sin(p.k * Math.PI) * 50; ell(g, Math.round(x), Math.round(y), 4, 4, DK); ell(g, Math.round(x), Math.round(y), 3, 3, '#ffd76a'); }
     for (const p of S.pops) { g.globalAlpha = Math.min(1, p.life * 2.5); textC(g, p.str, p.x, Math.round(p.y), p.c, DK); }
     g.globalAlpha = 1;
+    CATS.fx(g, EEVEE);
     if (S.hover && S.ui !== 'talk') {
       if (S.hover.r) SCENE.brackets(g, S.hover.r);
       if (S.hover.label) SCENE.label(g, S.hover.label, clamp(S.hover.x, cam + 90, cam + VW - 90), S.hover.y, S.hover.muted ? 'muted' : undefined);
@@ -1000,16 +1023,12 @@ const NIGHTSHOP = (() => {
     }
     // the opening-hours plate by the door
     plank(g, 588, 389, 150, 40, '#2a1a12'); textC(g, open ? 'OPEN' : 'CLOSED', 663, 392, open ? '#a6e07a' : '#ff9a86'); textC(g, HOURS, 663, 410, '#f6e6c0');
-    // lanterns, the street lamp, the cat on the vending machine
+    // lanterns, the street lamp
     lanterns(g, [96, 324], 200);
     for (const [i, x] of [744, 916].entries()) SCENE.lantern(g, Math.round(x + Math.sin(G.t * 1.3 + i) * 1.2), 200, 12, open ? '#c8302a' : '#6a4a4a');
     ell(g, 492, 194, 10, 4, '#ffe8a0');
-    const cat = G.t - (S.catT || -9), tail = Math.round(Math.sin(G.t * (cat < 1 ? 14 : 2)) * 3), cx = CAT.x + 22, cy = VEND.y;
-    ell(g, cx, cy - 8, 16, 8, DK); ell(g, cx, cy - 8, 15, 7, '#3a3036'); ell(g, cx + 12, cy - 12, 7, 6, DK); ell(g, cx + 12, cy - 12, 6, 5, '#3a3036');
-    poly(g, [[cx + 8, cy - 15], [cx + 9, cy - 21], [cx + 12, cy - 16]], DK); poly(g, [[cx + 13, cy - 16], [cx + 16, cy - 21], [cx + 17, cy - 14]], DK);
-    if (cat < 1.2) { rect(g, cx + 9, cy - 13, 2, 2, '#ffe08a'); rect(g, cx + 14, cy - 13, 2, 2, '#ffe08a'); } else { rect(g, cx + 9, cy - 12, 3, 1, '#1a1018'); rect(g, cx + 14, cy - 12, 3, 1, '#1a1018'); }
-    line(g, cx - 14, cy - 6, cx - 20, cy - 2 + tail, DK, 3); line(g, cx - 14, cy - 6, cx - 20, cy - 2 + tail, '#3a3036', 1);
-    if (cat < 1.2) textC(g, 'MRRP', cx, cy - 46 - Math.round(cat * 10), '#fff6d0', DK);
+    CATS.drawToy(g, SBALL, G.t);
+    for (const c of STRAYS.slice().sort((a, b) => a.y - b.y)) { c.mouse = G.mouse; c.hover = !!(S.hover && S.hover.cat === c); c.night = (G.nightF || 0) > 0.5; CATS.draw(g, c, G.t); }
     // lights
     const lamps = [[96, 232, 54, 60], [324, 232, 54, 60], [210, 340, 120, 110], [492, 330, 90, 120], [436, 360, 44, 60]];
     if (open) lamps.push([744, 232, 54, 60], [916, 232, 54, 60], [663, 320, 100, 100], [830, 330, 90, 110]);
@@ -1022,6 +1041,7 @@ const NIGHTSHOP = (() => {
       for (let i = 0; i < Math.round(26 * G.rain); i++) { const ph = (G.t * 3 + rnd(i) * 7) % 1; if (ph < 0.25) { const x = Math.round(rnd(i * 5 + 1) * VW), y = FLOOR + 6 + Math.round(rnd(i * 9) * 90); g.fillRect(x - 2, y - 1, 1, 1); g.fillRect(x + 2, y - 1, 1, 1); g.fillRect(x - 1, y, 3, 1); } }
     }
     SCENE.night(g, G, 0, VW, lamps);
+    for (const c of STRAYS) CATS.fx(g, c);
     if (S.hover && S.hover.label) SCENE.label(g, S.hover.label, clamp(S.hover.x, 90, VW - 90), S.hover.y, S.hover.muted ? 'muted' : undefined);
   }
 

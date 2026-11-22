@@ -95,37 +95,41 @@ const COOKBOOK = (() => {
       <table class="cb-ingr"><thead><tr><th colspan="2">Ingredient</th><th>Qty</th><th>Have</th></tr></thead><tbody>
       ${ids.map(id => { const n = e.uses[id], h = have(id); return `<tr class="${h < n ? 'short' : ''}"><td>${ico(id)}</td><td>${link(pageOf, ENTRIES.find(x => x.id === id), esc(itemName(id)))}</td><td class="q">${qty(id, n)}</td><td class="h">${h}</td></tr>`; }).join('')}
       </tbody></table>${num(p)}`;
-    const tops = Object.keys(m.tops).map(id => esc(TOP_NAME[id].toLowerCase()) + (m.tops[id] > 1 ? ' x' + m.tops[id] : '')).join(', ');
-    const tk = tareKey(m.tare), bk = brothKey(m.broth);
+    const caddyOn = gearOn('caddy'), auto = id => caddyOn && (id === 'scallion' || id === 'nori');
+    const topLine = id => { const n = m.tops[id], nm = `<b>${esc(TOP_NAME[id].toLowerCase())}</b>`; return auto(id) ? `${nm} (sprinkles itself in with the noodles: Garnish Caddy)` : n > 1 ? `${nm} x${n} (drag it in ${n === 2 ? 'twice' : n + ' times'})` : nm; };
     // the recipe's special steps (optional: they only improve the bowl's grade)
     const steps = [];
-    if (m.cold) steps.push('<b>Ice bath</b>: rinse the READY noodles in the ice bath (click it), then click it again to put them in. Served cold, no steam.');
-    if (m.tops.emberpep) steps.push(`<b>Ember pepper oil</b>: hold on the bowl to pour ${m.tops.emberpep} swirl${m.tops.emberpep > 1 ? 's' : ''}, then let go.`);
-    if (m.tops.mayu) steps.push('<b>Black garlic oil</b>: hold on the bowl to pour one swirl, then let go.');
-    if (m.tops.sesame) steps.push('<b>Sesame</b>: hold on the bowl to grind it; let go while it is fine (under a second and a half).');
-    if (TORCH_RECIPES.includes(e.key)) { const meat = TORCH_MEATS.find(id => m.tops[id]); steps.push(`<b>Torched ${esc(TOP_NAME[meat].toLowerCase())}</b>: hold on the bowl until it turns golden (about a second).`); }
-    if (m.tops.mandrake) steps.push('<b>Mandrake root</b>: it goes in whole; click the bowl to slice it. It squeaks.');
-    if (m.tops.butter) steps.push('<b>Butter</b>: it melts as it waits; serve it before it is gone.');
+    if (m.tops.emberpep) steps.push(`<b>Ember pepper oil</b>: press and hold on the bowl to pour. Each swirl takes about half a second; let go at <b>${m.tops.emberpep} swirl${m.tops.emberpep > 1 ? 's' : ''}</b>.`);
+    if (m.tops.mayu) steps.push('<b>Black garlic oil</b>: press and hold on the bowl, and let go after <b>one swirl</b> (about half a second).');
+    if (m.tops.sesame) steps.push('<b>Sesame</b>: press and hold on the bowl to grind it. Let go between <b>0.6 and 1.2 seconds</b>: sooner is coarse, longer turns it to paste.');
+    if (TORCH_RECIPES.includes(e.key)) { const meat = TORCH_MEATS.find(id => m.tops[id]); steps.push(`<b>Torched ${esc(TOP_NAME[meat].toLowerCase())}</b>: press and hold on the bowl until it turns golden, <b>0.8 to 1.3 seconds</b>. Too short is pale, too long chars it.`); }
+    if (m.tops.mandrake) steps.push('<b>Mandrake root</b>: it goes in whole. Click the bowl to slice it. It squeaks.');
+    if (m.tops.butter) steps.push(`<b>Butter</b>: it starts melting the moment it goes in. Serve within <b>${ART.BUTTER_MELT} seconds</b>, so add it last.`);
     if (m.strict && steps.length) steps.push('<b>Hiro\'s rule</b>: every touch must be perfect. A fluffed step costs three times as much here.');
     const right = `
       <div class="cb-chap">Method</div>
       <p class="cb-quote">&ldquo;${esc(m.desc)}&rdquo;</p>
-      <h4>Stocking up</h4>
-      <ul class="cb-prep">
-        <li>${ico(tk, 'sm')}<span><b>${esc(TARES[m.tare].name)}</b>: ${packSize(tk)} spoons a jar at Kitsune-ya (${SUPPLY_PRICE[tk]}G).</span></li>
-        <li>${ico(bk, 'sm')}<span><b>${esc(BROTHS[m.broth].name)}</b>: ${packSize(bk)} ladles a pack at Kitsune-ya (${SUPPLY_PRICE[bk]}G).</span></li>
-        <li>${ico(Object.keys(m.tops)[0], 'sm')}<span><b>Toppings</b>: packs of ${packSize('chashu')} at Kitsune-ya, straight into the bins.</span></li>
-      </ul>
       <h4>Cooking</h4>
       <ol class="cb-steps">
-        <li>Spoon <b>${esc(TARES[m.tare].short.toLowerCase())} tare</b> into an empty bowl.</li>
-        <li>Ladle <b>${esc(BROTHS[m.broth].name.toLowerCase())}</b> over it.</li>${m.spicy ? '<li>Click the <b>chili oil</b> bottle: the broth turns red and spicy.</li>' : ''}
-        <li>Boil a nest for <b>${cookTime()}s</b>, then ${m.cold ? 'chill it in the ice bath and put it in' : 'tip the basket in'}.</li>
-        <li>Add ${tops}.</li>
-        <li>Pass it, then serve it to the guest at the counter.</li>
+        <li>Drag the <b>${esc(TARES[m.tare].short.toLowerCase())} tare</b> spoon from its crock into an empty bowl.</li>
+        <li>Drag a ladle of <b>${esc(BROTHS[m.broth].name.toLowerCase())}</b> from its pot into the bowl.</li>${m.spicy ? `
+        <li>Drag the <b>chili oil</b> bottle onto the bowl: the broth turns red and spicy.</li>` : ''}
+        <li>Drag a noodle nest from the tray into a basket (or click the tray). It boils for <b>${cookTime()} seconds</b>.</li>
+        ${m.cold
+          ? '<li>When it says <b>READY</b>, drag the basket into the <b>ice bath</b> to chill the noodles. Then drag the chilled noodles from the ice bath into the bowl. Served cold, no steam.</li>'
+          : '<li>When it says <b>READY</b>, drag the basket onto the bowl. Ready noodles never overcook, so there is no rush.</li>'}
+        <li>Drag in the toppings from their bins: ${Object.keys(m.tops).map(topLine).join(', ')}.</li>${steps.length ? `
+        <li>Finish with the special touch${steps.length > 1 ? 'es' : ''} below.</li>` : ''}
+        <li>Drag the bowl to the <b>pass</b>: it goes on your tray. Then drag it from the tray to the guest's spot at the counter.</li>
       </ol>
-      ${steps.length ? `<h4>Special touch</h4><ul class="cb-steps cb-touch">${steps.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
-      <dl class="cb-facts"><dt>Cook time</dt><dd>${cookTime()}s noodles</dd><dt>Needs</dt><dd>${unlockText(m.node)}</dd></dl>${num(p + 1)}`;
+      ${steps.length ? `<h4>Special touch${steps.length > 1 ? 'es' : ''}</h4><ul class="cb-steps cb-touch">${steps.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
+      <h4>Good to know</h4>
+      <ul class="cb-steps cb-touch">
+        <li>Read the guest's ticket: <b>+</b> means an extra portion (it goes on their bill), <b>&minus;</b> means leave it out.</li>
+        <li>Made exactly as ordered, it is a <b>perfect bowl</b>: more XP and a tip.</li>
+        <li>A topping can go in twice at most. Added too much? <b>Right-click</b> the bowl to take one out.</li>
+      </ul>
+      <dl class="cb-facts"><dt>Price</dt><dd>${m.price}G, plus any extras</dd><dt>Cook time</dt><dd>${cookTime()}s noodles</dd><dt>Needs</dt><dd>${unlockText(m.node)}</dd></dl>${num(p + 1)}`;
     return [left, right];
   }
   function itemPage(e, p, pageOf) {

@@ -60,7 +60,7 @@ const TUT = (() => {
     'f.mandrake': 'Mandrake root! Click the bowl to slice it. It squeaks.',
     'f.butter':   'Butter melts fast. Get that bowl out quickly!',
     'f.cold':     'Cold ramen! Rinse READY noodles in the ice bath first.',
-    'l.up': 'Level up! New recipes go on your menu, and new tools are on sale at my shop.',   // the first level-up (after its popup)
+    'l.up': 'Level up! Each level brings a new recipe, and sometimes a new tool at my shop.',   // the first level-up (after its popup)
     'r.1': 'Lantern City! Older than my tail, and twice as bright.',
     'r.2': 'Canal Market! Everyone here eats on the move.',
     'r.3': 'The Neon Capital! Big city, bigger appetites.',
@@ -101,14 +101,14 @@ const TUT = (() => {
     far: ['A traveller from far away! Listen closely to their order.', "If it's something we can't make yet, just say sorry. That's fine."],
     call3: 'Tap them to hear their order.',
     cancel3: "We can't make Dragon's Fire yet! Tap them and cancel kindly.",
-    declined: ["That's right. Dragon's Fire is way down the Ramen Road.", 'Turning someone away kindly is fine. No hard feelings.'],
+    declined: ["That's right. Dragon's Fire is a long way off for us.", 'Turning someone away kindly is fine. No hard feelings.'],
     // guest 4: on your own (the recipe book first, since that is when it is needed)
     bookhint: ['Forget what goes in a bowl? The recipe book has every recipe.'],
     solo: 'Now try one on your own. I will just watch.',
     praise: "Lovely work! You're a natural.",
     // the night
-    ff1: 'The shop is open 9:00 to 21:00. Watch the clock: skipping to closing time!',
-    close: 'At 21:00 the crowd goes home, but the sign stays OPEN for late walk-ins until 04:00.',
+    ff1: 'Lunch and dinner are the busy times. Watch the clock: skipping ahead to 21:00!',
+    close: 'After 21:00 the crowds are gone, but the sign stays OPEN for late-night walk-ins until 04:00.',
     ff2: 'Late walk-ins come now and then. Skipping ahead to 04:00...',
     receipt: "At 04:00 the shop fully closes and the day's receipt prints. Fling it away when you're done.",
     // Kitsune-ya
@@ -611,7 +611,7 @@ const TUT = (() => {
   const PW = 96, PH = 96, ZONE_L = { x: 0, y: 372, w: 470, h: 140 }, ZONE_R = { x: VW - 470, y: 372, w: 470, h: 140 };
   const hits = (a, b) => !!(a && b && a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y);
   function drawAoi(g) {
-    const A = T.aoi; T.hit = []; if (!A) return;
+    const A = T.aoi; T.hit = []; T.aoiTop = null; if (!A) return;
     const want = T.on && hits(T.tgt, ZONE_L) && !hits(T.tgt, ZONE_R) ? 1 : -1;   // stay clear of what she points at
     if (want !== A.side && !A.out) { A.side = want; A.inT = G.t; }
     const img = H.img, gt = GUESTS.find(x => x.id === 'aoi');
@@ -621,6 +621,12 @@ const TUT = (() => {
     const top = T.on && G.where === 'store' && NIGHTSHOP.state().ui === 'talk';
     const side = A.side, hx = side < 0 ? 12 : VW - 12 - PW, y = top ? 52 : VH - 44 - PH;
     const x = Math.round(hx + (side < 0 ? -PW - 24 : PW + 24) * (1 - p));
+    // on the right she shares the corner with the daily quest card: record how high her panel and bubble reach (in
+    // canvas px, without the little hop) so game.js can lift the card above her
+    if (side > 0 && !top) {
+      const bh0 = A.text ? (wrap(A.text, 380).length - 1) * PX.lineH() + 32 : 0;
+      T.aoiTop = Math.min(y - 14, y + PH - bh0 - 6);   // (-14: room for an emote over her frame)
+    }
     const lt = G.t - A.lineT, hop = calm() || lt > 0.24 ? 0 : Math.round(Math.sin(lt / 0.24 * Math.PI) * 3);
     const it = G.t - A.inT, tilt = calm() || it > 0.4 ? 0 : (1 - it / 0.4) * 1.5 * (side < 0 ? 1 : -1) * Math.PI / 180;
     g.save(); g.globalAlpha = p;
@@ -648,7 +654,7 @@ const TUT = (() => {
   }
   function place(a, s) { const { w, h } = noteSize(s); return { x: clamp(a.x, 6, VW - w - 6), y: clamp(a.y, 46, VH - h - 44) }; }
   function draw(g) {
-    if (!window.G || G.mode !== 'play' || !tut() || hidden()) { T.hit = []; return; }
+    if (!window.G || G.mode !== 'play' || !tut() || hidden()) { T.hit = []; T.aoiTop = null; return; }
     if (T.on) spot(g, T.tgt, T.drag);
     const notes = T.ev.map(e => [e.id, e.t]).concat(T.stall ? [[T.stall.id, T.stall.t]] : []);
     for (const [id, t] of notes) {
@@ -680,6 +686,7 @@ const TUT = (() => {
     // the daily quest card stays hidden until Aoi has introduced it (or the handover is over or skipped)
     questShown: () => (T.on ? T.idx >= STEPS.findIndex(s => s.id === 'quest') : !tut() || !!tut().done),
     talking: () => !!(T.aoi && !T.aoi.out),
+    aoiTop: () => T.aoiTop ?? null,                                                      // top of Aoi's panel + bubble when she is in the bottom-right corner (canvas px), else null
     debug: () => ({ on: T.on, step: T.on && STEPS[T.idx] ? STEPS[T.idx].id : null, tgt: T.tgt, drag: T.drag, text: T.aoi && T.aoi.text, notes: T.ev.map(e => e.id).concat(T.stall ? [T.stall.id] : []) })   // (read-only, for test pages)
   };
 })();

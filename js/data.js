@@ -138,10 +138,11 @@ const TOP_NODE = {
    the next one, where you can move the shop. (cost = the tool's price at the night shop, for upgrade stops.)
    ids of the recipe/upgrade stops are the unlock ids the rest of the game checks with owns(); a recipe stop's id is
    its MENU key. LEVEL_XP[i] = total XP needed to reach level i + 1. */
-// Exponential: each level costs 20% more XP than the one before (50, 60, 70, 85 ... 1330 for the last), so the first
-// levels come quickly and the late road takes real work.
-const XP_FIRST = 50, XP_GROWTH = 1.2;
-const LEVEL_XP = Array.from({ length: 20 }, (_, i) => { let t = 0; for (let k = 0; k < i; k++) t += Math.round(XP_FIRST * XP_GROWTH ** k / 5) * 5; return t; });
+// Slow and steady: one new recipe per level (levels 2-25), each level about two in-game days of work or more, so
+// every ramen gets time to be learned before the next arrives. A day brings roughly 120-170 XP from bowls plus the
+// daily quest (20 + 6 x level), so each level costs a little more than the last: 250, 285, 320 ... 1090 for the last.
+const XP_FIRST = 250, XP_STEP = 35, MAX_LEVEL = 26;
+const LEVEL_XP = Array.from({ length: MAX_LEVEL }, (_, i) => { let t = 0; for (let k = 0; k < i; k++) t += XP_FIRST + XP_STEP * k; return t; });
 const REGIONS = [
   { id: 'sakura', name: 'Blossom Vale',  short: 'Blossom', c: '#e88aa8' },
   { id: 'kyoto',  name: 'Lantern City',  short: 'Lantern', c: '#c8443a' },
@@ -152,55 +153,55 @@ const REGIONS = [
 const ROAD_NAME = 'Ramen Road';
 // goal kinds: served / perfect (bowls, lifetime), sold (bowls of one ramen), met (guests), bestDay (gold in one day), days
 const STOPS = [
-  // Blossom Vale (levels 1-4)
+  // Blossom Vale (levels 1-7)
   { id: 'home',      region: 0, level: 1,  cost: 0,   kind: 'start',   place: 'Hanami Village', name: 'Your first shop', desc: 'Where the journey begins: a little ramen stall under the blossom trees.' },
   { id: 'shio',      region: 0, level: 2,  cost: 0,   kind: 'recipe',  place: 'Salt Spring Inn', menu: 'shio', name: 'Shio Ramen', also: 'Shio tare, chicken chashu, wakame' },
-  { id: 'spicy',     region: 0, level: 2,  cost: 0,   kind: 'recipe',  place: 'Chili Farm', menu: 'spicy', name: 'Spicy Miso', also: 'Chili topping' },
+  { id: 'spicy',     region: 0, level: 3,  cost: 0,   kind: 'recipe',  place: 'Chili Farm', menu: 'spicy', name: 'Spicy Miso', also: 'Chili topping' },
   { id: 'quick',     region: 0, level: 3,  cost: 60,  kind: 'upgrade', place: 'Rice Terraces', name: 'Waiting Bench', desc: 'Up to five guests wait in line instead of three.' },
-  { id: 'traveller', region: 0, level: 3,  cost: 0,   kind: 'recipe',  place: 'Crossroads Shrine', menu: 'traveller', name: "Traveller's Bowl", also: 'Bean sprouts' },
-  { id: 'garden',    region: 0, level: 3,  cost: 0,   kind: 'recipe',  place: 'Temple Garden', menu: 'garden', name: 'Garden Miso', also: 'Bok choy, corn' },
-  { id: 'yuzu',      region: 0, level: 4,  cost: 0,   kind: 'recipe',  place: 'Sunpetal Meadow', menu: 'yuzu', name: 'Blossom Shio', also: 'Sunpetals, yuzu peel' },
-  { id: 'mandrake',  region: 0, level: 4,  cost: 0,   kind: 'recipe',  place: 'Root Witch’s Plot', menu: 'mandrake', name: 'Mandrake Shoyu', also: 'Mandrake root' },
-  { id: 'sakuraLm',  region: 0, level: 4,  cost: 0,   kind: 'landmark', place: 'Cherry Blossom Hill', name: 'Blossom branch', deco: 0, gold: 60, desc: 'A sprig of blossom for the shop, and the road to Lantern City.' },
-  // Lantern City (levels 4-8)
-  { id: 'tonkotsu',  region: 1, level: 5,  cost: 0,   kind: 'recipe',  place: 'Thousand Gates', menu: 'tonkotsu', name: 'Tonkotsu', also: 'Red pickled ginger' },
-  { id: 'bins',      region: 1, level: 5,  cost: 120, kind: 'upgrade', place: 'Bamboo Grove', name: 'Bulk Crates', desc: 'Every pack from Kitsune-ya holds half as much again.' },
-  { id: 'seaside',   region: 1, level: 6,  cost: 0,   kind: 'recipe',  place: 'River Fish Market', menu: 'seaside', name: 'Seaside Dashi', also: 'Dashi broth, naruto' },
-  { id: 'stall5',    region: 1, level: 6,  cost: 150, kind: 'upgrade', place: 'Lantern Market', name: 'Stall 5', desc: 'Opens a fifth stall at the counter: room for one more guest.' },
-  { id: 'kyoto',     region: 1, level: 7,  cost: 0,   kind: 'recipe',  place: 'Glowcap Caves', menu: 'kyoto', name: 'Lantern Shoyu', also: 'Glowcaps' },
-  { id: 'hakata',    region: 1, level: 7,  cost: 0,   kind: 'recipe',  place: 'Night Yatai Row', menu: 'hakata', name: 'Hakata Red', also: 'Wood ear, garlic chips' },
-  { id: 'caddy',     region: 1, level: 7,  cost: 140, kind: 'upgrade', place: 'Spice Merchant Row', name: 'Garnish Caddy', desc: 'Spring onion and nori sprinkle themselves in when the noodles go into a bowl that needs them.' },
-  { id: 'kyotoLm',   region: 1, level: 8,  cost: 0,   kind: 'landmark', place: 'Lantern Street', name: 'Red paper lantern', deco: 1, gold: 120, desc: 'A city lantern for the shop, and the road to Canal Market.' },
-  // Canal Market (levels 8-12)
-  { id: 'butter',    region: 2, level: 8,  cost: 0,   kind: 'recipe',  place: 'Canal Lights', menu: 'butter', name: 'Canal Butter Corn', also: 'Butter' },
-  { id: 'boil',      region: 2, level: 9,  cost: 200, kind: 'upgrade', place: 'Fishmonger Row', name: 'Fast Boil', desc: 'Noodles cook in 4 seconds instead of 6.' },
-  { id: 'tantan',    region: 2, level: 9,  cost: 0,   kind: 'recipe',  place: 'Sesame Mill', menu: 'tantan', name: 'Market Tantanmen', also: 'Minced pork, sesame (and the grinder)' },
-  { id: 'stall6',    region: 2, level: 10, cost: 220, kind: 'upgrade', place: 'New World Arcade', name: 'Stall 6', desc: 'Opens a sixth stall at the counter: room for one more guest.' },
-  { id: 'hiyashi',   region: 2, level: 10, cost: 0,   kind: 'recipe',  place: 'Frost Traders’ Wharf', menu: 'hiyashi', name: 'Frostleaf Hiyashi', also: 'Frostleaf, shrimp (and the ice bath)' },
-  { id: 'board9',    region: 2, level: 11, cost: 200, kind: 'upgrade', place: 'Signwright’s Lane', name: 'Menu Board Plank', desc: 'A ninth slot on your menu: sell one more ramen at a time.' },
-  { id: 'osakaLm',   region: 2, level: 12, cost: 0,   kind: 'landmark', place: 'Canal Castle', name: 'Food stall banner', deco: 2, gold: 160, desc: 'A street-food banner for the shop, and the road to the Neon Capital.' },
-  // Neon Capital (levels 12-16)
-  { id: 'tips',      region: 3, level: 12, cost: 260, kind: 'upgrade', place: 'Neon Crossing', name: 'Generous Tips', desc: 'Perfect bowls earn 3G more in tips.' },
-  { id: 'akibaLm',   region: 3, level: 12, cost: 0,   kind: 'landmark', place: 'Electric Town', name: 'Arcade prize', gold: 150, desc: 'A bag of arcade tokens, cashed in for gold.' },
-  { id: 'forest',    region: 3, level: 13, cost: 0,   kind: 'recipe',  place: 'Sunken Park', menu: 'forest', name: 'Glowcap Forest Miso', also: 'Shiitake' },
-  { id: 'stall7',    region: 3, level: 13, cost: 300, kind: 'upgrade', place: 'Old Temple Gate', name: 'Stall 7', desc: 'Opens a seventh stall at the counter: room for one more guest.' },
-  { id: 'tokyo',     region: 3, level: 14, cost: 0,   kind: 'recipe',  place: 'Old Town Street', menu: 'tokyo', name: 'Neon Shoyu' },
-  { id: 'feast',     region: 3, level: 14, cost: 0,   kind: 'recipe',  place: 'Guild Hall', menu: 'feast', name: 'Feast Bowl', also: 'Kakuni (braised pork belly)' },
-  { id: 'garlic',    region: 3, level: 15, cost: 0,   kind: 'recipe',  place: 'Garlic Smokehouse', menu: 'garlic', name: 'Black Garlic Tonkotsu', also: 'Mayu (black garlic oil)' },
-  { id: 'wyvern',    region: 3, level: 15, cost: 0,   kind: 'recipe',  place: 'Hunters’ Guild', menu: 'wyvern', name: 'Wyvern Tonkotsu', also: 'Wyvern chashu' },
-  { id: 'tokyoLm',   region: 3, level: 16, cost: 0,   kind: 'landmark', place: 'Neon Spire', name: 'Neon ramen sign', deco: 3, gold: 200, desc: 'A buzzing neon sign for the shop, and the road to the Ember Coast.' },
-  // Ember Coast (levels 16-20)
-  { id: 'clam',      region: 4, level: 16, cost: 0,   kind: 'recipe',  place: 'Clam Flats', menu: 'clam', name: 'Clam Shio', also: 'Clams' },
-  { id: 'kraken',    region: 4, level: 17, cost: 0,   kind: 'recipe',  place: 'Fishers’ Wharf', menu: 'kraken', name: 'Kraken King', also: 'Kraken tentacle' },
-  { id: 'golden',    region: 4, level: 17, cost: 0,   kind: 'recipe',  place: 'Golden Beach', menu: 'golden', name: 'Golden Cockatrice', also: 'Cockatrice eggs (a few a night at Kitsune-ya)' },
-  { id: 'stall8',    region: 4, level: 18, cost: 400, kind: 'upgrade', place: 'Great Buddha Cove', name: 'Stall 8', desc: 'Opens the eighth and last stall at the counter.' },
-  { id: 'fox',       region: 4, level: 18, cost: 0,   kind: 'recipe',  place: 'Fox Shrine at Moonrise', menu: 'fox', name: "Fox's Moonlight Bowl", also: 'Spirit dashi, aburaage' },
-  { id: 'board10',   region: 4, level: 19, cost: 350, kind: 'upgrade', place: 'Lantern Workshop', name: 'Grand Menu Board', desc: 'A tenth slot on your menu: sell one more ramen at a time.' },
-  { id: 'hiro',      region: 4, level: 19, cost: 0,   kind: 'recipe',  place: 'Hiro’s Old Stall', menu: 'hiro', name: "Hiro's House Ramen" },
-  { id: 'dragon',    region: 4, level: 20, cost: 0,   kind: 'recipe',  place: 'Dragon’s Peak', menu: 'dragon', name: "Dragon's Fire", also: 'Dragonbone broth, ember pepper' },
-  { id: 'harborLm',  region: 4, level: 20, cost: 0,   kind: 'landmark', place: 'Fishing Harbour', name: 'Fisher’s thanks', gold: 250, desc: 'The harbour cooks pay you a visit, and their respects.' },
-  { id: 'lightLm',   region: 4, level: 20, cost: 0,   kind: 'landmark', place: 'Lighthouse Point', name: 'Lighthouse lamp', gold: 300, desc: 'The keeper trades a lamp for a bowl.' },
-  { id: 'endLm',     region: 4, level: 20, cost: 0,   kind: 'landmark', place: 'Journey’s End', name: 'Glass fishing float', deco: 4, gold: 500, desc: 'The end of the road: a glass float for the shop, and a famous name across the land.' }
+  { id: 'traveller', region: 0, level: 4,  cost: 0,   kind: 'recipe',  place: 'Crossroads Shrine', menu: 'traveller', name: "Traveller's Bowl", also: 'Bean sprouts' },
+  { id: 'garden',    region: 0, level: 5,  cost: 0,   kind: 'recipe',  place: 'Temple Garden', menu: 'garden', name: 'Garden Miso', also: 'Bok choy, corn' },
+  { id: 'yuzu',      region: 0, level: 6,  cost: 0,   kind: 'recipe',  place: 'Sunpetal Meadow', menu: 'yuzu', name: 'Blossom Shio', also: 'Sunpetals, yuzu peel' },
+  { id: 'mandrake',  region: 0, level: 7,  cost: 0,   kind: 'recipe',  place: 'Root Witch’s Plot', menu: 'mandrake', name: 'Mandrake Shoyu', also: 'Mandrake root' },
+  { id: 'sakuraLm',  region: 0, level: 7,  cost: 0,   kind: 'landmark', place: 'Cherry Blossom Hill', name: 'Blossom branch', deco: 0, gold: 60, desc: 'A sprig of blossom for the shop, and the road to Lantern City.' },
+  // Lantern City (levels 8-11)
+  { id: 'tonkotsu',  region: 1, level: 8,  cost: 0,   kind: 'recipe',  place: 'Thousand Gates', menu: 'tonkotsu', name: 'Tonkotsu', also: 'Red pickled ginger' },
+  { id: 'bins',      region: 1, level: 8,  cost: 120, kind: 'upgrade', place: 'Bamboo Grove', name: 'Bulk Crates', desc: 'Every pack from Kitsune-ya holds half as much again.' },
+  { id: 'seaside',   region: 1, level: 9,  cost: 0,   kind: 'recipe',  place: 'River Fish Market', menu: 'seaside', name: 'Seaside Dashi', also: 'Dashi broth, naruto' },
+  { id: 'stall5',    region: 1, level: 9,  cost: 150, kind: 'upgrade', place: 'Lantern Market', name: 'Stall 5', desc: 'Opens a fifth stall at the counter: room for one more guest.' },
+  { id: 'kyoto',     region: 1, level: 10, cost: 0,   kind: 'recipe',  place: 'Glowcap Caves', menu: 'kyoto', name: 'Lantern Shoyu', also: 'Glowcaps' },
+  { id: 'hakata',    region: 1, level: 11, cost: 0,   kind: 'recipe',  place: 'Night Yatai Row', menu: 'hakata', name: 'Hakata Red', also: 'Wood ear, garlic chips' },
+  { id: 'caddy',     region: 1, level: 11, cost: 140, kind: 'upgrade', place: 'Spice Merchant Row', name: 'Garnish Caddy', desc: 'Spring onion and nori sprinkle themselves in when the noodles go into a bowl that needs them.' },
+  { id: 'kyotoLm',   region: 1, level: 11, cost: 0,   kind: 'landmark', place: 'Lantern Street', name: 'Red paper lantern', deco: 1, gold: 120, desc: 'A city lantern for the shop, and the road to Canal Market.' },
+  // Canal Market (levels 12-14)
+  { id: 'butter',    region: 2, level: 12, cost: 0,   kind: 'recipe',  place: 'Canal Lights', menu: 'butter', name: 'Canal Butter Corn', also: 'Butter' },
+  { id: 'boil',      region: 2, level: 12, cost: 200, kind: 'upgrade', place: 'Fishmonger Row', name: 'Fast Boil', desc: 'Noodles cook in 4 seconds instead of 6.' },
+  { id: 'tantan',    region: 2, level: 13, cost: 0,   kind: 'recipe',  place: 'Sesame Mill', menu: 'tantan', name: 'Market Tantanmen', also: 'Minced pork, sesame (and the grinder)' },
+  { id: 'stall6',    region: 2, level: 13, cost: 220, kind: 'upgrade', place: 'New World Arcade', name: 'Stall 6', desc: 'Opens a sixth stall at the counter: room for one more guest.' },
+  { id: 'hiyashi',   region: 2, level: 14, cost: 0,   kind: 'recipe',  place: 'Frost Traders’ Wharf', menu: 'hiyashi', name: 'Frostleaf Hiyashi', also: 'Frostleaf, shrimp (and the ice bath)' },
+  { id: 'board9',    region: 2, level: 14, cost: 200, kind: 'upgrade', place: 'Signwright’s Lane', name: 'Menu Board Plank', desc: 'A ninth slot on your menu: sell one more ramen at a time.' },
+  { id: 'osakaLm',   region: 2, level: 14, cost: 0,   kind: 'landmark', place: 'Canal Castle', name: 'Food stall banner', deco: 2, gold: 160, desc: 'A street-food banner for the shop, and the road to the Neon Capital.' },
+  // Neon Capital (levels 15-19)
+  { id: 'tips',      region: 3, level: 15, cost: 260, kind: 'upgrade', place: 'Neon Crossing', name: 'Generous Tips', desc: 'Perfect bowls earn 3G more in tips.' },
+  { id: 'akibaLm',   region: 3, level: 15, cost: 0,   kind: 'landmark', place: 'Electric Town', name: 'Arcade prize', gold: 150, desc: 'A bag of arcade tokens, cashed in for gold.' },
+  { id: 'forest',    region: 3, level: 15, cost: 0,   kind: 'recipe',  place: 'Sunken Park', menu: 'forest', name: 'Glowcap Forest Miso', also: 'Shiitake' },
+  { id: 'stall7',    region: 3, level: 16, cost: 300, kind: 'upgrade', place: 'Old Temple Gate', name: 'Stall 7', desc: 'Opens a seventh stall at the counter: room for one more guest.' },
+  { id: 'tokyo',     region: 3, level: 16, cost: 0,   kind: 'recipe',  place: 'Old Town Street', menu: 'tokyo', name: 'Neon Shoyu' },
+  { id: 'feast',     region: 3, level: 17, cost: 0,   kind: 'recipe',  place: 'Guild Hall', menu: 'feast', name: 'Feast Bowl', also: 'Kakuni (braised pork belly)' },
+  { id: 'garlic',    region: 3, level: 18, cost: 0,   kind: 'recipe',  place: 'Garlic Smokehouse', menu: 'garlic', name: 'Black Garlic Tonkotsu', also: 'Mayu (black garlic oil)' },
+  { id: 'wyvern',    region: 3, level: 19, cost: 0,   kind: 'recipe',  place: 'Hunters’ Guild', menu: 'wyvern', name: 'Wyvern Tonkotsu', also: 'Wyvern chashu' },
+  { id: 'tokyoLm',   region: 3, level: 19, cost: 0,   kind: 'landmark', place: 'Neon Spire', name: 'Neon ramen sign', deco: 3, gold: 200, desc: 'A buzzing neon sign for the shop, and the road to the Ember Coast.' },
+  // Ember Coast (levels 20-26)
+  { id: 'clam',      region: 4, level: 20, cost: 0,   kind: 'recipe',  place: 'Clam Flats', menu: 'clam', name: 'Clam Shio', also: 'Clams' },
+  { id: 'kraken',    region: 4, level: 21, cost: 0,   kind: 'recipe',  place: 'Fishers’ Wharf', menu: 'kraken', name: 'Kraken King', also: 'Kraken tentacle' },
+  { id: 'golden',    region: 4, level: 22, cost: 0,   kind: 'recipe',  place: 'Golden Beach', menu: 'golden', name: 'Golden Cockatrice', also: 'Cockatrice eggs (a few a night at Kitsune-ya)' },
+  { id: 'stall8',    region: 4, level: 22, cost: 400, kind: 'upgrade', place: 'Great Buddha Cove', name: 'Stall 8', desc: 'Opens the eighth and last stall at the counter.' },
+  { id: 'fox',       region: 4, level: 23, cost: 0,   kind: 'recipe',  place: 'Fox Shrine at Moonrise', menu: 'fox', name: "Fox's Moonlight Bowl", also: 'Spirit dashi, aburaage' },
+  { id: 'board10',   region: 4, level: 24, cost: 350, kind: 'upgrade', place: 'Lantern Workshop', name: 'Grand Menu Board', desc: 'A tenth slot on your menu: sell one more ramen at a time.' },
+  { id: 'hiro',      region: 4, level: 24, cost: 0,   kind: 'recipe',  place: 'Hiro’s Old Stall', menu: 'hiro', name: "Hiro's House Ramen" },
+  { id: 'dragon',    region: 4, level: 25, cost: 0,   kind: 'recipe',  place: 'Dragon’s Peak', menu: 'dragon', name: "Dragon's Fire", also: 'Dragonbone broth, ember pepper' },
+  { id: 'harborLm',  region: 4, level: 25, cost: 0,   kind: 'landmark', place: 'Fishing Harbour', name: 'Fisher’s thanks', gold: 250, desc: 'The harbour cooks pay you a visit, and their respects.' },
+  { id: 'lightLm',   region: 4, level: 26, cost: 0,   kind: 'landmark', place: 'Lighthouse Point', name: 'Lighthouse lamp', gold: 300, desc: 'The keeper trades a lamp for a bowl.' },
+  { id: 'endLm',     region: 4, level: 26, cost: 0,   kind: 'landmark', place: 'Journey’s End', name: 'Glass fishing float', deco: 4, gold: 500, desc: 'The end of the road: a glass float for the shop, and a famous name across the land.' }
 ];
 const NODES = STOPS.filter(s => s.kind === 'recipe' || s.kind === 'upgrade');   // the stops that unlock something in the shop
 
@@ -362,10 +363,10 @@ const KL = {
   bin: k => ({ x: 572 + 48 * (k % 8), y: 182 + 70 * Math.floor(k / 8), w: 44, h: 46 }),
   MAT: { x: 636, y: 386, w: 248, h: 112 },
   bowlX: [700, 820], BOWL_Y: 420,
-  tare: i => ({ cx: 976 + 64 * i, y: 330 }),            // crock i: centre x, rim y
+  tare: i => ({ cx: 966 + 50 * i, y: 330 }),            // crock i: centre x, rim y (the chili oil stands at the end of the row)
   pot: i => ({ cx: 1150 + 48 * i, cy: 340, rx: 21 }),    // broth pot i on the hearth (five smaller pots)
   ICE: { cx: 1030, cy: 452, rx: 40 },                   // the ice bath for cold ramen, on the counter in front of the crocks
-  OIL: { cx: 1040, by: 240 },                           // the chili oil bottle, on the window sill above the crocks (by = its bottom)
+  OIL: { cx: 1106, by: 382 },                           // the chili oil bottle, standing with the tare crocks at the end of their row (by = its bottom)
   BOIL: { cx: 1440, cy: 352, rx: 66 }, basketX: [1398, 1440, 1482],
   NOODLE: { x: 1394, y: 226, w: 92, h: 40 },            // tray of noodle nests on the shelf above the boiler
   // where each stock's "+" restock button sits

@@ -73,11 +73,15 @@ const PBOOK = (() => {
       if (bw.length) { li = Math.min(...bw.map(l => l.from - 1)); ri = Math.max(...bw.map(l => l.from)); }
       return [li, ri];
     }
+    // A flat page with more words than fit scrolls; each new page starts at its top. (pb-over marks one that overflows,
+    // so its page number stays pinned to the bottom edge instead of sitting over the words.)
+    const overflowing = el => { el.classList.remove('pb-over'); el.classList.toggle('pb-over', el.scrollHeight > el.clientHeight + 1); };
+    function fill(el, html) { el.innerHTML = html; el.scrollTop = 0; overflowing(el); requestAnimationFrame(() => overflowing(el)); }
     function setStatic(force) {
       const [li, ri] = underneath();
-      if (force || li !== shownL) { Lin.innerHTML = pageHTML(2 * li); shownL = li; }
-      if (force || ri !== shownR) { Rin.innerHTML = pageHTML(2 * ri + 1); shownR = ri; }
-      if (force || (cover.style.display !== 'none' && coverShown !== li)) { coverIn.innerHTML = pageHTML(2 * li); coverShown = li; }
+      if (force || li !== shownL) { fill(Lin, pageHTML(2 * li)); shownL = li; }
+      if (force || ri !== shownR) { fill(Rin, pageHTML(2 * ri + 1)); shownR = ri; }
+      if (force || (cover.style.display !== 'none' && coverShown !== li)) { fill(coverIn, pageHTML(2 * li)); coverShown = li; }
       // the paper stacked under each side thickens as you move through the book
       const n = spreads(), u = U(), lt = Math.round(clamp(li / Math.max(1, n - 1), 0, 1) * 4) + 1, rt = Math.round(clamp((n - 1 - ri) / Math.max(1, n - 1), 0, 1) * 4) + 1;
       const layers = side => k => Array.from({ length: k }, (_, i) => `${side * (i + 1) * u}px ${(i + 1) * u * 0.6}px 0 0 ${i % 2 ? 'var(--pb-edge2)' : 'var(--pb-edge)'}`).concat(`${side * (k + 1) * u}px ${(k + 1) * u * 0.6}px 0 0 var(--pb-edge-ink)`).join(',');
@@ -239,7 +243,7 @@ const PBOOK = (() => {
         cover.style.transform = `rotateY(${-cv.a}rad)`;
         coverFront.style.setProperty('--sh', (0.55 * Math.pow(clamp(cv.a / (PI / 2), 0, 1), 1.5)).toFixed(3));
         coverBack.style.setProperty('--sh', (0.5 * Math.pow(clamp((PI - cv.a) / (PI / 2), 0, 1), 1.5)).toFixed(3));
-        if (coverShown !== shownL) { coverIn.innerHTML = pageHTML(2 * shownL); coverShown = shownL; }
+        if (coverShown !== shownL) { fill(coverIn, pageHTML(2 * shownL)); coverShown = shownL; }
       }
       body.classList.toggle('pb-leftbare', cv.a <= PI / 2);   // before the cover passes upright, the left side is just table
       // pages in flight, and the shadow the highest one throws on the paper below it
@@ -367,6 +371,12 @@ const PBOOK = (() => {
     stage.addEventListener('click', e => { if (eatClick) { eatClick = false; e.stopPropagation(); e.preventDefault(); } }, true);   // a drag is not a click
     stage.addEventListener('wheel', e => {
       if (mode !== 'open' || e.target.closest('.pb-tabs, .pb-side')) return;
+      // over a page that scrolls: the wheel scrolls it, and only turns the page once it is already at that end
+      const pg = e.target.closest('.pb-L > .pb-in, .pb-R > .pb-in, .pb-cover-page > .pb-in');
+      if (pg && pg.scrollHeight > pg.clientHeight + 1) {
+        const atEnd = e.deltaY > 0 ? pg.scrollTop + pg.clientHeight >= pg.scrollHeight - 1 : pg.scrollTop <= 0;
+        if (!atEnd) { wheelT = performance.now(); return; }   // (let it scroll; the wheel turns the page only after a short pause at the end)
+      }
       e.preventDefault();
       const now = performance.now();
       if (now - wheelT < 110) return;

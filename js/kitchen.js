@@ -553,8 +553,8 @@ const KITCHEN = (() => {
     if (!chiliOilOn()) return;
     const O = KL.OIL, n = G.stock[CHILI_OIL] || 0;
     if (!(G.drag && G.drag.kind === 'oil')) oilBottle(g, O.cx, O.by, 10);
-    nameplate(g, 'CHILI OIL', O.cx, O.by + 4, 50);
-    stockBadge(g, n, O.cx + 36, O.by);
+    nameplate(g, 'CHILI', O.cx, O.by + 4, 34);
+    stockBadge(g, n, O.cx + 11, O.by - 2);
   }
 
   /* The ice bath (once a cold recipe is learned): a hinoki tub of ice water on the counter. Chilled nests wait in it

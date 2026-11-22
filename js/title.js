@@ -32,10 +32,10 @@ const TITLE = (() => {
   const firstMet = n => GUESTS.slice(0, n).map(g => g.id);
   const FAKE = {
     new: () => null,
-    early: () => ({ day: 3, gold: 120, level: 3, region: 0, owned: upto(3), gear: [], met: firstMet(6), aoiMet: false, night: false }),
-    mid: () => ({ day: 14, gold: 640, level: 10, region: 2, owned: upto(10), gear: ['quick', 'bins', 'stall5', 'caddy', 'boil', 'stall6'], met: firstMet(16), aoiMet: true, night: false }),
-    late: () => ({ day: 41, gold: 2380, level: 20, region: 4, owned: upto(20), gear: GEAR.slice(), met: GUESTS.map(g => g.id), aoiMet: true, night: false }),
-    night: () => ({ day: 9, gold: 410, level: 7, region: 1, owned: upto(8), gear: ['quick', 'bins', 'stall5', 'caddy'], met: firstMet(10), aoiMet: true, night: true })
+    early: () => ({ day: 7, gold: 120, level: 3, region: 0, owned: upto(3), gear: [], met: firstMet(6), aoiMet: false, night: false }),
+    mid: () => ({ day: 40, gold: 640, level: 13, region: 2, owned: upto(13), gear: ['quick', 'bins', 'stall5', 'caddy', 'boil', 'stall6'], met: firstMet(16), aoiMet: true, night: false }),
+    late: () => ({ day: 95, gold: 2380, level: MAX_LEVEL, region: 4, owned: upto(MAX_LEVEL), gear: GEAR.slice(), met: GUESTS.map(g => g.id), aoiMet: true, night: false }),
+    night: () => ({ day: 30, gold: 410, level: 11, region: 1, owned: upto(11), gear: ['quick', 'bins', 'stall5', 'caddy'], met: firstMet(10), aoiMet: true, night: true })
   };
   let fake;
   const forced = () => !!(FORCED && FAKE[FORCED]);
@@ -837,12 +837,13 @@ const TITLE = (() => {
     const hop = (sl.t % 1.1) / 1.1;
     if (hop > 0.25 && hop < 0.75) sl.x += sl.dir * 70 * dt * (chase && chase.t > 0.4 && chase.t < 4 ? 1.6 : 1);
     if (sl.x > 650) sl.dir = -1; else if (sl.x < 110) sl.dir = 1;
-    const ct = village.cat;
-    if (chase) {   // the cat wakes, chases the slime along the street, then strolls back to its step
+    const ct = village.cat, px = ct.x;
+    if (chase && CATS.SIDE) {   // the cat wakes, chases the slime along the street, then strolls back to its step (it needs the walk frames)
       if (chase.t < 0.4) { ct.run = 0; }
       else if (chase.t < 4) { const tx = sl.x - sl.dir * 34; ct.x += clamp(tx - ct.x, -150 * dt, 150 * dt); ct.y += (500 - ct.y) * Math.min(1, dt * 6); ct.run += dt; ct.face = Math.sign(tx - ct.x) || ct.face || 1; }
       else { ct.x += clamp(524 - ct.x, -90 * dt, 90 * dt); ct.y += (434 - ct.y) * Math.min(1, dt * 3); ct.run += dt; ct.face = Math.sign(524 - ct.x) || 1; }
     } else { ct.x = 524; ct.y = 434; ct.run = 0; }
+    ct.dist = (ct.dist || 0) + Math.abs(ct.x - px);   // (his paws step with the distance run)
     const dr = village.dragon;
     if (dr.x === null) {
       dr.wait -= dt;
@@ -891,28 +892,13 @@ const TITLE = (() => {
     for (const k of [-12, -4, 4]) poly(g, [[x + k, by - 18 - br], [x + k + 3, by - 22 - br], [x + k + 6, by - 18 - br]], DK);                        // spines
     if (Math.sin(S.t * 0.9) > -0.2) { const zy = by - 28 - Math.round((S.t * 6) % 10); textC(g, 'Z', x + 36, zy, '#c9b8e0'); }
   }
+  // Casper (js/cats.js) asleep on the shop's doorstep; when the slime bounces by he wakes and gives chase, then strolls back
   function cat(g) {
     const ct = village.cat;
-    if (ct.run > 0) {   // running: a stretched body and flying legs
-      const x = Math.round(ct.x), y = Math.round(ct.y), f = ct.face || 1, st = Math.floor(ct.run * 12) % 2;
-      ell(g, x, y - 7, 13, 5, DK); ell(g, x, y - 7, 12, 4, '#e2903e'); ell(g, x - 3 * f, y - 8, 6, 2, '#f2b062');
-      ell(g, x + 12 * f, y - 10, 6, 5, DK); ell(g, x + 12 * f, y - 10, 5, 4, '#e2903e'); poly(g, [[x + 9 * f, y - 13], [x + 10 * f, y - 18], [x + 13 * f, y - 13]], DK);
-      dot(g, x + 14 * f, y - 11, DK);
-      for (const [lx, k] of [[x - 8, 0], [x + 7, 1]]) { const sp = (st ^ k) ? 4 : -2; line(g, lx, y - 4, lx + sp, y, DK, 3); }
-      line(g, x - 12 * f, y - 8, x - 20 * f, y - 14, DK, 3); line(g, x - 12 * f, y - 8, x - 19 * f, y - 13, '#e2903e', 1);
-      return;
-    }
-    const x = 524, y = 434, br = Math.round(Math.sin(S.t * 1.6));
-    ell(g, x, y - 4 - br, 13, 6 + br, DK); ell(g, x, y - 4 - br, 12, 5 + br, '#e2903e'); ell(g, x - 3, y - 6 - br, 7, 2, '#f2b062');
-    for (const k of [-6, 0, 6]) rect(g, x + k, y - 9 - br, 2, 3, '#b8682a');
-    ell(g, x + 11, y - 7, 6, 5, DK); ell(g, x + 11, y - 7, 5, 4, '#e2903e');
-    poly(g, [[x + 7, y - 10], [x + 9, y - 15], [x + 11, y - 10]], DK); poly(g, [[x + 12, y - 10], [x + 14, y - 15], [x + 16, y - 10]], DK);
-    poly(g, [[x + 8, y - 10], [x + 9, y - 13], [x + 10, y - 10]], '#e2903e'); poly(g, [[x + 13, y - 10], [x + 14, y - 13], [x + 15, y - 10]], '#e2903e');
-    rect(g, x + 9, y - 7, 2, 1, DK); rect(g, x + 13, y - 7, 2, 1, DK);
-    const flick = Math.sin(S.t * 0.7) > 0.85 ? Math.round(Math.sin(S.t * 14) * 3) : 0;
-    line(g, x - 12, y - 3, x - 20, y - 6 + flick, DK, 3); line(g, x - 12, y - 4, x - 19, y - 6 + flick, '#e2903e', 1);
-    if (Math.sin(S.t * 0.9) > 0.3) { const zy = y - 22 - Math.round((S.t * 6) % 8); textC(g, 'Z', x + 20, zy, '#c9b8e0'); }
+    if (ct.run > 0) CATS.drawFrame(g, 'casper', CATS.F.walk + Math.floor(ct.dist / 4) % 8, ct.x, ct.y + 1, (ct.face || 1) < 0);
+    else CATS.drawFrame(g, 'casper', CATS.F.sleep + Math.floor(S.t * 1.6) % 4, 524, 436);
   }
+
   function slime(g) {
     const sl = village.slime, hop = (sl.t % 1.1) / 1.1;
     let squash = 0, lift = 0;

@@ -1,6 +1,7 @@
 'use strict';
-/* Toppings + kitchen, one continuous counter in local x 0-KL.W (the caller translates it to world x KL.X0).
-   Toppings view shows local x 0-960, kitchen view shows 560-1520; both see the topping boxes and the bowl mat.
+/* The kitchen, one continuous counter in local x 0-KL.W (the caller translates it to world x KL.X0): four stations
+   (KL.STATIONS) with bare wall and a timber post between them, each under a small hanging sign. Nothing sits in the
+   HUD band (y < KL.TOP) or the tab-bar band (y >= KL.BOTTOM); the wall under the order rail only has decoration.
    Art direction: a lantern-lit adventurers' ramen-ya. Warm plaster between dark timber posts, a hinoki counter,
    lacquered topping boxes, glazed tare crocks, copper stock pots on a brick hearth and a copper-banded noodle boiler.
    One light logic: paper lanterns and the hearth fire are warm key lights; corners fall off into soft shade. */
@@ -14,10 +15,11 @@ const KITCHEN = (() => {
     copper: PAL.copper, copperHi: PAL.copperHi, copperLo: PAL.copperLo, copperDk: PAL.copperDk,
     iron: PAL.iron, ironHi: PAL.ironHi, lacquer: PAL.lacquerBlack, lacquerRed: PAL.lacquerDeep, indigo: PAL.indigo, indigoLo: PAL.indigoLo
   };
-  const WIN = { x: 976, y: 150, w: 104, h: 84 };
-  const COOK_X = 1124;                          // brick backsplash + hood start here
-  const HEARTH = { x: 1126, x1: 1368, y: 392, y1: 504 };
-  const LANTERNS = [[238, 56, 11, '#c8443a'], [404, 46, 10, '#e8a040'], [1060, 46, 10, '#c8443a']];
+  const { WIN, MB, SHELF, RAIL, COOK_X, HOOD_X1 } = KL;   // the window, menu board, tare shelf, utensil rail, brick + hood span
+  const HEARTH = { x: KL.pot(0).cx - 44, x1: KL.pot(BURNERS - 1).cx + 44, y: 386, y1: 488 };
+  const POSTS = [375, COOK_X - 11, HOOD_X1];      // timber posts in the bare wall: pass | toppings + tare | hearth + boiler | window
+  const LANTERNS = [[380, 60, 11, '#c8443a'], [COOK_X - 6, 60, 10, '#e8a040'], [1655, 60, 10, '#c8443a']];
+  const TARE_SIGN = [906, 150];                   // the TARE sign's nail: on the bare wall past the pantry, over the crocks' shelf
   let back = null;
 
   // A vertical cylinder in cel steps (lit left, dark right). tones: [rim-left, highlight, light, base, shade, rim-right]
@@ -60,6 +62,14 @@ const KITCHEN = (() => {
     rect(g, cx - 8, by, 16, 1, DK);
   }
   function stack(g, cx, by, n, c, band) { for (let i = 0; i < n; i++) sideBowl(g, cx, by - i * 7, c, band); }
+  // A station sign: a walnut tag (the world's one label style) hanging on two cords from a brass nail at (cx, nailY).
+  function hangSign(g, s, cx, nailY) {
+    const y = KL.SIGN_Y, w = textW(s) + 12, x = Math.round(cx - w / 2);
+    line(g, cx, nailY, x + 4, y - 3, DK, 1); line(g, cx, nailY, x + w - 5, y - 3, DK, 1);
+    rect(g, cx - 2, nailY - 2, 5, 5, DK); rect(g, cx - 1, nailY - 1, 3, 3, PAL.brass); dot(g, cx - 1, nailY - 1, PAL.brassHi);
+    rect(g, x + 2, y + 18, w, 2, 'rgba(30,14,10,0.25)');
+    tag(g, s, cx, y);
+  }
   // A small potion-style bottle (the RPG touch on the windowsill and spice shelf).
   function bottle(g, x, by, c, tall = 16) {
     rect(g, x - 5, by - tall, 11, tall, DK); rect(g, x - 4, by - tall + 1, 9, tall - 2, c);
@@ -95,27 +105,127 @@ const KITCHEN = (() => {
     const c = mk(W, VH), g = c.getContext('2d');
     // ceiling beam
     wood(g, 0, 0, W, 30, C.beam, 10, false, 305); rect(g, 0, 29, W, 2, DK);
-    // warm plaster walls, brick behind the cooking line
-    plaster(g, 0, 31, COOK_X, 269, C.plaster, 7);
-    bricks(g, COOK_X, 140, W - COOK_X, 160);
-    plaster(g, COOK_X, 31, W - COOK_X, 110, C.plaster, 9);
-    // wainscot: dark wooden panels along the bottom of the prep wall
-    rect(g, 0, 246, COOK_X, 1, DK); wood(g, 0, 247, COOK_X, 53, C.panel, 53, false, 17);
-    for (let x = 28; x < COOK_X; x += 56) { rect(g, x, 250, 1, 48, shade(C.panel, 0.65)); rect(g, x + 1, 250, 1, 48, shade(C.panel, 1.2)); }
-    rect(g, 0, 247, COOK_X, 2, shade(C.panel, 1.25));
-    // timber posts frame each section
-    for (const x of [228, 554, 952, COOK_X - 6]) timber(g, x, 31, 10, 269);
+    // warm plaster walls, brick behind the hearth
+    plaster(g, 0, 31, W, 269, C.plaster, 7);
+    bricks(g, COOK_X, 140, HOOD_X1 - COOK_X, 160);
+    // wainscot: dark wooden panels along the bottom of the plaster walls (either side of the brick)
+    for (const [a, b] of [[0, COOK_X], [HOOD_X1, W]]) {
+      rect(g, a, 246, b - a, 1, DK); wood(g, a, 247, b - a, 53, C.panel, 53, false, 17 + a);
+      for (let x = a + 28; x < b; x += 56) { rect(g, x, 250, 1, 48, shade(C.panel, 0.65)); rect(g, x + 1, 250, 1, 48, shade(C.panel, 1.2)); }
+      rect(g, a, 247, b - a, 2, shade(C.panel, 1.25));
+    }
+    // timber posts in the bare wall between the stations
+    for (const x of POSTS) timber(g, x, 31, 10, 269);
     timber(g, 0, 31, W, 8, false);
     ao(g, 0, 39, W, 261, 'top', 26, 0.45);
     ao(g, 0, 31, W, 269, 'bottom', 22, 0.35);
     // light: window spill and the lantern pools on the wall
     pool(g, WIN.x + WIN.w / 2, 290, 150, 80, '#fff2c8', 0.06);
     for (const [lx, ly] of LANTERNS) pool(g, lx, ly + 40, 90, 70, '#ffc070', 0.07);
-    // ticket rail (slips are drawn on top by the game): a lacquered wooden rail on brass pegs
-    ao(g, 250, 42, 1250, 10, 'top', 8, 0.35);
-    rect(g, 250, 32, 1250, 10, DK); wood(g, 251, 33, 1248, 8, '#7a3a24', 8, false, 3); rect(g, 251, 33, 1248, 1, '#b05a38');
-    for (let x = 280; x < 1500; x += 160) { rect(g, x - 2, 31, 5, 12, DK); rect(g, x - 1, 32, 3, 10, '#e0b040'); }
-    // lattice window over the tare crocks, with potion bottles and herbs on the sill
+    // ticket rail along the whole kitchen (slips are drawn on top by the game): a lacquered rail on brass pegs
+    ao(g, 0, 42, W, 10, 'top', 8, 0.35);
+    rect(g, 0, 32, W, 10, DK); wood(g, 0, 33, W, 8, '#7a3a24', 8, false, 3); rect(g, 0, 33, W, 1, '#b05a38');
+    for (let x = 40; x < W; x += 160) { rect(g, x - 2, 31, 5, 12, DK); rect(g, x - 1, 32, 3, 10, '#e0b040'); }
+
+    /* ---- PASS: the pass window, a shelf of clean bowls, the recipe lectern, the bin ---- */
+    const P = KL.PASS;
+    ao(g, P.x + P.w + 9, P.y - 8, 14, P.h + 16, 'left', 12, 0.4);
+    frameRect(g, P.x, P.y, P.w, P.h, '#5a3820', 8);
+    // through the window: the warm, dim serving room (a glimpse of the counter and two paper lanterns)
+    rect(g, P.x, P.y, P.w, P.h, '#3a2620');
+    rect(g, P.x, P.y + 118, P.w, 40, '#2a1a14'); rect(g, P.x, P.y + 118, P.w, 2, '#5a3a24');
+    for (const lx of [P.x + 44, P.x + P.w - 44]) {
+      rect(g, lx, P.y + 46, 1, 28, '#1a1010');
+      ell(g, lx, P.y + 88, 10, 12, '#1a1010'); ell(g, lx, P.y + 88, 9, 11, '#d8a050'); ell(g, lx - 1, P.y + 87, 5, 7, '#ffe0a0');
+      rect(g, lx - 5, P.y + 75, 11, 3, '#1a1010'); rect(g, lx - 5, P.y + 99, 11, 3, '#1a1010');
+    }
+    rect(g, P.x, P.y + 158, P.w, 18, '#8a6a42'); rect(g, P.x, P.y + 158, P.w, 1, '#c8985c');   // the counter top
+    const NW = Math.floor((P.w - 4) / 3);   // three little indigo noren panels across the top
+    for (let k = 0; k < 3; k++) {
+      const x = P.x + 2 + k * NW, w = NW - 2; rect(g, x, P.y, w, 46, C.indigo); rect(g, x + w - 8, P.y, 8, 46, C.indigoLo); rect(g, x, P.y, w, 5, '#1a2244');
+      const m = x + Math.floor(w / 2);
+      poly(g, [[m - 10, P.y + 25], [m + 11, P.y + 25], [m + 6, P.y + 34], [m - 5, P.y + 34]], '#e8dcc0');   // bowl crest
+      rect(g, m - 4, P.y + 34, 9, 2, '#e8dcc0'); line(g, m - 6, P.y + 14, m + 8, P.y + 23, '#e8dcc0', 1); line(g, m - 3, P.y + 13, m + 10, P.y + 21, '#e8dcc0', 1);
+    }
+    // the sill: a thick hinoki ledge, and a lacquered serving tray waiting on it (bowls go on the tray)
+    const SY = P.y + 176;
+    rect(g, P.x - 10, SY - 1, P.w + 20, 70, DK); wood(g, P.x - 9, SY, P.w + 18, 68, '#e8c08a', 17, false, 177); rect(g, P.x - 9, SY, P.w + 18, 2, '#fff0cf'); rect(g, P.x - 9, SY + 66, P.w + 18, 2, '#a8763e');
+    tray(g, P.x + P.w / 2, SY + 34, P.w - 16, 62);
+    // the order-up bell on the corner of the sill
+    const bx = P.x + P.w + 2, by = SY - 2;
+    ell(g, bx, by, 9, 3, DK); ell(g, bx, by - 1, 8, 2, '#8a6a42'); lathe(g, bx, [[by - 12, 2], [by - 9, 6], [by - 3, 8]], DK); lathe(g, bx, [[by - 11, 1], [by - 9, 5], [by - 3, 7]], PAL.brass); rect(g, bx - 3, by - 9, 2, 5, '#ffe08a'); rect(g, bx - 1, by - 15, 2, 3, DK);
+    // a hinoki shelf of clean bowls over the lectern
+    ao(g, 254, 272, 102, 10, 'top', 8, 0.4);
+    stack(g, 280, 266, 5, '#f2ede2', '#3f6fa8'); stack(g, 328, 266, 4, '#b8302a', '#e8c070');
+    rect(g, 254, 266, 102, 6, DK); wood(g, 255, 267, 100, 4, C.hinoki, 4, false, 23); rect(g, 255, 267, 100, 1, '#f6d9a0');
+    for (const sx of [264, 346]) poly(g, [[sx - 3, 272], [sx + 4, 272], [sx + 4, 286]], DK);
+    hangSign(g, 'PASS', 296, 148);
+    /* ---- TOPPINGS: the menu board, the topping rack and its pantry shelf, the bowl mat ---- */
+    // menu board: one row per ramen on the menu today (the board is rebuilt when the menu changes)
+    const dishes = ((window.G && G.menu) || ['miso']).filter(k => MENU[k]);
+    rect(g, MB.x + 40, MB.y - 10, 2, 10, DK); rect(g, MB.x + MB.w - 42, MB.y - 10, 2, 10, DK);
+    rect(g, MB.x - 1, MB.y - 1, MB.w + 2, MB.h + 2, DK); wood(g, MB.x, MB.y, MB.w, MB.h, '#6e4428', MB.h, false, 77);
+    rect(g, MB.x + 4, MB.y + 4, MB.w - 8, MB.h - 8, DK); rect(g, MB.x + 5, MB.y + 5, MB.w - 10, MB.h - 10, '#3a2418');
+    for (const [nx, ny] of [[MB.x + 2, MB.y + 2], [MB.x + MB.w - 3, MB.y + 2], [MB.x + 2, MB.y + MB.h - 3], [MB.x + MB.w - 3, MB.y + MB.h - 3]]) dot(g, nx, ny, '#e0b040');
+    textC(g, 'MENU', MB.x + MB.w / 2, MB.y + 8, '#ffe08a');
+    rect(g, MB.x + 20, MB.y + 22, MB.w - 40, 1, '#7a5230');
+    PX.setFont(1);
+    dishes.slice(0, 10).forEach((k, i) => {
+      const m = MENU[k], x = MB.x + 14 + (i % 2) * 168, y = MB.y + 26 + Math.floor(i / 2) * 12;
+      rect(g, x, y + 2, 5, 5, m.c); text(g, m.name.toUpperCase().slice(0, 18), x + 9, y, '#f6e6c0');
+      const pr = m.price + 'G'; text(g, pr, x + 158 - textW(pr), y, '#ffb87a');
+    });
+    { const ps = rackList().filter(topOn).map(extraPrice), lo = Math.min(...ps), hi = Math.max(...ps);
+      textC(g, ps.length ? 'EXTRA TOPPINGS +' + lo + (hi > lo ? '-' + hi : '') + 'G EACH' : 'EXTRA TOPPINGS', MB.x + MB.w / 2, MB.y + MB.h - 14, '#c9a468'); }
+    PX.setFont(2);
+    hangSign(g, 'TOPPINGS', MB.x + MB.w / 2, MB.y + MB.h + 1);
+    // hinoki counter along the whole strip
+    rect(g, 0, 299, W, 2, DK);
+    wood(g, 0, 301, W, 239, C.hinoki, 26, false, 309);
+    rect(g, 0, 301, W, 1, '#fff0c8'); rect(g, 0, 302, W, 2, '#f0c88a');
+    ao(g, 0, 304, W, 236, 'top', 22, 0.4);
+    ao(g, 0, 304, W, 236, 'bottom', 70, 0.35);
+    for (const [lx] of LANTERNS) pool(g, lx, 360, 120, 40, '#fff2c8', 0.06);
+    // the lectern the recipe book lies open on (the book itself is drawn live: it can be picked up)
+    { const B = KL.BOOK, M = B.x + B.w / 2, ty = B.y + 66;
+      contact(g, M, B.y + 136, 34, 4);
+      rect(g, B.x - 3, ty - 1, B.w + 6, 10, DK); wood(g, B.x - 2, ty, B.w + 4, 8, '#8a5a32', 8, false, 61); rect(g, B.x - 2, ty, B.w + 4, 1, '#c08a52');
+      rect(g, M - 7, ty + 9, 14, 56, DK); wood(g, M - 6, ty + 9, 12, 56, '#6b4a34', 12, true, 63); rect(g, M - 6, ty + 9, 2, 56, '#8a623c');
+      rect(g, M - 27, ty + 64, 54, 8, DK); wood(g, M - 26, ty + 65, 52, 6, '#7a5232', 6, false, 65); rect(g, M - 26, ty + 65, 52, 1, '#a8784a'); }
+
+    // the topping rack: a walnut backboard standing on the back of the counter, a crown board, and a hinoki ledge under
+    // each row's name plates
+    { const b0 = KL.bin(0), b1 = KL.bin(RACK - 1), X0 = b0.x - 12, X1 = b1.x + b1.w + 12, Y0 = b0.y - 14, Y1 = b1.y + b1.h + 22;
+      ao(g, X0 - 6, Y1 + 2, X1 - X0 + 12, 12, 'top', 10, 0.5);
+      rect(g, X0 - 1, Y0 - 1, X1 - X0 + 2, Y1 - Y0 + 2, DK); wood(g, X0, Y0, X1 - X0, Y1 - Y0, '#7a4e2c', 23, false, 49);
+      rect(g, X0 + 6, Y0 + 6, X1 - X0 - 12, Y1 - Y0 - 8, shade('#7a4e2c', 0.82));
+      rect(g, X0 - 5, Y0 - 9, X1 - X0 + 10, 10, DK); wood(g, X0 - 4, Y0 - 8, X1 - X0 + 8, 8, C.beam, 8, false, 51); rect(g, X0 - 4, Y0 - 8, X1 - X0 + 8, 1, C.beamHi);
+      for (let x = X0 + 10; x < X1 - 4; x += 40) { dot(g, x, Y0 - 4, '#e0b040'); dot(g, x - 1, Y0 - 5, '#ffe08a'); }
+      for (let r = 0; r * 6 < RACK; r++) {
+        const ly = KL.bin(r * 6).y + 65;
+        rect(g, X0 + 2, ly, X1 - X0 - 4, 3, DK); rect(g, X0 + 2, ly, X1 - X0 - 4, 1, '#f6d9a0'); rect(g, X0 + 2, ly + 1, X1 - X0 - 4, 1, C.hinoki);
+      }
+      for (const x of [X0, X1 - 6]) { rect(g, x, Y0, 6, Y1 - Y0 + 4, '#5a3820'); rect(g, x, Y0, 1, Y1 - Y0 + 4, '#8a5a32'); } }
+    // bamboo mat for the two bowls
+    const M = KL.MAT;
+    ao(g, M.x - 4, M.y + M.h, M.w + 8, 8, 'top', 6, 0.45);
+    rect(g, M.x, M.y, M.w, M.h, DK); rect(g, M.x + 1, M.y + 1, M.w - 2, M.h - 2, '#c4cf8e');
+    for (let y = M.y + 3; y < M.y + M.h - 2; y += 6) { rect(g, M.x + 1, y, M.w - 2, 2, '#a8b86e'); rect(g, M.x + 1, y + 2, M.w - 2, 1, '#dae4aa'); }
+    for (const x of [M.x + 24, M.x + M.w / 2, M.x + M.w - 26]) rect(g, x, M.y + 1, 2, M.h - 2, '#86985a');
+
+    /* ---- TARE: the crocks' low shelf on the counter beside the mat, under its sign ---- */
+    hangSign(g, 'TARE', TARE_SIGN[0], TARE_SIGN[1]);
+    { const S = SHELF, w = S.x1 - S.x;
+      contact(g, (S.x + S.x1) / 2, S.y + 36, w / 2 + 6, 5);
+      for (const lx of [S.x + 6, S.x1 - 14]) { rect(g, lx - 1, S.y + 22, 10, 14, DK); rect(g, lx, S.y + 22, 8, 13, '#6b4a34'); }
+      rect(g, S.x - 1, S.y - 1, w + 2, 24, DK); wood(g, S.x, S.y, w, 4, C.hinoki, 4, false, 81); rect(g, S.x, S.y, w, 1, '#fff0c8');
+      wood(g, S.x, S.y + 4, w, 18, '#8a5a32', 18, false, 83); rect(g, S.x, S.y + 4, w, 1, '#5a3820'); rect(g, S.x, S.y + 20, w, 2, '#6b4228'); }
+    for (let i = 0; i < TARE_SLOTS.length; i++) { const T = KL.tare(i); contact(g, T.cx, T.y + 52, 22, 3); }
+
+    /* ---- HEARTH: the hood, a rail of utensils, the brick stove under the pots, the noodle shelf ---- */
+    hood(g, COOK_X, HOOD_X1);
+    rect(g, HOOD_X1 - 1, 31, 2, 112, DK);
+    /* ---- BOILER end: past the hood, the lattice window over the ice bath (the ice bath is drawn live) ---- */
     frameRect(g, WIN.x, WIN.y, WIN.w, WIN.h, '#6e4a2c', 6);
     g.clearRect(WIN.x, WIN.y, WIN.w, WIN.h);
     for (let k = 1; k < 4; k++) rect(g, WIN.x + Math.round(WIN.w * k / 4) - 1, WIN.y, 2, WIN.h, '#6e4a2c');
@@ -124,119 +234,37 @@ const KITCHEN = (() => {
     bottle(g, WIN.x + 6, WIN.y + WIN.h + 6, '#c8443a', 14); bottle(g, WIN.x + 22, WIN.y + WIN.h + 6, '#4aa86a', 18);
     for (let k = 0; k < 5; k++) { const hx = WIN.x + 40 + k * 7; line(g, hx, WIN.y - 8, hx + (k % 2 ? 2 : -2), WIN.y + 18, '#5a7a3a', 2); dot(g, hx, WIN.y + 18, '#7aa04a'); }
     rect(g, WIN.x + 36, WIN.y - 10, 34, 3, DK); rect(g, WIN.x + 37, WIN.y - 9, 32, 1, '#c9a468');
-    // prep wall: a hinoki shelf of clean bowls with a beckoning cat at the end (the cat's paw is animated in frame())
-    ao(g, 252, 272, 296, 10, 'top', 8, 0.4);
-    stack(g, 284, 266, 5, '#f2ede2', '#3f6fa8'); stack(g, 334, 266, 4, '#f2ede2', '#3f6fa8'); stack(g, 386, 266, 5, '#b8302a', '#e8c070');
-    stack(g, 438, 266, 3, '#2e2a2e', '#c9a468');
-    rect(g, 252, 266, 296, 6, DK); wood(g, 253, 267, 294, 4, C.hinoki, 4, false, 23); rect(g, 253, 267, 294, 1, '#f6d9a0');
-    for (const bx of [270, 530]) poly(g, [[bx - 3, 272], [bx + 4, 272], [bx + 4, 286]], DK);
-    // hood over the hearth and boiler
-    hood(g, COOK_X, W);
-    // brick shelf above the boiler for the noodle tray
+    hangSign(g, 'HEARTH', (HEARTH.x + HEARTH.x1) / 2, 143);
     const N = KL.NOODLE;
     rect(g, N.x - 22, N.y + N.h, N.w + 40, 7, DK); wood(g, N.x - 21, N.y + N.h + 1, N.w + 38, 5, C.hinoki, 5, false, 31); rect(g, N.x - 21, N.y + N.h + 1, N.w + 38, 1, '#f6d9a0');
-    for (const bx of [N.x - 12, N.x + N.w + 8]) poly(g, [[bx - 3, N.y + N.h + 7], [bx + 4, N.y + N.h + 7], [bx + 4, N.y + N.h + 22]], DK);
+    for (const sx of [N.x - 12, N.x + N.w + 8]) poly(g, [[sx - 3, N.y + N.h + 7], [sx + 4, N.y + N.h + 7], [sx + 4, N.y + N.h + 22]], DK);
     ao(g, N.x - 21, N.y + N.h + 7, N.w + 38, 10, 'top', 8, 0.35);
-    // hanging utensils on a rail between hood and hearth
-    rect(g, 1150, 150, 190, 4, DK); rect(g, 1151, 151, 188, 2, '#e0b040');
-    const hang = (x, len, draw) => { rect(g, x, 154, 1, len, DK); draw(x, 154 + len); };
-    hang(1170, 18, (x, y) => { ell(g, x, y + 7, 8, 7, DK); ell(g, x, y + 7, 7, 6, C.copper); ell(g, x - 2, y + 5, 3, 2, C.copperHi); });
-    hang(1206, 26, (x, y) => { rect(g, x - 1, y, 3, 10, DK); ell(g, x, y + 14, 6, 5, DK); ell(g, x, y + 14, 5, 4, '#c9a468'); });
-    hang(1240, 14, (x, y) => { lathe(g, x, [[y, 9], [y + 16, 6]], DK); lathe(g, x, [[y + 1, 8], [y + 15, 5]], '#b58a52'); for (let k = -6; k <= 6; k += 3) rect(g, x + k, y + 2, 1, 12, '#7a5432'); });
-    hang(1276, 22, (x, y) => { ell(g, x, y + 8, 8, 8, DK); ell(g, x, y + 8, 7, 7, C.iron); ell(g, x - 2, y + 6, 3, 3, C.ironHi); });
-    hang(1310, 16, (x, y) => { rect(g, x - 6, y, 13, 22, DK); rect(g, x - 5, y + 1, 11, 20, '#dfe6ee'); rect(g, x - 5, y + 1, 3, 20, '#ffffff'); rect(g, x - 2, y - 4, 5, 5, '#6b4a34'); });
-    // pass window to the serving room (its little noren curtains are the shop's indigo)
-    const P = KL.PASS;
-    ao(g, P.x + P.w + 9, P.y - 8, 14, P.h + 16, 'left', 12, 0.4);
-    frameRect(g, P.x, P.y, P.w, P.h, '#5a3820', 8);
-    // through the window: the warm, dim serving room (a glimpse of the counter and two paper lanterns)
-    rect(g, P.x, P.y, P.w, P.h, '#3a2620');
-    rect(g, P.x, P.y + 118, P.w, 40, '#2a1a14'); rect(g, P.x, P.y + 118, P.w, 2, '#5a3a24');   // the dark wainscot beyond the counter
-    for (const lx of [P.x + 44, P.x + P.w - 44]) {
-      rect(g, lx, P.y + 46, 1, 28, '#1a1010');
-      ell(g, lx, P.y + 88, 10, 12, '#1a1010'); ell(g, lx, P.y + 88, 9, 11, '#d8a050'); ell(g, lx - 1, P.y + 87, 5, 7, '#ffe0a0');
-      rect(g, lx - 5, P.y + 75, 11, 3, '#1a1010'); rect(g, lx - 5, P.y + 99, 11, 3, '#1a1010');
-    }
-    rect(g, P.x, P.y + 158, P.w, 18, '#8a6a42'); rect(g, P.x, P.y + 158, P.w, 1, '#c8985c');   // the counter top
-    for (let k = 0; k < 3; k++) {
-      const x = P.x + 2 + k * 54; rect(g, x, P.y, 52, 46, C.indigo); rect(g, x + 44, P.y, 8, 46, C.indigoLo); rect(g, x, P.y, 52, 5, '#1a2244');
-      poly(g, [[x + 16, P.y + 25], [x + 37, P.y + 25], [x + 32, P.y + 34], [x + 21, P.y + 34]], '#e8dcc0');   // bowl crest
-      rect(g, x + 22, P.y + 34, 9, 2, '#e8dcc0'); line(g, x + 20, P.y + 14, x + 34, P.y + 23, '#e8dcc0', 1); line(g, x + 23, P.y + 13, x + 36, P.y + 21, '#e8dcc0', 1);
-    }
-    // the sill: a thick hinoki ledge, and a lacquered serving tray waiting on it (bowls go on the tray)
-    const SY = P.y + 176;
-    rect(g, P.x - 10, SY - 1, P.w + 20, 70, DK); wood(g, P.x - 9, SY, P.w + 18, 68, '#e8c08a', 17, false, 177); rect(g, P.x - 9, SY, P.w + 18, 2, '#fff0cf'); rect(g, P.x - 9, SY + 66, P.w + 18, 2, '#a8763e');
-    tray(g, P.x + P.w / 2, SY + 34, 150, 62);
-    // the order-up bell on the corner of the sill
-    const bx = P.x + P.w + 2, by = SY - 2;
-    ell(g, bx, by, 9, 3, DK); ell(g, bx, by - 1, 8, 2, '#8a6a42'); lathe(g, bx, [[by - 12, 2], [by - 9, 6], [by - 3, 8]], DK); lathe(g, bx, [[by - 11, 1], [by - 9, 5], [by - 3, 7]], PAL.brass); rect(g, bx - 3, by - 9, 2, 5, '#ffe08a'); rect(g, bx - 1, by - 15, 2, 3, DK);
-    // menu board on the prep wall: one row per ramen on the menu today (the board is rebuilt when a recipe unlocks)
-    const dishes = ((window.G && G.menu) || ['miso']).filter(k => MENU[k]), rows = Math.ceil(dishes.length / 2);
-    const MBX = 598, MBY = 40, MBW = 346, MBH = 30 + rows * 14 + 16;
-    rect(g, MBX + 40, MBY - 10, 2, 10, DK); rect(g, MBX + MBW - 42, MBY - 10, 2, 10, DK);
-    rect(g, MBX - 1, MBY - 1, MBW + 2, MBH + 2, DK); wood(g, MBX, MBY, MBW, MBH, '#6e4428', MBH, false, 77);
-    rect(g, MBX + 4, MBY + 4, MBW - 8, MBH - 8, DK); rect(g, MBX + 5, MBY + 5, MBW - 10, MBH - 10, '#3a2418');
-    for (const [nx, ny] of [[MBX + 2, MBY + 2], [MBX + MBW - 3, MBY + 2], [MBX + 2, MBY + MBH - 3], [MBX + MBW - 3, MBY + MBH - 3]]) dot(g, nx, ny, '#e0b040');
-    textC(g, 'MENU', MBX + MBW / 2, MBY + 10, '#ffe08a');
-    rect(g, MBX + 20, MBY + 26, MBW - 40, 1, '#7a5230');
-    PX.setFont(1);
-    dishes.forEach((k, i) => {
-      const m = MENU[k], x = MBX + 14 + (i % 2) * 168, y = MBY + 30 + Math.floor(i / 2) * 14;
-      rect(g, x, y + 3, 5, 5, m.c); text(g, m.name.toUpperCase().slice(0, 18), x + 9, y, '#f6e6c0');
-      const pr = m.price + 'G'; text(g, pr, x + 158 - textW(pr), y, '#ffb87a');
-    });
-    { const ps = rackTops().filter(topOn).map(extraPrice), lo = Math.min(...ps), hi = Math.max(...ps);
-      textC(g, ps.length ? 'EXTRA TOPPINGS +' + lo + (hi > lo ? '-' + hi : '') + 'G EACH' : 'EXTRA TOPPINGS', MBX + MBW / 2, MBY + MBH - 14, '#c9a468'); }
-    PX.setFont(2);
-    // hinoki counter along the whole strip
-    rect(g, 0, 299, W, 2, DK);
-    wood(g, 0, 301, W, 239, C.hinoki, 26, false, 309);
-    rect(g, 0, 301, W, 1, '#fff0c8'); rect(g, 0, 302, W, 2, '#f0c88a');
-    ao(g, 0, 304, W, 236, 'top', 22, 0.4);
-    ao(g, 0, 304, W, 236, 'bottom', 70, 0.35);
-    for (const [lx] of LANTERNS) pool(g, lx, 360, 120, 40, '#fff2c8', 0.06);
-    // stepped hinoki shelf for the lacquered topping boxes, with a dark name rail above each row
-    const UX = 566, UW = 388;
-    ao(g, UX - 6, 372, UW + 12, 12, 'top', 10, 0.5);
-    rect(g, UX - 1, 159, UW + 2, 72, DK); wood(g, UX, 160, UW, 70, '#a87a44', 23, false, 49);
-    rect(g, UX - 1, 229, UW + 2, 72, DK); wood(g, UX, 230, UW, 70, '#b8864e', 23, false, 51);
-    rect(g, UX - 1, 299, UW + 2, 72, DK); wood(g, UX, 300, UW, 70, C.hinoki, 30, false, 53);
-    rect(g, UX, 300, UW, 1, '#fff0c8'); rect(g, UX, 368, UW, 4, '#8a5a32');
-    for (const y of [162, 232, 302]) { rect(g, UX + 3, y, UW - 6, 18, C.lacquer); rect(g, UX + 3, y, UW - 6, 1, '#5a3a32'); rect(g, UX + 3, y + 17, UW - 6, 1, C.lacquerRed); }
-    for (const x of [UX, UX + UW - 6]) { rect(g, x, 160, 6, 212, '#6e4a2c'); rect(g, x, 160, 1, 212, '#9a6a3a'); }
-    // bamboo mat for the two bowls
-    const M = KL.MAT;
-    ao(g, M.x - 4, M.y + M.h, M.w + 8, 8, 'top', 6, 0.45);
-    rect(g, M.x, M.y, M.w, M.h, DK); rect(g, M.x + 1, M.y + 1, M.w - 2, M.h - 2, '#c4cf8e');
-    for (let y = M.y + 3; y < M.y + M.h - 2; y += 6) { rect(g, M.x + 1, y, M.w - 2, 2, '#a8b86e'); rect(g, M.x + 1, y + 2, M.w - 2, 1, '#dae4aa'); }
-    for (const x of [M.x + 24, M.x + 124, M.x + 224]) rect(g, x, M.y + 1, 2, M.h - 2, '#86985a');
-    contact(g, 598, 494, 26, 5); stack(g, 598, 494, 4, '#b8302a', '#e8c070');
-    // prep corner: a cutting board with a knife and sliced scallion, and a caddy of potion-style condiments
-    contact(g, 118, 488, 76, 6);
-    rect(g, 44, 444, 148, 42, DK); wood(g, 45, 445, 146, 40, '#e8c48a', 40, false, 71); rect(g, 45, 445, 146, 1, '#fff0c8'); rect(g, 45, 482, 146, 3, '#b8864e');
-    rect(g, 70, 456, 54, 6, DK); rect(g, 71, 457, 52, 4, '#dfe6ee'); rect(g, 71, 457, 52, 1, '#ffffff'); rect(g, 124, 455, 22, 8, DK); rect(g, 125, 456, 20, 6, '#3a2a22');
-    ART.top(g, 'scallion', 160, 468, 0.9);
-    contact(g, 236, 500, 30, 4);
-    rect(g, 206, 486, 60, 14, DK); wood(g, 207, 487, 58, 12, '#8a5a32', 12, false, 73);
-    bottle(g, 218, 488, '#3a1e14', 18); bottle(g, 236, 488, '#c8443a', 14); bottle(g, 254, 488, '#d8a030', 16);
-    // brick hearth under the broth pots: a stone slab top, three arched fire mouths (fire is animated in frame())
+    // hanging utensils on a brass rail between the sign and the pots
+    rect(g, RAIL.x, RAIL.y, RAIL.x1 - RAIL.x, 4, DK); rect(g, RAIL.x + 1, RAIL.y + 1, RAIL.x1 - RAIL.x - 2, 2, '#e0b040');
+    const hang = (x, len, draw) => { rect(g, x, RAIL.y + 4, 1, len, DK); draw(x, RAIL.y + 4 + len); };
+    const step = (RAIL.x1 - RAIL.x) / 5, hx = k => Math.round(RAIL.x + step * (k + 0.5));
+    hang(hx(0), 14, (x, y) => { ell(g, x, y + 7, 8, 7, DK); ell(g, x, y + 7, 7, 6, C.copper); ell(g, x - 2, y + 5, 3, 2, C.copperHi); });
+    hang(hx(1), 20, (x, y) => { rect(g, x - 1, y, 3, 10, DK); ell(g, x, y + 14, 6, 5, DK); ell(g, x, y + 14, 5, 4, '#c9a468'); });
+    hang(hx(2), 10, (x, y) => { lathe(g, x, [[y, 9], [y + 16, 6]], DK); lathe(g, x, [[y + 1, 8], [y + 15, 5]], '#b58a52'); for (let k = -6; k <= 6; k += 3) rect(g, x + k, y + 2, 1, 12, '#7a5432'); });
+    hang(hx(3), 16, (x, y) => { ell(g, x, y + 8, 8, 8, DK); ell(g, x, y + 8, 7, 7, C.iron); ell(g, x - 2, y + 6, 3, 3, C.ironHi); });
+    hang(hx(4), 12, (x, y) => { rect(g, x - 6, y, 13, 22, DK); rect(g, x - 5, y + 1, 11, 20, '#dfe6ee'); rect(g, x - 5, y + 1, 3, 20, '#ffffff'); rect(g, x - 2, y - 4, 5, 5, '#6b4a34'); });
+    // brick stove under the broth pots: a stone slab top, one arched fire mouth per burner (fire is animated in frame())
     const H = HEARTH;
-    contact(g, (H.x + H.x1) / 2, H.y1 + 4, (H.x1 - H.x) / 2 + 8, 7);
+    contact(g, (H.x + H.x1) / 2, H.y1 + 4, (H.x1 - H.x) / 2 + 8, 6);
     rect(g, H.x - 1, H.y - 1, H.x1 - H.x + 2, H.y1 - H.y + 2, DK);
     bricks(g, H.x, H.y + 10, H.x1 - H.x, H.y1 - H.y - 10, '#b05e40');
     rect(g, H.x - 4, H.y - 2, H.x1 - H.x + 8, 12, DK); rect(g, H.x - 3, H.y - 1, H.x1 - H.x + 6, 10, C.stone);
     rect(g, H.x - 3, H.y - 1, H.x1 - H.x + 6, 2, C.stoneHi); rect(g, H.x - 3, H.y + 7, H.x1 - H.x + 6, 2, C.stoneLo);
-    for (let i = 0; i < BROTH_SLOTS.length; i++) {
+    for (let i = 0; i < BURNERS; i++) {
       const fx = KL.pot(i).cx, my = H.y + 26;
       ell(g, fx, my + 2, 16, 10, DK); rect(g, fx - 16, my + 2, 33, 34, DK);
       ell(g, fx, my + 2, 14, 8, '#1a0e0c'); rect(g, fx - 14, my + 2, 29, 32, '#1a0e0c');
       for (let k = -16; k <= 16; k += 8) { rect(g, fx + k, my - 6 + Math.abs(k) / 3, 4, 3, C.stoneHi); }   // voussoir stones
     }
     rect(g, H.x, H.y1 - 10, H.x1 - H.x, 10, C.stoneLo); rect(g, H.x, H.y1 - 10, H.x1 - H.x, 1, C.stone);
-    const B = KL.BOIL, BK = KL.BOOK, TR = KL.TRASH;
-    contact(g, B.cx, B.cy + 152, B.rx + 12, 9);
-    contact(g, TR.x + 23, TR.y + TR.h, 26, 5); contact(g, BK.x + 58, BK.y + 76, 34, 4);
-    for (let i = 0; i < TARE_SLOTS.length; i++) { const T = KL.tare(i); contact(g, T.cx, T.y + 54, 22, 4); }
+    const B = KL.BOIL, TR = KL.TRASH;
+    contact(g, B.cx, B.cy + 152, B.rx + 12, 7);
+    contact(g, TR.x + 23, TR.y + TR.h, 26, 5);
     return c;
   }
 
@@ -507,20 +535,32 @@ const KITCHEN = (() => {
     steam(g, cx, cy - 6, rx - 16, G.t, 9, 0.55, 74, 3);   // a rolling boil: plenty of steam
   }
 
-  // Copper stock pots on the brick hearth, one per BROTH_SLOTS entry. A locked slot has a lidded pot over a cold mouth.
+  // A brass progress bar for a swap from the pantry (x, y: top-left).
+  const swapBar = (g, x, y, w, p) => { rect(g, x - 1, y - 1, w + 2, 6, DK); rect(g, x, y, w, 4, '#4a3226'); rect(g, x, y, Math.round(w * Math.max(0, Math.min(1, p))), 4, PAL.brass); rect(g, x, y, Math.round(w * Math.max(0, Math.min(1, p))), 1, PAL.brassHi); };
+  const swapOf = (G, kind, slot) => (G.swaps || []).find(s => s.kind === kind && s.slot === slot);
+
+  // Copper stock pots on the brick stove, one per burner (burners()). A burner with a broth still to come has a lidded
+  // pot over a cold mouth, padlocked; one being swapped from the pantry is lidded while the bar fills.
   function drawPots(g, G) {
-    BROTH_SLOTS.forEach((kind, i) => {
-      const P = KL.pot(i), cx = P.cx, cy = P.cy, rx = P.rx, def = kind && BROTHS[kind], id = kind && brothKey(kind), n = kind ? G.stock[id] : 0;
-      const my = HEARTH.y + 26;
-      if (def && brothOn(kind)) { fire(g, cx, my + 34, 24, 22, G.t, i * 2.1); glow(g, cx, HEARTH.y1 + 6, 28, 9, G.t, i, 0.12); }
+    burners().forEach((kind, i) => {
+      const P = KL.pot(i), cx = P.cx, cy = P.cy, rx = P.rx, sw = swapOf(G, 'broth', i);
+      if (sw) kind = sw.t / sw.dur < 0.5 ? sw.from : sw.to;
+      const def = kind && BROTHS[kind], id = kind && brothKey(kind), n = kind ? G.stock[id] : 0;
+      const my = HEARTH.y + 26, on = def && brothOn(kind);
+      if (on) { fire(g, cx, my + 34, 24, 22, G.t, i * 2.1); glow(g, cx, HEARTH.y1 + 6, 28, 9, G.t, i, 0.12); }
       else for (let k = -12; k <= 12; k += 5) rect(g, cx + k, my + 31, 3, 2, '#4a3a36');
       for (const s of [-1, 1]) { rect(g, cx + s * (rx + 5) - 4, cy + 12, 9, 12, DK); rect(g, cx + s * (rx + 5) - 3, cy + 13, 7, 10, C.iron); rect(g, cx + s * (rx + 5) - 3, cy + 13, 7, 2, C.ironHi); }
-      cyl(g, cx, cy, rx, 56, COPPER);
-      rect(g, cx - rx, cy + 46, 2 * rx + 1, 3, C.copperDk); rect(g, cx - rx, cy + 46, 2 * rx + 1, 1, C.copperHi);
-      if (!def || !brothOn(kind)) {
+      cyl(g, cx, cy, rx, 60, COPPER);
+      rect(g, cx - rx, cy + 50, 2 * rx + 1, 3, C.copperDk); rect(g, cx - rx, cy + 50, 2 * rx + 1, 1, C.copperHi);
+      if (!def || !on || sw) {
         ell(g, cx, cy, rx + 2, 11, DK); ell(g, cx, cy, rx + 1, 10, C.copper); ell(g, cx - 4, cy - 2, rx - 8, 6, C.copperHi);
         ell(g, cx, cy - 4, 6, 3, DK); ell(g, cx, cy - 5, 5, 2, C.iron);
-        lock(g, cx, cy + 24);
+        if (sw) {   // swapping: the lid lifts and settles, the new pot's name shows, a bar fills
+          const p = sw.t / sw.dur;
+          if (Math.floor(G.t * 10) % 2) for (let k = 0; k < 3; k++) dot(g, cx - 12 + k * 12, cy - 12 - Math.round(Math.abs(Math.sin(G.t * 8 + k)) * 4), '#f4f0ea');
+          if (BROTHS[sw.to]) nameplate(g, BROTHS[sw.to].short, cx, cy + 14, 2 * rx - 2, true);
+          swapBar(g, cx - rx + 2, cy + 36, 2 * rx - 4, p);
+        } else if (def) lock(g, cx, cy + 24);
         return;
       }
       ell(g, cx, cy, rx + 1, 12, DK); ell(g, cx, cy, rx, 11, C.copperHi); ell(g, cx, cy + 1, rx - 4, 8, '#5a2a14');
@@ -535,7 +575,7 @@ const KITCHEN = (() => {
         line(g, ex, cy - 16, tx, cy - 40, DK, 5); line(g, ex + 1, cy - 16, tx + 1, cy - 40, '#9a6a3a', 3); line(g, ex + 1, cy - 17, tx + 1, cy - 41, '#c08a52', 1);
       }
       nameplate(g, def.short, cx, cy + 14, 2 * rx - 2);
-      stockBadge(g, n, cx + rx + 1, cy + 50);
+      stockBadge(g, n, cx + rx + 1, cy + 54);
       badge(g, G, id);
     });
   }
@@ -613,8 +653,7 @@ const KITCHEN = (() => {
 
   function drawBook(g, G) {
     const B = KL.BOOK, x = B.x, dt = G.t - (G.bookPut == null ? -9 : G.bookPut);
-    rect(g, x + 46, B.y + 60, 24, 16, DK); wood(g, x + 47, B.y + 61, 22, 14, '#6b4a34', 14, false, 9);
-    if (G.bookOut) { label(g, 'RECIPES', x + B.w / 2, B.y + 80); return; }   // picked up: only the stand is left
+    if (G.bookOut) { label(g, 'RECIPES', x + B.w / 2, B.y + 142); return; }   // picked up: only the lectern is left (it is part of the wall)
     const y = B.y - (dt < 0.6 ? Math.round(Math.abs(Math.sin(dt * 15)) * Math.exp(-dt * 7) * 5) : 0);
     // The cookbook itself, lying open at the Miso Ramen spread: the same red leather, bookmark tabs, cream pages and
     // printed layout as the book that opens (a framed ink figure, not an in-game bowl).
@@ -649,7 +688,7 @@ const KITCHEN = (() => {
     // page numbers, and the red ribbon laid across the right page
     dot(g, x + 13, y + 61, '#9a7a4a'); dot(g, x + B.w - 13, y + 61, '#9a7a4a');
     rect(g, M + 34, y - 4, 5, 30, DK); rect(g, M + 35, y - 4, 3, 30, '#b8302a'); poly(g, [[M + 34, y + 26], [M + 39, y + 26], [M + 36.5, y + 22]], '#f6ead0');
-    label(g, 'RECIPES', x + B.w / 2, B.y + 80);
+    label(g, 'RECIPES', x + B.w / 2, B.y + 142);   // under the lectern's foot
   }
 
   function drawTrash(g) {   // a lidded wooden bucket with iron hoops
@@ -676,16 +715,33 @@ const KITCHEN = (() => {
     });
   }
 
-  // One lacquered topping box: name on the dark rail above, food in the wooden well, count chip and "+" along the bottom.
-  const PILE = [[11, 15], [23, 11], [34, 16], [16, 26], [29, 26]];
+  // One lacquered topping box: food in the wooden well, its count in the corner, its name on a plate under it.
+  // A bin being swapped from the pantry: a hinoki lid slides over it, the topping changes underneath, the lid slides
+  // back off, and a brass bar fills on the plate.
+  const PILE = [[12, 16], [25, 12], [37, 17], [17, 29], [31, 29]];
+  function lacquerBox(g, x, y, w, h) {
+    rect(g, x - 1, y - 1, w + 2, h + 2, DK); rect(g, x, y, w, h, C.lacquer); rect(g, x, y, w, 1, '#5a3a32');
+    rect(g, x + 2, y + 2, w - 4, h - 4, C.lacquerRed); rect(g, x + 3, y + 3, w - 6, h - 6, DK);
+    rect(g, x + 4, y + 4, w - 8, h - 8, '#5a3a22'); rect(g, x + 4, y + 4, w - 8, 3, '#3e2616');
+  }
   function drawBin(g, G, k, id) {
-    const b = KL.bin(k), { x, y, w, h } = b;
+    const b = KL.bin(k), { x, y, w, h } = b, sw = swapOf(G, 'top', k);
+    if (sw) {
+      const p = sw.t / sw.dur, show = p < 0.5 ? sw.from : sw.to, cover = p < 0.4 ? p / 0.4 : p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4;
+      lacquerBox(g, x, y, w, h);
+      if (show) for (let i = 0; i < 4; i++) ART.top(g, show, x + PILE[i][0], y + PILE[i][1], 0.72);
+      const lh = Math.round((h - 4) * cover);
+      if (lh > 0) { rect(g, x + 2, y + 2, w - 4, lh, '#c8925a'); for (let ly = y + 6; ly < y + 2 + lh; ly += 7) rect(g, x + 2, ly, w - 4, 1, '#a8723a'); rect(g, x + 2, y + 1 + lh, w - 4, 1, DK); }
+      nameplate(g, binName(sw.to), x + w / 2, y + h + 3, w, true);
+      swapBar(g, x + 5, y + h - 9, w - 10, p);
+      return;
+    }
     if (!id) {   // a free bin: an empty lacquered well
       rect(g, x - 1, y - 1, w + 2, h + 2, DK); rect(g, x, y, w, h, C.lacquer); rect(g, x + 3, y + 3, w - 6, h - 6, DK); rect(g, x + 4, y + 4, w - 8, h - 8, '#4a2e1c');
       return;
     }
     const n = G.stock[id], job = G.jobs.find(j => j.id === id);
-    nameplate(g, binName(id), x + w / 2, y + h + 3, w, !topOn(id));   // every name on one row, under its own bin
+    nameplate(g, binName(id), x + w / 2, y + h + 3, w, !topOn(id));   // every name on its own plate, never wider than its bin
     if (!topOn(id)) {
       rect(g, x - 1, y - 1, w + 2, h + 2, DK); rect(g, x, y, w, h, C.indigo);
       for (let fx = x + 8; fx < x + w; fx += 12) { rect(g, fx, y + 2, 1, h - 4, C.indigoLo); rect(g, fx + 1, y + 2, 1, h - 4, '#4a5c9a'); }
@@ -693,19 +749,52 @@ const KITCHEN = (() => {
       lock(g, x + w / 2, y + h / 2 - 6);
       return;
     }
-    rect(g, x - 1, y - 1, w + 2, h + 2, DK); rect(g, x, y, w, h, C.lacquer); rect(g, x, y, w, 1, '#5a3a32');
-    rect(g, x + 2, y + 2, w - 4, h - 4, C.lacquerRed); rect(g, x + 3, y + 3, w - 6, h - 6, DK);
-    rect(g, x + 4, y + 4, w - 8, h - 8, '#5a3a22'); rect(g, x + 4, y + 4, w - 8, 3, '#3e2616');
+    lacquerBox(g, x, y, w, h);
     const shown = Math.min(5, Math.ceil(n / 2));
     for (let i = 0; i < shown; i++) ART.top(g, id, x + PILE[i][0], y + PILE[i][1], 0.72);
     if (n <= 0) rect(g, x + 2, y + 2, w - 4, h - 4, 'rgba(20,8,12,0.55)');   // empty: the bin dims
     stockBadge(g, n, x + w, y + h);
     if (job) {
       const ky = y - 6 + Math.round(Math.abs(Math.sin(job.t * 12)) * 14);
-      rect(g, x + 40, ky - 1, 10, 26, DK); rect(g, x + 41, ky, 8, 24, '#dfe6ee'); rect(g, x + 41, ky, 2, 24, '#ffffff'); rect(g, x + 47, ky, 2, 24, '#aab4c4');
-      rect(g, x + 39, ky - 12, 12, 12, DK); rect(g, x + 40, ky - 11, 10, 10, '#6b4a34'); rect(g, x + 40, ky - 11, 3, 10, '#8a623c');
+      rect(g, x + w - 6, ky - 1, 10, 26, DK); rect(g, x + w - 5, ky, 8, 24, '#dfe6ee'); rect(g, x + w - 5, ky, 2, 24, '#ffffff'); rect(g, x + w + 1, ky, 2, 24, '#aab4c4');
+      rect(g, x + w - 7, ky - 12, 12, 12, DK); rect(g, x + w - 6, ky - 11, 10, 10, '#6b4a34'); rect(g, x + w - 6, ky - 11, 3, 10, '#8a623c');
     }
     badge(g, G, id);
+  }
+
+  /* The pantry shelf at the end of the rack: a little cupboard of crocks and jars. Everything not on the line waits in
+     it. A red count shows how many of the orders' toppings or broths are in it; before opening it glows (tap it to
+     prep the line). (G.pantryNeed and G.canPrep come from game.js each frame.) */
+  function drawPantry(g, G) {
+    const P = KL.PANTRY, { x, y, w, h } = P;
+    contact(g, x + w / 2, y + h + 2, w / 2 + 4, 4);
+    rect(g, x - 1, y - 1, w + 2, h + 2, DK); wood(g, x, y, w, h, '#8a5a32', 12, true, 91);
+    rect(g, x, y, w, 1, '#c08a52'); rect(g, x, y, 1, h, '#a8784a');
+    rect(g, x + 4, y + 8, w - 8, h - 14, DK); rect(g, x + 5, y + 9, w - 10, h - 16, '#3a2418');
+    const sh = [y + 44, y + 80, y + h - 7];
+    for (const sy of sh) { rect(g, x + 5, sy, w - 10, 3, '#c8925a'); rect(g, x + 5, sy, w - 10, 1, '#f0c890'); }
+    // what is on the shelves: a lidded crock, jars, a sack, a bundle of bottles (decoration; the real list is in the panel)
+    lathe(g, x + 16, [[sh[0] - 22, 8], [sh[0] - 14, 10], [sh[0], 9]], DK); lathe(g, x + 16, [[sh[0] - 21, 7], [sh[0] - 14, 9], [sh[0] - 1, 8]], '#6a3a24');
+    rect(g, x + 10, sh[0] - 25, 13, 4, DK); rect(g, x + 11, sh[0] - 24, 11, 2, C.indigo);
+    for (const [jx, c] of [[x + 33, '#e8b850'], [x + 42, '#6aa040']]) { rect(g, jx - 4, sh[0] - 15, 9, 15, DK); rect(g, jx - 3, sh[0] - 14, 7, 13, c); rect(g, jx - 3, sh[0] - 14, 7, 2, '#f6e6c0'); rect(g, jx - 2, sh[0] - 11, 1, 8, shade(c, 1.35)); }
+    poly(g, [[x + 9, sh[1]], [x + 27, sh[1]], [x + 24, sh[1] - 22], [x + 12, sh[1] - 22]], DK); poly(g, [[x + 10, sh[1] - 1], [x + 26, sh[1] - 1], [x + 23, sh[1] - 21], [x + 13, sh[1] - 21]], '#d8c49a');
+    rect(g, x + 13, sh[1] - 18, 10, 2, '#a88a5a');
+    for (const [bx2, c] of [[x + 34, '#c8443a'], [x + 41, '#3a1e14']]) { rect(g, bx2 - 3, sh[1] - 18, 7, 18, DK); rect(g, bx2 - 2, sh[1] - 17, 5, 16, c); rect(g, bx2 - 1, sh[1] - 21, 3, 4, '#b8864e'); }
+    for (let k = 0; k < 3; k++) { const cx2 = x + 14 + k * 12; ell(g, cx2, sh[2] - 6, 5, 6, DK); ell(g, cx2, sh[2] - 6, 4, 5, ['#93451f', '#e6dcc4', '#c8792e'][k]); }
+    // a little indigo noren across the top
+    rect(g, x + 2, y + 2, w - 4, 12, C.indigo); rect(g, x + 2, y + 2, w - 4, 2, '#1a2244');
+    for (let k = 1; k < 3; k++) rect(g, x + 2 + Math.round((w - 4) * k / 3), y + 4, 1, 10, '#1a2244');
+    nameplate(g, 'PANTRY', x + w / 2, y + h + 3, w, false);
+    if (G.canPrep) {   // before opening: it glows (tap it to prep the line)
+      const a = 0.5 + 0.5 * Math.sin(G.t * 3);
+      g.globalAlpha = 0.5 + 0.4 * a; rect(g, x - 3, y - 3, w + 6, 2, '#ffe08a'); rect(g, x - 3, y + h + 1, w + 6, 2, '#ffe08a'); rect(g, x - 3, y - 3, 2, h + 6, '#ffe08a'); rect(g, x + w + 1, y - 3, 2, h + 6, '#ffe08a'); g.globalAlpha = 1;
+    }
+    const need = G.pantryNeed || 0;
+    if (need > 0) {   // orders need something that is in here
+      const bob = Math.round(Math.abs(Math.sin(G.t * 4)) * 2), s = String(need), bw = Math.max(16, textW(s) + 8), bx2 = x + w - bw + 6, by2 = y + 16 - bob;
+      rect(g, bx2 - 1, by2 - 1, bw + 2, 18, DK); rect(g, bx2, by2, bw, 16, PAL.lacquerDeep || '#8a2a1a'); rect(g, bx2, by2, bw, 1, '#ff8a7a');
+      textC(g, s, bx2 + bw / 2, by2 + 2, '#fff6e0');
+    }
   }
 
   function frame(g, G) {
@@ -713,23 +802,24 @@ const KITCHEN = (() => {
     sky(g, G, WIN); SCENE.view(g, G, WIN, G.region || 0);
     g.drawImage(back, 0, 0);
     for (const [lx, ly, r, c] of LANTERNS) lantern(g, lx + Math.round(Math.sin(G.t * 1.3 + lx) * 1.2), ly, r, c);
-    maneki(g, 506, 266, G.t);
     G.pass.forEach((b, i) => { if (b !== G.dragBowl) { const [x, y] = KL.passPos(i), s = Math.min(1, b.age / 0.25); ART.smallBowl(g, x + Math.round((1 - s) * 60), y, b); } });
-    SCENE.clock(g, G, 1250, 84, 16);
-    drawNoodles(g, G); drawBoiler(g, G); drawPots(g, G); drawTares(g, G); drawIce(g, G); drawOil(g, G); drawBook(g, G); drawTrash(g);
+    SCENE.clock(g, G, TARE_SIGN[0], 104, 16);
+    drawNoodles(g, G); drawBoiler(g, G); drawPots(g, G); drawTares(g, G); drawIce(g, G); drawOil(g, G); drawBook(g, G); drawTrash(g); drawPantry(g, G);
+    maneki(g, KL.PANTRY.x + KL.PANTRY.w / 2, KL.PANTRY.y, G.t);   // the beckoning cat sits on the pantry's roof
     const rack = rackTops();
     for (let k = 0; k < RACK; k++) drawBin(g, G, k, rack[k]);
     PX.setFont(1);
-    for (let k = 0; k < Math.min(9, rack.length); k++) {   // each bin's number key (1-9), a small tag on its top-left corner
+    for (let k = 0; k < Math.min(9, RACK); k++) {   // each bin's number key (1-9), a small tag on its top-left corner
+      if (!rack[k]) continue;
       const { x, y } = KL.bin(k);
-      rect(g, x - 4, y - 4, 13, 13, DK); rect(g, x - 3, y - 3, 11, 11, '#f6e6c0'); rect(g, x - 3, y + 7, 11, 1, '#d8c8a0');
-      textC(g, String(k + 1), x + 2.5, y, '#4a3226');
+      rect(g, x - 2, y - 2, 11, 11, DK); rect(g, x - 1, y - 1, 9, 9, '#f6e6c0'); rect(g, x - 1, y + 7, 9, 1, '#d8c8a0');
+      textC(g, String(k + 1), x + 3, y - 1, '#4a3226');
     }
     PX.setFont(2);
     drawBowls(g, G);
     glow(g, (HEARTH.x + HEARTH.x1) / 2, 300, 200, 110, G.t, 1, 0.035);   // the hearth warms the whole cooking line
-    SCENE.night(g, G, 0, W, [[1240, 420, 180, 120], [1440, 470, 110, 70], [760, 340, 240, 150], [134, 200, 110, 120],
-      ...LANTERNS.map(([x, y]) => [x, y + 30, 90, 80]), [344, 400, 110, 80]]);
+    SCENE.night(g, G, 0, W, [[(HEARTH.x + HEARTH.x1) / 2, 420, 200, 120], [KL.BOIL.cx, 470, 110, 70], [KL.MAT.x + KL.MAT.w / 2, 360, 260, 160], [KL.PASS.x + 80, 200, 110, 120], [KL.ICE.cx, 420, 90, 70],
+      ...LANTERNS.map(([x, y]) => [x, y + 30, 90, 80]), [KL.BOOK.x + 58, 400, 110, 90], [(SHELF.x + SHELF.x1) / 2, 410, 150, 100]]);
   }
 
   const refresh = () => { back = null; };

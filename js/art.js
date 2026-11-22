@@ -510,11 +510,22 @@ const ART = (() => {
     }
     return out;
   }
-  const slipH = order => { const n = nameLines(MENU[order.type]).length, k = slipMods(order).length; return 30 + n * 22 + (k ? 12 + k * 22 : 0) + 10; };
-  function dashes(g, x, y, w) { for (let k = 0; k < w; k += 6) rect(g, x + k, y, 3, 1, FADED); }
-  // s: { num, stall, order }
+  // miss: what this order needs that is not on the kitchen's line today (in the pantry), printed in red at the bottom
+  // (small type, wrapped to the slip, so a slip only grows a line or two: it hangs over the wall)
+  function missLines(miss) {
+    if (!miss || !miss.length) return [];
+    PX.setFont(1);
+    const out = []; let ln = 'PANTRY:';
+    for (const t of miss) { const next = ln + ' ' + t + ','; if (textW(next) > SLIP_W - 14 && ln !== 'PANTRY:') { out.push(ln); ln = t + ','; } else ln = next; }
+    out.push(ln.replace(/,$/, ''));
+    PX.setFont(2);
+    return out;
+  }
+  const slipH = (order, miss) => { const n = nameLines(MENU[order.type]).length, k = slipMods(order).length, q = missLines(miss).length; return 30 + n * 22 + (k ? 12 + k * 22 : 0) + (q ? 8 + q * 11 : 0) + 10; };
+  function dashes(g, x, y, w, c = FADED) { for (let k = 0; k < w; k += 6) rect(g, x + k, y, 3, 1, c); }
+  // s: { num, stall, order, miss }
   function slip(g, x, y, s) {
-    const m = MENU[s.order.type], H = slipH(s.order), names = nameLines(m), mods = slipMods(s.order);
+    const m = MENU[s.order.type], H = slipH(s.order, s.miss), names = nameLines(m), mods = slipMods(s.order);
     rect(g, x + 3, y + 3, SLIP_W, H, 'rgba(60,40,30,0.25)');
     rect(g, x - 1, y - 1, SLIP_W + 2, H + 1, DK);
     rect(g, x, y, SLIP_W, H, '#fbf6ea'); rect(g, x + SLIP_W - 2, y, 2, H, '#efe6d2');
@@ -531,6 +542,12 @@ const ART = (() => {
       const my = y + 30 + names.length * 22;
       dashes(g, x + 6, my + 2, SLIP_W - 12);
       mods.forEach((md, i) => text(g, md.t, x + 8, my + 10 + i * 22, md.add ? '#2f7a3a' : '#c8302a'));
+    }
+    const ml = missLines(s.miss);
+    if (ml.length) {   // not on the line today: swap it in from the pantry
+      const qy = y + 30 + names.length * 22 + (mods.length ? 12 + mods.length * 22 : 0);
+      dashes(g, x + 6, qy + 2, SLIP_W - 12, '#d87a6a');
+      PX.setFont(1); ml.forEach((t, i) => text(g, t, x + 8, qy + 8 + i * 11, '#c8302a')); PX.setFont(2);
     }
   }
 

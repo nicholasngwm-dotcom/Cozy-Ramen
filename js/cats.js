@@ -24,7 +24,7 @@ const CATS = (() => {
   // pitch: how its meow is played; speed: walking pace; then how much it likes each pastime (0: never)
   const COATS = {
     casper: { name: 'Casper', pitch: 1.0,  speed: 1.0,  sleepy: 0.3,  wander: 1.0, play: 1.6, curious: 1.2 },                     // yours: playful, comes to say hello
-    eevee:  { name: 'Eevee',  pitch: 1.14, speed: 1.1,  sleepy: 0.3,  wander: 1.0, play: 0.5, curious: 1.2, friend: 1.2, eat: 0.8 }, // Aoi's: follows Aoi about, snacks
+    eevee:  { name: 'Eevee',  pitch: 1.14, speed: 1.1,  sleepy: 0.3,  wander: 1.0, play: 0.5, curious: 0.8, friend: 1.2, eat: 0.8, grumpy: 1 }, // Aoi's: follows Aoi about, snacks; scratches if you overdo the petting
     maple:  { name: 'Maple',  pitch: 1.06, speed: 0.8,  sleepy: 0.6,  wander: 0.9, social: 1.2, perch: 0.4 },                     // gentle and sociable, a napper
     miso:   { name: 'Miso',   pitch: 1.18, speed: 1.35, sleepy: 0.15, wander: 1.6, social: 0.8, play: 1.4, curious: 1.0, perch: 0.5 }, // never still
     nori:   { name: 'Nori',   pitch: 0.98, speed: 0.9,  sleepy: 0.4,  wander: 0.6, shy: 1, perch: 0.9 },                          // shy: keeps away from your hand
@@ -70,7 +70,8 @@ const CATS = (() => {
       coat, name: COATS[coat].name, T: Object.assign({}, COATS[coat], o.traits), x, surfaces: o.surfaces, surf: o.surf || 0, y: 0,
       dir: o.dir || (Math.random() < 0.5 ? -1 : 1), act: null, plan: [], t: 0, ph: 0, seed: Math.random() * 5, last: null, now: 0,
       toy: o.toy || null, dish: o.dish || null, peers: [], mouse: null, friendX: null, night: false, plays: 0,
-      hearts: [], petT: -9, soundT: -9, curT: rand(3, 8), shyT: 0, greetT: -99, hover: false, hoverOnce: false
+      hearts: [], petT: -9, soundT: -9, curT: rand(3, 8), shyT: 0, greetT: -99, hover: false, hoverOnce: false,
+      annoy: 0, sulkT: -99, scratches: []   // (grumpy cats) how fed up it is with petting, sulking until, claw marks on screen
     };
     c.y = c.surfaces[c.surf].y;
     begin(c, o.state === 'sleep' ? { do: 'sleep', dur: rand(10, 25) } : { do: 'sit', dur: rand(2, 6) });
@@ -79,7 +80,7 @@ const CATS = (() => {
   const group = cats => { for (const c of cats) c.peers = cats.filter(o => o !== c); return cats; };
   const surface = c => c.surfaces[c.surf];
   const airborne = c => !!c.act && ((c.act.do === 'jump' && c.t >= 0.2 && c.t < 0.2 + c.act.air) || (c.act.do === 'pounce' && c.t >= c.act.wait));
-  const busy = c => !c.act || ['jump', 'pounce', 'meow', 'blink'].includes(c.act.do);
+  const busy = c => !c.act || ['jump', 'pounce', 'meow', 'blink', 'swipe'].includes(c.act.do);
   const onSurf = (c, j) => c.surf === j || (c.act && (c.act.do === 'jump' || c.act.do === 'blink') && c.act.to === j) || c.plan.some(a => a.do === 'jump' && a.to === j);
 
   function begin(c, a) {
@@ -91,7 +92,7 @@ const CATS = (() => {
     }
     c.act = a; c.t = 0;
     if (a.do === 'jump') { a.x0 = c.x; a.y0 = c.y; a.y1 = c.surfaces[a.to].y; a.air = 0.38 + Math.abs(a.y1 - a.y0) / 380; }
-    if (a.do === 'pounce') { if (c.toy && c.toy.surf === c.surf) c.dir = sign(c.toy.x - c.x); a.x0 = c.x; a.tx = clamp(c.x + c.dir * 18, surface(c).x0, surface(c).x1); a.wait = rand(0.5, 0.9); }
+    if (a.do === 'pounce') { a.x0 = c.x; a.tx = clamp(c.x + c.dir * 18, surface(c).x0, surface(c).x1); a.wait = rand(0.5, 0.9); }
   }
   function interrupt(c, plan) { c.plan = plan.slice(1); begin(c, plan[0]); }
   // the next action: instant ones (turning round, a greeting) happen on the spot
@@ -155,7 +156,7 @@ const CATS = (() => {
   }
   // play: trot round behind the ball, crouch, wiggle, pounce
   function chase(c) {
-    const b = c.toy, s = surface(c), bx = clamp(b.x + b.vx / 1.5, b.x0, b.x1), side = c.x < bx ? 1 : -1, tx = clamp(bx - side * 24, s.x0, s.x1);   // (where a rolling ball will stop)
+    const b = c.toy, s = surface(c), side = c.x < b.x ? 1 : -1, tx = clamp(b.x - side * 24, s.x0, s.x1);
     c.plays++;
     return [{ do: 'walk', tx, run: Math.abs(tx - c.x) > 50 }, { do: 'face', dir: side }, { do: 'pounce' }, { do: 'stand', dur: rand(0.4, 1) }];
   }
@@ -183,13 +184,13 @@ const CATS = (() => {
     if (c.hover && a.do === 'walk' && !a.run && !c.T.shy && !c.hoverOnce) { c.hoverOnce = true; interrupt(c, [{ do: 'stand', dur: 1.8 }]); return; }   // you point at it: it stops to look
     if (!m) return;
     const dx = m.x - c.x, near = m.y > c.y - 130 && m.y < c.y + 40, s = surface(c);
-    if (c.T.shy && near && Math.abs(dx) < 70 && c.now > c.shyT) {   // too close: off it goes
+    if ((c.T.shy || c.now < c.sulkT) && near && Math.abs(dx) < 70 && c.now > c.shyT) {   // too close (or still sulking): off it goes
       c.shyT = c.now + 2.5;
       const away = clamp(c.x - sign(dx) * rand(130, 220), s.x0, s.x1);
       if (Math.abs(away - c.x) > 20) interrupt(c, [{ do: 'walk', tx: away, run: true }, { do: 'sit', dur: rand(3, 6) }]);
       return;
     }
-    if (c.T.curious && near && Math.abs(dx) > 34 && Math.abs(dx) < 170 && c.now > c.curT && (a.do !== 'walk' || !a.run) && Math.random() < dt * 0.5 * c.T.curious) {   // comes over to say hello
+    if (c.T.curious && c.now > c.sulkT && near && Math.abs(dx) > 34 && Math.abs(dx) < 170 && c.now > c.curT && (a.do !== 'walk' || !a.run) && Math.random() < dt * 0.5 * c.T.curious) {   // comes over to say hello
       c.curT = c.now + rand(9, 15);
       interrupt(c, [{ do: 'walk', tx: clamp(m.x - sign(dx) * 22, s.x0, s.x1) }, { do: 'face', dir: sign(dx) }, { do: 'stand', dur: 2.6 }, { do: 'sit', dur: rand(3, 6) }]);
     }
@@ -198,6 +199,9 @@ const CATS = (() => {
     const dt = c.last === null ? 0 : clamp(now - c.last, 0, 0.1); c.last = now; c.now = now;
     for (const h of c.hearts) { h.k += dt / h.life; h.x += h.vx * dt; h.y -= h.vy * dt; }
     c.hearts = c.hearts.filter(h => h.k < 1);
+    for (const s of c.scratches) s.k += dt / 0.8;
+    c.scratches = c.scratches.filter(s => s.k < 1);
+    c.annoy = Math.max(0, c.annoy - dt * 0.4);   // patience comes back slowly
     if (!dt) return;
     senses(c, dt);
     const a = c.act; c.t += dt;
@@ -236,14 +240,38 @@ const CATS = (() => {
 
   /* ---------- petting ---------- */
   const petting = (c, now = c.now) => now - c.petT < 1.5;   // just petted: hearts still rising
-  function pet(c, now) {
-    if (airborne(c)) return;
+  // A grumpy cat (T.grumpy) puts up with a pet or two; keep going and it may scratch you, hiss, stalk off and sulk for a
+  // while (petting a sulking cat only makes it walk away). It warns you first: just one heart instead of three.
+  // p: where you tapped (scene coordinates), for the claw marks. Returns 'scratch' or 'snub' so the scene can react.
+  function pet(c, now, p) {
+    if (airborne(c) || (c.act && c.act.do === 'swipe')) return;
     const asleep = c.act && c.act.do === 'sleep';
+    if (c.T.grumpy) {
+      c.annoy += asleep ? 2 : 1;   // she really does not like being woken
+      const px = p ? p.x : c.x + c.dir * 16, py = p ? p.y : c.y - 30, s = surface(c);
+      if (now < c.sulkT) {
+        if (now - c.soundT > 0.6) { meow(c.T.pitch * 0.8); c.soundT = now; }
+        const away = clamp(c.x - sign(px - c.x) * rand(60, 100), s.x0, s.x1);
+        interrupt(c, [{ do: 'walk', tx: away }, { do: 'sit', dur: rand(4, 7) }]);
+        return 'snub';
+      }
+      const over = c.annoy - 2.6;
+      if (over > 0 && Math.random() < clamp(over * 0.45 * c.T.grumpy, 0, 0.85)) {
+        c.dir = sign(px - c.x);
+        const away = clamp(c.x - c.dir * rand(120, 200), s.x0, s.x1);
+        interrupt(c, [{ do: 'swipe', dur: 0.55 }, { do: 'walk', tx: away, run: true }, { do: 'sit', dur: rand(5, 9) }]);
+        c.sulkT = now + rand(7, 11); c.curT = now + 20; c.annoy = 0; c.soundT = now;
+        c.scratches.push({ x: px, y: py, k: 0 });
+        if (H.hiss) H.hiss(); else meow(c.T.pitch * 0.7);
+        return 'scratch';
+      }
+    }
     if (c.act && c.act.do === 'pounce') c.y = surface(c).y;   // (caught mid-crouch: a cat in the air cannot be reached)
     interrupt(c, asleep ? [{ do: 'meow', dur: 1.3 }, { do: 'stretch', dur: 1.1 }, { do: 'stand', dur: 1.5 }] : [{ do: 'meow', dur: 1.3 }, { do: 'stand', dur: 2 }]);
     c.petT = now; c.curT = now + 6;
     if (now - c.soundT > 0.6) { meow(c.T.pitch); c.soundT = now; }   // quick taps do not stack meows
-    for (let i = 0; i < 3; i++) c.hearts.push({ x: c.x + rand(-10, 10), y: c.y - 46 - i * 4, vx: rand(-10, 10), vy: rand(22, 34), k: -i * 0.18, life: 1.3 });
+    const n = c.T.grumpy && c.annoy > 1.8 ? 1 : 3;   // (a grumpy cat running out of patience: one heart)
+    for (let i = 0; i < n; i++) c.hearts.push({ x: c.x + rand(-10, 10), y: c.y - 46 - i * 4, vx: rand(-10, 10), vy: rand(22, 34), k: -i * 0.18, life: 1.3 });
   }
 
   /* ---------- drawing ---------- */
@@ -260,6 +288,7 @@ const CATS = (() => {
       case 'eat': return F.groom + Math.floor(t * 8) % 4;
       case 'jump': return t < 0.2 ? F.crouch : t < 0.2 + a.air ? F.leap : F.stand;
       case 'pounce': return t < a.wait ? F.crouch : F.leap;
+      case 'swipe': return t < 0.12 ? F.crouch : t < 0.32 ? F.leap : F.stand;   // a quick lunge at your hand
       default: { const ph = (t + c.seed) % 3.2; return ph < 2 ? F.groom + Math.floor(ph * 7) % 4 : F.groom; }   // grooming: a licking burst, then a pause
     }
   }
@@ -280,6 +309,7 @@ const CATS = (() => {
     const flip = sideOn ? c.dir < 0 : c.dir > 0;   // side-on frames face right; the sitting ones have their tail on the right
     let dx = f === F.meow || f === F.meow + 1 ? 4 : 0;
     if (c.act.do === 'pounce' && c.t < c.act.wait && c.t > c.act.wait - 0.45) dx += Math.floor(c.t * 14) % 2 ? 1 : -1;   // the wiggle before a pounce
+    if (c.act.do === 'swipe' && c.t >= 0.12 && c.t < 0.32) dx += 6;   // (side-on frames face their way: +dx is a lunge forward)
     const since = now - c.petT, hop = since < 0.3 ? Math.round(Math.sin(since / 0.3 * Math.PI) * 3) : 0;   // a hop of joy as it is petted
     const x = Math.round(c.x), y = Math.round(c.y) - hop;
     g.save();
@@ -310,6 +340,15 @@ const CATS = (() => {
       if (h.k < 0) continue;
       g.globalAlpha = Math.min(1, (1 - h.k) * 3);
       heart(g, Math.round(h.x - 3), Math.round(h.y));
+    }
+    // claw marks where you tapped: three red slashes drawn in quickly, then fading
+    for (const s of c.scratches) {
+      g.globalAlpha = Math.min(1, (1 - s.k) * 2.5);
+      const len = Math.round(16 * Math.min(1, s.k * 7));
+      for (const pass of [0, 1]) for (let i = 0; i < 3; i++) for (let j = 0; j < len; j++) {
+        const x = Math.round(s.x + 4 + i * 6 - j * 0.6), y = Math.round(s.y - 8 + j + (i === 1 ? -2 : 0));
+        if (pass === 0) { g.fillStyle = PX.OUTLINE; g.fillRect(x - 1, y - 1, 3, 3); } else { g.fillStyle = j < 2 || j > len - 3 ? '#ff8a8a' : '#e0303a'; g.fillRect(x, y, 1, 1); }
+      }
     }
     g.globalAlpha = 1;
     if (c.act && c.act.do === 'meow' && c.act.soft && !c.played) { c.played = true; meow(c.T.pitch, true); }
@@ -344,7 +383,7 @@ const CATS = (() => {
 
   return {
     init: h => { H = Object.assign(H, h); },
-    make, group, draw, drawFrame, F, SIDE: SIDE_POSES, fx, rect, hit, pet, petting, meow, COATS,
+    make, group, draw, drawFrame, F, SIDE: SIDE_POSES, fx, rect, hit, pet, petting, meow, COATS, sulking: c => c.now < c.sulkT,
     toy, drawToy, hitToy, poke, dish, drawDish
   };
 })();

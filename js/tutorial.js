@@ -75,7 +75,9 @@ const TUT = (() => {
     'u.tips':    'A lucky cat! Perfect bowls bring bigger tips.',
     'u.stall7':  'Seat seven. Busy nights ahead, chef.',
     'u.stall8':  'All eight seats! The whole counter is yours.',
-    'u.board10': 'The grand menu board! Ten dishes, chef.'
+    'u.board10': 'The grand menu board! Ten dishes, chef.',
+    'u.bell':    'The pass bell! Drop a finished bowl on the pass side, or press Space.',
+    'u.runner':  'A noodle runner! Ready noodles hop into a bowl with broth.'
   };
   // The handover, in order.
   const LINE = {
@@ -374,9 +376,10 @@ const TUT = (() => {
     if (!T.on) return;
     const s = STEPS[T.idx];
     if (s.ff) G.time = Math.min(s.ff(), G.time + dt * T.ffRate);
-    // keep the camera on what matters: the far left of the serving room; the cooking line, or the pass end of the kitchen
-    if (!s.free) { G.scam = STATIONS[0].cam; if (s.cam !== undefined && at('kitchen')) G.kcam = s.cam ? STATIONS[1].camMax : STATIONS[1].cam; }
     let tgt = s.dom && H.domRect ? H.domRect(s.dom) : s.target ? s.target() : null, drag = s.drag ? s.drag() : null;
+    // keep the camera on what matters: the far left of the serving room; in the kitchen (two screens wide), what to pick
+    // up and where it goes (game.js frames them; while something is carried it slides over to where it goes)
+    if (!s.free) { G.scam = STATIONS[0].cam; if (s.cam !== undefined && at('kitchen') && H.kcam) G.kcam = H.kcam(tgt, drag); }
     const away = toward(s.toward || s.at);
     if (away !== undefined) { tgt = away; drag = null; }
     T.tgt = scr(tgt); T.drag = scr(drag);
@@ -426,7 +429,7 @@ const TUT = (() => {
       case 'n.serve': return { x: 650, y: 432 };
       case 'n.cook': return { x: VW - 252, y: VH / 2 + 34 };
       case 'n.tare': return w(R.tare(TARE_SLOTS[0]), -10, -46);
-      case 'n.broth': return w(R.pot(BROTH_SLOTS[0]), 0, -46);
+      case 'n.broth': return w(R.pot(burners().find(Boolean)), 0, -46);
       case 'n.noodle': return w(R.noodle(), -196, 4);
       case 'n.ready': return w(R.basket(0), -204, 0);
       case 'n.tops': return w(R.binAt(0), 0, -46);

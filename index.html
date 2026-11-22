@@ -23,7 +23,16 @@
         <span class="sep"></span>
         <button id="lvl" class="lvlbtn" type="button" title="Level road" aria-label="Level road"><span id="lvnum">Lv 1</span><span class="xpbar"><i id="xpfill"></i></span></button>
       </div>
+      <!-- the kitchen's stations (shown in the kitchen): each button slides the camera there; PREP opens "Prep the line" before opening -->
+      <div id="kst" aria-label="Kitchen stations">
+        <button type="button" class="kbtn" data-k="pass" title="The pass, the recipe book and the bin (Q / A / left arrow)">Pass</button>
+        <button type="button" class="kbtn" data-k="home" title="The line: rack, bowls, tare and broth pots">Line</button>
+        <button type="button" class="kbtn" data-k="boiler" title="The noodle boiler and the ice bath (E / D / right arrow)">Boiler</button>
+        <button type="button" id="kprep" class="kbtn prep gone" title="Prep the line: what is on the rack and the burners today">Prep</button>
+      </div>
       <span class="grow"></span>
+      <!-- the active bowl's picture, while that bowl is off screen: drop things on it, or tap it to go back to the bowls -->
+      <button type="button" id="minibowl" title="The active bowl: drop things here, or tap to go to the bowls" aria-label="Active bowl"><canvas id="minibowl-c" width="64" height="30"></canvas></button>
       <div class="btnrow">
         <button id="btn-menu" class="ibtn" type="button" title="Menu" aria-label="Menu" data-icon="menu"></button>
         <button id="btn-book" class="ibtn" type="button" title="Recipe book" aria-label="Recipe book" data-icon="book"></button>
@@ -61,7 +70,9 @@
       <button id="tab-serving" class="tag on" type="button"><span class="ti" data-icon="serving"></span>Serving<span class="badge" id="badge-serving"></span></button>
       <button id="tab-kitchen" class="tag" type="button"><span class="ti" data-icon="kitchen"></span>Kitchen<span class="badge" id="badge-kitchen"></span></button>
       <button id="tab-street" class="tag gone" type="button" title="Night street: Aoi's supply shop"><span class="ti" data-icon="street"></span>Street</button>
+      <span id="alerts-l" class="alerts"></span>
       <span id="hint"></span>
+      <span id="alerts-r" class="alerts"></span>
     </div>
 
     <!-- the daily quest: a card in the bottom-right corner; the header button folds it down to a small chip -->
@@ -76,6 +87,14 @@
       <div class="paper menu-paper framed">
         <div id="menu-body"></div>
         <button id="menu-close" class="close" type="button">Close</button>
+      </div>
+    </div>
+
+    <!-- Prep the line (before opening): which toppings are on the rack and which broths on the burners -->
+    <div id="prep" class="overlay">
+      <div class="paper menu-paper prep-paper framed">
+        <div id="prep-body"></div>
+        <div class="prep-btns"><button id="prep-reset" class="btn" type="button" title="Fill the line for today's menu">Default</button><button id="prep-close" class="close" type="button">Done</button></div>
       </div>
     </div>
 

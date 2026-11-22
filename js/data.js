@@ -1,7 +1,7 @@
 'use strict';
 /* Menu, ingredients and the world layout shared by every other file.
-   The screen is 960x540. The world is one long strip: the serving room sits at x 0-960, then
-   toppings and kitchen share x 960-2480 (their views overlap on the topping bins and bowl mat). */
+   The screen is 960x540. The world is one long strip: the serving room sits at x -960-960, then
+   the kitchen at x 960-2880 (two screens: the pass, toppings, tare and hearth stations, left to right). */
 const VW = 960, VH = 540;
 
 /* Tares (the seasoning spooned in first) and broths. Every recipe names one of each. The kitchen has a crock or pot
@@ -21,7 +21,7 @@ const BROTHS = {
   spirit:  { name: 'Spirit dashi', short: 'SPIRIT', c: '#cfd8c8', dark: '#8a9a8e', light: '#ffffff', mid: '#b4c4b8', node: 'fox' }
 };
 const TARE_SLOTS = ['miso', 'shoyu', 'shio'];
-const BROTH_SLOTS = ['pork', 'chicken', 'dashi', 'dragon', 'spirit'];
+const BROTH_SLOTS = ['pork', 'chicken', 'dashi', 'dragon', 'spirit'];   // every broth, in order (four of them sit on the burners: burners())
 const tareKey = k => 'tare.' + k, brothKey = k => 'broth.' + k;   // their ids in G.stock / STOCK / jobs
 
 /* The 26 ramen the shop can learn, in three tiers (a topping at 2 counts as 2):
@@ -177,6 +177,7 @@ const STOPS = [
   { id: 'boil',      region: 2, level: 12, cost: 200, kind: 'upgrade', place: 'Fishmonger Row', name: 'Fast Boil', desc: 'Noodles cook in 4 seconds instead of 6.' },
   { id: 'tantan',    region: 2, level: 13, cost: 0,   kind: 'recipe',  place: 'Sesame Mill', menu: 'tantan', name: 'Market Tantanmen', also: 'Minced pork, sesame (and the grinder)' },
   { id: 'stall6',    region: 2, level: 13, cost: 220, kind: 'upgrade', place: 'New World Arcade', name: 'Stall 6', desc: 'Opens a sixth stall at the counter: room for one more guest.' },
+  { id: 'bell',      region: 2, level: 13, cost: 180, kind: 'upgrade', place: 'Temple Bell Foundry', name: 'Pass Bell', desc: 'A finished bowl dropped anywhere on the pass side, or sent with Space, goes to the pass by itself.' },
   { id: 'hiyashi',   region: 2, level: 14, cost: 0,   kind: 'recipe',  place: 'Frost Traders’ Wharf', menu: 'hiyashi', name: 'Frostleaf Hiyashi', also: 'Frostleaf, shrimp (and the ice bath)' },
   { id: 'board9',    region: 2, level: 14, cost: 200, kind: 'upgrade', place: 'Signwright’s Lane', name: 'Menu Board Plank', desc: 'A ninth slot on your menu: sell one more ramen at a time.' },
   { id: 'osakaLm',   region: 2, level: 14, cost: 0,   kind: 'landmark', place: 'Canal Castle', name: 'Food stall banner', deco: 2, gold: 160, desc: 'A street-food banner for the shop, and the road to the Neon Capital.' },
@@ -188,6 +189,7 @@ const STOPS = [
   { id: 'tokyo',     region: 3, level: 16, cost: 0,   kind: 'recipe',  place: 'Old Town Street', menu: 'tokyo', name: 'Neon Shoyu' },
   { id: 'feast',     region: 3, level: 17, cost: 0,   kind: 'recipe',  place: 'Guild Hall', menu: 'feast', name: 'Feast Bowl', also: 'Kakuni (braised pork belly)' },
   { id: 'garlic',    region: 3, level: 18, cost: 0,   kind: 'recipe',  place: 'Garlic Smokehouse', menu: 'garlic', name: 'Black Garlic Tonkotsu', also: 'Mayu (black garlic oil)' },
+  { id: 'runner',    region: 3, level: 18, cost: 320, kind: 'upgrade', place: 'Courier Alley', name: 'Noodle Runner', desc: 'Ready noodles drop into the active bowl by themselves once it has tare and broth.' },
   { id: 'wyvern',    region: 3, level: 19, cost: 0,   kind: 'recipe',  place: 'Hunters’ Guild', menu: 'wyvern', name: 'Wyvern Tonkotsu', also: 'Wyvern chashu' },
   { id: 'tokyoLm',   region: 3, level: 19, cost: 0,   kind: 'landmark', place: 'Neon Spire', name: 'Neon ramen sign', deco: 3, gold: 200, desc: 'A buzzing neon sign for the shop, and the road to the Ember Coast.' },
   // Ember Coast (levels 20-26)
@@ -288,18 +290,53 @@ const CHILI_OIL = 'chilioil';
 STOCK[CHILI_OIL] = { cap: 16, add: 8, time: 6, label: 'CHILI OIL' };
 const chiliOilOn = () => owns('spicy');
 
-/* The kitchen's topping rack: 24 lacquered bins (eight to a row, three rows). It holds every topping the menu needs,
-   in TOPS order, then fills the free bins with other toppings you have unlocked that guests like as extras. So the
-   menu can only need 24 different toppings (the menu editor says so when a dish would not fit). */
-const RACK = 24;
+/* The line: what is out in the kitchen today. The topping rack holds RACK lacquered bins (two rows of six) and the stove
+   has BURNERS burners; everything else waits in the pantry. The player chooses (the "Prep the line" panel, before
+   opening); left alone, the line is filled for today's menu (defaultLoad). An order that needs something left in the
+   pantry shows it in red on its slip, and it can be swapped onto the line mid-shift (the pantry shelf by the rack).
+   G.load = { tops: [RACK ids or null], broths: [BURNERS ids or null], auto } (auto: refilled for the menu each day).
+   The menu may still need up to MENU_TOPS different toppings (the old 24-bin rack's limit). */
+const RACK = 12, BURNERS = 4, MENU_TOPS = 24;
 // the ice bath (for cold ramen) is in the kitchen once a cold recipe is learned
 const iceOn = () => Object.keys(MENU).some(k => MENU[k].cold && menuOn(k));
 const menuTops = menu => { const s = new Set(); for (const k of menu) if (MENU[k]) for (const id in MENU[k].tops) s.add(id); return TOPS.filter(id => s.has(id)); };
-function rackTops() {
-  const need = menuTops((typeof window !== 'undefined' && window.G && G.menu) || ['miso']);
-  const fill = EXTRA_OK.filter(id => !need.includes(id) && topOn(id)).slice(0, Math.max(0, RACK - need.length));
-  return TOPS.filter(id => need.includes(id) || fill.includes(id)).slice(0, RACK);
+// The default line for today's menu: the toppings and broths it uses, the dishes ordered most (the top of the menu, and
+// the chef's pick) first; free bins get other unlocked toppings guests like as extras, spare burners show the broths
+// still to come (locked, as a promise). Bins keep the usual TOPS order, so a topping sits in the same place day to day.
+function defaultLoad() {
+  const has = typeof window !== 'undefined' && window.G, menu = ((has && G.menu) || ['miso']).filter(k => MENU[k]), pick = has && G.pick, n = menu.length;
+  const ts = {}, bs = {};
+  menu.forEach((k, i) => {
+    const m = MENU[k], w = (1 + 0.6 * (n > 1 ? (n - 1 - i) / (n - 1) : 0)) * (k === pick ? 1.5 : 1);
+    for (const id in m.tops) ts[id] = (ts[id] || 0) + w * m.tops[id];
+    bs[m.broth] = (bs[m.broth] || 0) + w;
+  });
+  const rank = (S, order) => (a, b) => S[b] - S[a] || order.indexOf(a) - order.indexOf(b);
+  let tops = Object.keys(ts).filter(topOn).sort(rank(ts, TOPS)).slice(0, RACK);
+  for (const id of EXTRA_OK) if (tops.length < RACK && !tops.includes(id) && topOn(id)) tops.push(id);
+  tops = TOPS.filter(id => tops.includes(id));
+  let broths = Object.keys(bs).filter(brothOn).sort(rank(bs, BROTH_SLOTS)).slice(0, BURNERS);
+  for (const k of BROTH_SLOTS) if (broths.length < BURNERS && !broths.includes(k) && brothOn(k)) broths.push(k);
+  broths = BROTH_SLOTS.filter(k => broths.includes(k));
+  for (const k of BROTH_SLOTS) if (broths.length < BURNERS && !broths.includes(k)) broths.push(k);   // (locked: a promise)
+  while (tops.length < RACK) tops.push(null);
+  return { tops, broths, auto: true };
 }
+// A saved (or edited) line made valid: known, unlocked toppings, no repeats, the right number of slots. A line left on
+// auto (and old saves, which have none) is simply refilled for the menu.
+function fixLoad(L) {
+  if (!L || L.auto !== false || !Array.isArray(L.tops) || !Array.isArray(L.broths)) return defaultLoad();
+  const seen = new Set(), ok = (id, valid) => { if (!id || !valid(id) || seen.has(id)) return null; seen.add(id); return id; };
+  return {
+    tops: Array.from({ length: RACK }, (_, k) => ok(L.tops[k], id => TOPS.includes(id) && topOn(id))),
+    broths: Array.from({ length: BURNERS }, (_, k) => ok(L.broths[k], id => !!BROTHS[id])),
+    auto: false
+  };
+}
+const liveLoad = () => (typeof window !== 'undefined' && window.G && G.load) || defaultLoad();
+const rackTops = () => liveLoad().tops;      // bin k holds rackTops()[k] (null: an empty bin)
+const burners = () => liveLoad().broths;     // burner i holds burners()[i]
+const rackList = () => rackTops().filter(Boolean);
 // Guest affinity: every bowl you serve someone earns points (a perfect one earns double). Five ranks; from the second
 // rank up, a guest adds a little extra to the tip for a perfect bowl (+1G per rank above the first).
 const AFFINITY = [
@@ -343,38 +380,59 @@ const perfectTip = () => (gearOn('tips') ? 7 : 4);
 const stallOpen = i => i < 4 || gearOn('stall' + (i + 1));
 
 // Two stations, both wide pages you pan along between cam and camMax (hold A / D or use the mouse wheel):
-// the serving room (the staff door and stalls 1-4 at the left, where you start; 5-8 to the right) and the kitchen (toppings, then the cooking line).
+// the serving room (the staff door and stalls 1-4 at the left, where you start; 5-8 to the right) and the kitchen
+// (the pass, toppings, tare and hearth stations: KL.CAM has a camera spot for each).
 const STATIONS = [
   { id: 'serving', name: 'Serving', cam: -960, camMax: 0 },   // starts at cam (the far left)
-  { id: 'kitchen', name: 'Kitchen', cam: 960, camMax: 1520 }
+  { id: 'kitchen', name: 'Kitchen', cam: 960, camMax: 1680 }   // (KL.X0 + KL.W - VW)
 ];
 const PAN_SPEED = 820;    // px per second while A / D is held
 const EDGE = 46;          // width of the screen-edge zones that pan to the next station
 
-// Toppings + kitchen (local x 0-1520, drawn at world x 960). Toppings view shows local 0-960, kitchen view 560-1520.
-// Left to right: pass, recipe book + bin, topping bins over the bowl mat (seen from both views), tare crocks, broth range, noodle boiler.
+/* The kitchen: two screens wide (local x 0-1680, drawn at world x 960). Everything used for every bowl is on one
+   screen, "home" (local 370-1330, where the kitchen opens): the topping rack and its pantry, the bowl mat, the tare
+   crocks and chili oil on a low counter shelf beside it, and the four broth pots on the stove. The rest sits to the
+   sides: the pass window, recipe book and bin on the left (the PASS view also shows the bowls), the noodle boiler and
+   shelf, the ice bath and the window on the right (the BOILER view also shows the pots).
+     PASS 0-360 | TOPPINGS 400-870 (rack + pantry on the wall, mat below) | TARE 696-940 (on the counter, under the
+     rack's right end) | HEARTH 956-1296 | BOILER 1330-1630  (home's stations sit 16-20px apart; nothing touches)
+   Each station has a small hanging sign. Bands kept clear for the HTML overlay: y < TOP (the HUD) and y >= BOTTOM (the
+   station tabs, their badges, the hint bar, the alert arrows). The order slips hang from the rail just under the HUD,
+   so the wall up to about y 150 only has decoration on it. */
 const KL = {
-  X0: 960, W: 1520,
-  PASS: { x: 50, y: 52, w: 166, h: 244 },
-  passPos: i => [96 + (i % 2) * 74, 240 + Math.floor(i / 2) * 24],   // on the serving tray in the pass window
-  BOOK: { x: 286, y: 352, w: 116, h: 74 },
-  TRASH: { x: 470, y: 440, w: 46, h: 58 },
-  // stepped hinoki topping rack: three rows of eight bins right above the bowls (RACK = 24; see rackTops)
-  bin: k => ({ x: 572 + 48 * (k % 8), y: 182 + 70 * Math.floor(k / 8), w: 44, h: 46 }),
-  MAT: { x: 636, y: 386, w: 248, h: 112 },
-  bowlX: [700, 820], BOWL_Y: 420,
-  tare: i => ({ cx: 966 + 50 * i, y: 330 }),            // crock i: centre x, rim y (the chili oil stands at the end of the row)
-  pot: i => ({ cx: 1150 + 48 * i, cy: 340, rx: 21 }),    // broth pot i on the hearth (five smaller pots)
-  ICE: { cx: 1030, cy: 452, rx: 40 },                   // the ice bath for cold ramen, on the counter in front of the crocks
-  OIL: { cx: 1106, by: 382 },                           // the chili oil bottle, standing with the tare crocks at the end of their row (by = its bottom)
-  BOIL: { cx: 1440, cy: 352, rx: 66 }, basketX: [1398, 1440, 1482],
-  NOODLE: { x: 1394, y: 226, w: 92, h: 40 },            // tray of noodle nests on the shelf above the boiler
-  // where each stock's "+" restock button sits
+  X0: 960, W: 1680, TOP: 44, BOTTOM: 496,               // (BOTTOM: the tab bar, its count badges and the hint ribbon)
+  STATIONS: [{ id: 'pass', name: 'PASS', x0: 0, x1: 360 }, { id: 'toppings', name: 'TOPPINGS', x0: 400, x1: 870 }, { id: 'tare', name: 'TARE', x0: 696, x1: 940 },   // (the tare shelf stands on the counter under the rack's right end)
+             { id: 'hearth', name: 'HEARTH', x0: 956, x1: 1296 }, { id: 'boiler', name: 'BOILER', x0: 1330, x1: 1630 }],
+  // the camera spots, left to right (Q/E, A/D and the arrow keys step through them; the station buttons jump straight there)
+  SPOTS: ['pass', 'home', 'boiler'],
+  CAM: { pass: 0, home: 370, boiler: 720 },
+  SIGN_Y: 170,                                          // the station signs' text line (the tag spans SIGN_Y-3 to SIGN_Y+17), clear of the order slips
+  PASS: { x: 56, y: 54, w: 160, h: 242 },             // (its frame stays out of the HUD band)
+  passPos: i => [102 + (i % 2) * 74, 242 + Math.floor(i / 2) * 24],   // on the serving tray in the pass window
+  BOOK: { x: 238, y: 330, w: 116, h: 74 },              // the open cookbook on its lectern (the lectern stands under it)
+  TRASH: { x: 113, y: 436, w: 46, h: 58 },              // under the pass window
+  // the topping rack: two rows of six 48px bins, 12px apart, rows 20px apart (a name plate under each bin)
+  bin: k => ({ x: 432 + 60 * (k % 6), y: 216 + 68 * Math.floor(k / 6), w: 48, h: 48 }),
+  PANTRY: { x: 812, y: 216, w: 52, h: 116 },            // the pantry shelf at the end of the rack (swaps mid-shift; morning prep)
+  MB: { x: 433, y: 52, w: 346, h: 98 },                 // the menu board over the rack (the TOPPINGS sign hangs from it)
+  MAT: { x: 410, y: 380, w: 272, h: 112 },
+  bowlX: [480, 612], BOWL_Y: 414,
+  tare: i => ({ cx: 733 + 64 * i, y: 392 }),             // crock i: centre x, rim y; they stand on a low shelf on the counter (top at SHELF.y)
+  SHELF: { x: 700, x1: 938, y: 444 },
+  OIL: { cx: 909, by: 444 },                            // the chili oil bottle, 48px after the last crock (by = its bottom)
+  pot: i => ({ cx: 1006 + 80 * i, cy: 330, rx: 24 }),    // broth pot on burner i (BURNERS of them)
+  COOK_X: 952, HOOD_X1: 1496,                           // the brick backsplash and hood: over the stove and the boiler
+  RAIL: { x: 976, x1: 1276, y: 198 },                   // the utensil rail over the pots
+  BOIL: { cx: 1412, cy: 340, rx: 66 }, basketX: [1370, 1412, 1454],   // 61px clear of the last pot
+  NOODLE: { x: 1366, y: 176, w: 92, h: 40 },            // tray of noodle nests on the shelf above the boiler
+  ICE: { cx: 1570, cy: 430, rx: 40 },                   // the ice bath for cold ramen, past the boiler
+  WIN: { x: 1518, y: 56, w: 104, h: 84 },               // the lattice window over the ice bath
+  // where a stock's job marker sits
   badge(id) {
     if (id === 'noodle') return [this.NOODLE.x - 14, this.NOODLE.y + 20];
     const tk = TARE_SLOTS.findIndex(k => k && tareKey(k) === id);
     if (tk >= 0) { const t = this.tare(tk); return [t.cx - 10, t.y - 14]; }
-    const bk = BROTH_SLOTS.findIndex(k => k && brothKey(k) === id);
+    const bk = burners().findIndex(k => k && brothKey(k) === id);
     if (bk >= 0) { const p = this.pot(bk); return [p.cx - 20, p.cy - 26]; }
     const b = this.bin(Math.max(0, rackTops().indexOf(id))); return [b.x + b.w - 13, b.y + b.h - 13];
   },

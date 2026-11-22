@@ -9,7 +9,7 @@
    GEAR (the road's upgrade stops). Packs go straight into the kitchen (G.stock); tools into G.gear.
    Tonight's special is one ingredient at 40% off, shown on its own price tag and in the specials cabinet. */
 const NIGHTSHOP = (() => {
-  const { rect, dot, ell, poly, line, shade, mix, text, textC, textW } = PX;
+  const { rect, dot, ell, lathe, poly, line, shade, mix, text, textC, textW } = PX;
   const DK = PX.OUTLINE, SW = 3260, FLOOR = 430, CTOP = 378, EDGE = 46;
   const $ = id => document.getElementById(id);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -36,6 +36,8 @@ const NIGHTSHOP = (() => {
     boil:  { name: 'High-flame boiler', line: 'A roaring burner. Noodles in four seconds.' },
     caddy: { name: 'Garnish caddy',    line: 'A little cedar caddy of spring onion and nori: it sprinkles them in with the noodles, as the order asks.' },
     tips:  { name: 'Lucky tip cat',    line: 'A beckoning cat for the counter. Happy guests tip more.' },
+    bell:  { name: 'Pass bell',        line: 'A brass bell for the pass: ring it (Space) or drop a finished bowl anywhere near the pass, and the bowl goes out by itself.' },
+    runner: { name: 'Noodle runner',   line: 'A little cedar chute from the boiler: ready noodles slide into the active bowl once it has tare and broth.' },
     stall5: { name: 'Seat 5 kit', line: 'A stool, a paper lantern and a bamboo blind: opens stall 5 at your counter.' },
     stall6: { name: 'Seat 6 kit', line: 'A stool, a paper lantern and a bamboo blind: opens stall 6 at your counter.' },
     stall7: { name: 'Seat 7 kit', line: 'A stool, a paper lantern and a bamboo blind: opens stall 7 at your counter.' },
@@ -106,9 +108,10 @@ const NIGHTSHOP = (() => {
   FRESH2.forEach((id, i) => SLOTS.push({ id, x: 2338 + (i % 5) * 96, base: [222, 298, 374][Math.floor(i / 5)] }));
   FANTASY.forEach((id, i) => SLOTS.push({ id, x: 2884 + (i % 4) * 96, base: [262, 362][Math.floor(i / 4)] }));
   const shelfGear = id => id.startsWith('stall') || id.startsWith('board');
-  GEAR.filter(id => !shelfGear(id)).forEach((id, i) => SLOTS.push({ id, x: 1806 + i * 86, base: 340 }));   // five kitchen tools on the table
+  { const tools = GEAR.filter(id => !shelfGear(id)), step = Math.min(86, Math.floor(400 / tools.length));   // the kitchen tools on the table (seven, spaced to fit it)
+    tools.forEach((id, i) => SLOTS.push({ id, x: 1770 + Math.round(step / 2) + i * step, base: 340, tool: step })); }
   [...GEAR.filter(id => id.startsWith('stall')), ...GEAR.filter(id => id.startsWith('board'))].forEach((id, i) => SLOTS.push({ id, x: 1798 + i * 72, base: 232, small: true }));
-  for (const s of SLOTS) s.r = s.small ? { x: s.x - 33, y: s.base - 54, w: 66, h: 64 } : { x: s.x - 40, y: s.base - 54, w: 80, h: 64 };
+  for (const s of SLOTS) s.r = s.small ? { x: s.x - 33, y: s.base - 54, w: 66, h: 64 } : s.tool ? { x: s.x - Math.floor(s.tool / 2) + 1, y: s.base - 54, w: s.tool - 2, h: 64 } : { x: s.x - 40, y: s.base - 54, w: 80, h: 64 };
   const DOOR = { x: 40, y: 168, w: 120, h: FLOOR - 168 };
   const COUNTER = { x: 222, y: CTOP - 12, w: 350, h: FLOOR - CTOP + 12 };
   const REG = { x: 520, y: CTOP };
@@ -467,7 +470,7 @@ const NIGHTSHOP = (() => {
   const EBALL = CATS.toy(1, 850, ESURF), EDISH = CATS.dish(664, ESURF);
   const EEVEE = CATS.make('eevee', 598, { surfaces: ESURF, toy: EBALL, dish: EDISH, dir: -1 });
   function hitStore(w) {
-    if (CATS.hit(EEVEE, w)) { const r = CATS.rect(EEVEE); return { kind: 'cat', cat: EEVEE, x: EEVEE.x, y: r.y - 22, label: CATS.petting(EEVEE, G.t) ? null : 'EEVEE' }; }
+    if (CATS.hit(EEVEE, w)) { const r = CATS.rect(EEVEE); return { kind: 'cat', cat: EEVEE, x: EEVEE.x, y: r.y - 22, label: CATS.petting(EEVEE, G.t) ? null : CATS.sulking(EEVEE) ? 'EEVEE IS SULKING' : 'EEVEE', muted: CATS.sulking(EEVEE) }; }
     if (CATS.hitToy(EBALL, w)) return { kind: 'toy', toy: EBALL, x: EBALL.x, y: EBALL.y - 40 };
     if (inR(w, DOOR)) return { kind: 'door', x: DOOR.x + DOOR.w / 2, y: DOOR.y - 6, label: 'EXIT TO STREET' };
     const a = S.aoi;
@@ -520,7 +523,12 @@ const NIGHTSHOP = (() => {
     const e = edgeAt(p);
     if (e) { S.camT = clamp(S.camT + e * 480, 0, SW - VW); H.sfx.tap(); return; }
     const w = W(p), h = hitStore(w);
-    if (h && h.kind === 'cat') return CATS.pet(h.cat, G.t);
+    if (h && h.kind === 'cat') {
+      const r = CATS.pet(h.cat, G.t, w);
+      if (r === 'scratch') bubble(pick(['Eevee! No claws! ...Sorry, she has her limits.', 'Ah, she got you? She only likes a pat or two.', 'Told you she bites the hand that pets her. Literally.', 'Eevee, manners! Are you alright?']));
+      else if (r === 'snub' && Math.random() < 0.4) bubble(pick(['Give her a minute. She holds a grudge.', 'She is ignoring you now. Very dignified.']));
+      return;
+    }
     if (h && h.kind === 'toy') return CATS.poke(h.toy, w, [EEVEE]);
     if (h && h.kind === 'door') { H.sfx.tap(); return leaveStore(); }
     if (h && h.kind === 'aoi') { H.sfx.tap(); return talk(S.basket.length ? 'checkout' : 'menu'); }
@@ -692,6 +700,16 @@ const NIGHTSHOP = (() => {
       ell(g, x, base - 30, 22, 6, DK); rect(g, x - 22, base - 30, 44, 18, DK); rect(g, x - 21, base - 30, 42, 17, '#9aa4b2'); rect(g, x - 21, base - 30, 6, 17, '#d8e0ea');
       ell(g, x, base - 31, 21, 5, '#c9d1dd'); ell(g, x, base - 31, 17, 3, '#5a6a7a');
       rect(g, x - 28, base - 27, 7, 3, DK); rect(g, x + 21, base - 27, 7, 3, DK);
+    } else if (id === 'bell') {   // pass bell: a brass counter bell on a little walnut block
+      rect(g, x - 16, base - 6, 32, 6, DK); rect(g, x - 15, base - 5, 30, 4, '#6e4428'); rect(g, x - 15, base - 5, 30, 1, '#a57a4c');
+      ell(g, x, base - 8, 12, 3, DK); lathe(g, x, [[base - 22, 3], [base - 18, 9], [base - 9, 12]], DK); lathe(g, x, [[base - 21, 2], [base - 18, 8], [base - 10, 11]], PAL.brass);
+      rect(g, x - 6, base - 18, 3, 7, PAL.brassHi); rect(g, x - 1, base - 27, 3, 5, DK); rect(g, x, base - 26, 1, 3, '#c9d1dd');
+    } else if (id === 'runner') {   // noodle runner: a slanted cedar chute with a noodle nest sliding down it
+      poly(g, [[x - 24, base - 30], [x - 18, base - 34], [x + 22, base - 8], [x + 16, base - 4]], DK);
+      poly(g, [[x - 22, base - 30], [x - 18, base - 32], [x + 20, base - 8], [x + 16, base - 6]], '#c8925a');
+      for (const lx of [x - 18, x + 14]) { rect(g, lx - 1, base - (lx < x ? 30 : 8), 4, lx < x ? 30 : 8, DK); rect(g, lx, base - (lx < x ? 29 : 7), 2, lx < x ? 29 : 7, '#8a5a32'); }
+      const sl = Math.round(((G.t || 0) * 12) % 26);
+      ell(g, x - 12 + sl, base - 25 + Math.round(sl * 0.62), 6, 3, DK); ell(g, x - 12 + sl, base - 26 + Math.round(sl * 0.62), 5, 2, '#f6e19a');
     } else if (id === 'tips') {   // maneki-neko beside a glass jar of coins
       const paw = Math.round(Math.sin((G.t || 0) * 4) * 2);
       rect(g, x + 4, base - 22, 22, 22, DK); rect(g, x + 5, base - 21, 20, 20, 'rgba(200,230,255,0.55)'); rect(g, x + 5, base - 9, 20, 8, '#e0b040'); rect(g, x + 7, base - 11, 6, 3, '#ffe08a'); rect(g, x + 5, base - 21, 3, 20, '#ffffff');
@@ -1062,6 +1080,7 @@ const NIGHTSHOP = (() => {
     return S.hover || S.edge ? 'pointer' : 'default';
   }
   return {
+    fading: () => S.fadeDir > 0,   // walking out to (or between) the street rooms
     init: h => { H = Object.assign(H, h); }, enter, leaveTo: backHome, update, draw, down, move, up, wheel, key, keyup, hint, cursor,
     // jump straight in (for ?shot= screenshots and tests)
     visit: (where, cam = 0) => { G.where = where; S.cam = S.camT = clamp(cam, 0, SW - VW); S.fade = 0; S.fadeDir = 0; S.door = 0; S.doorT = 0; if (where === 'store') { S.aoi.x = S.aoi.tx = 420; greet(); } },

@@ -26,7 +26,7 @@
 
   const newBowl = () => ({ s: 0, tare: false, broth: false, fill: 0, noodles: null, nHide: false, items: [], itemT: [], hide: {}, age: 0, fx: {} });   // fx: special steps (see "special steps")
   const zeroes = () => Object.fromEntries(Object.keys(MENU).map(k => [k, 0]));
-  const newStats = () => ({ served: 0, perfect: 0, earned: 0, sales: 0, tips: 0, declined: 0, sold: zeroes(), rev: zeroes() });
+  const newStats = () => ({ served: 0, perfect: 0, earned: 0, sales: 0, tips: 0, declined: 0, sold: zeroes(), rev: zeroes(), camMoves: 0, trips: 0 });   // (camMoves, trips: the ?dev=1 counter)
   const fresh = () => ({
     menu: ['miso'], pick: 'miso',   // the menu the shop sells from (in order), and the chef's pick
     mode: 'title', visits: { day: 0, n: {} }, met: [], aff: {}, level: 1, xp: 0, owned: [], gear: [], where: null, aoiMet: false, region: 0,
@@ -34,7 +34,8 @@
     aoi: { seen: 0, visit: 0, buy: 0, chat: 0, notes: 0 }, aoiDay: 0,   // Aoi's story (js/aoi.js): scenes seen, tonight's markers, notes left; the day she last ate here
     t: 0, time: 0, day: 1, gold: 0, paused: false, ui: null, nightF: 0, duskF: 0, rain: 0, wx: null, quest: null,
     shop: 'morning', signT: -9, signWas: 'morning', receipt: null,   // shop: morning (closed, waiting for the sign) | open | night
-    st: 0, cam: -960, kcam: 960, scam: -960, pan: 0, edge: 0, edgeSide: 0,   // the serving room starts at its far left
+    st: 0, cam: -960, kcam: KL.X0 + KL.CAM.home, scam: -960, pan: 0, edge: 0, edgeSide: 0,   // the serving room starts at its far left
+    load: null, swaps: [], pantry: null, swapPick: null,   // the line (data.js: defaultLoad), swaps from the pantry under way, the pantry popup, a pantry item waiting for a bin
     stalls: Array.from({ length: SL.NSTALL }, () => ({ guest: null, bowl: null, blind: 1 })),   // the stalls; blind: 1 = down, 0 = rolled up
     walkers: [], ticketZoom: -1,   // guests fading out of their stalls; a ticket shown big
     activeBowl: null, flying: [], hold: null, lvQueue: [],   // lvQueue: level-ups waiting for their celebration popup   // the bowl clicks go into (null: chosen for you); items in flight; a hold step under way
@@ -42,9 +43,8 @@
     slips: [], pass: [], bowls: [newBowl(), newBowl()],
     baskets: [0, 1, 2].map(() => ({ t: -1 })),
     ice: 0,   // chilled noodle nests waiting in the ice bath (for cold ramen)
-    // enough for the first day (then Kitsune-ya); every topping starts with a little, so a newly unlocked one is ready
-    stock: { noodle: 16, ...Object.fromEntries([...Object.keys(TARES).map(tareKey), ...Object.keys(BROTHS).map(brothKey)].map(id => [id, 16])),
-             ...Object.fromEntries(TOPS.map(id => [id, 6])), [CHILI_OIL]: 10, chashu: 14, egg: 14, nori: 14, scallion: 14, menma: 14, cockegg: 2 },
+    // enough for the first day (then Kitsune-ya): every stack starts at 16, so a newly unlocked topping is ready too
+    stock: Object.fromEntries(['noodle', CHILI_OIL, ...TOPS, ...Object.keys(TARES).map(tareKey), ...Object.keys(BROTHS).map(brothKey)].map(id => [id, 16])),
     jobs: [], parts: [], pops: [],
     drag: null, dragBowl: null, mouse: null, hover: null,
     flash: '', flashT: 0, steamT: 0, stats: newStats(),
@@ -65,7 +65,7 @@
   // (night: the title shows the night scene for a save made after closing)
   // Continue always resumes at the start of a morning: `day` is the morning to resume on.
   // (nothing saves during Aoi's handover: it is not a real day)
-  function saveGame(day) { if (G.tut && G.tut.handover) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, aff: G.aff, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned, quest: G.quest, gear: G.gear, aoiMet: G.aoiMet, aoi: G.aoi, region: G.region, life: G.life, menu: G.menu, pick: G.pick, night: G.shop === 'night', tut: TUT.saveData() })); } catch (e) { /* storage may be blocked */ } }
+  function saveGame(day) { if (G.tut && G.tut.handover) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify({ day, gold: G.gold, stock: G.stock, met: G.met, aff: G.aff, nextNum: G.nextNum, level: G.level, xp: G.xp, owned: G.owned, quest: G.quest, gear: G.gear, aoiMet: G.aoiMet, aoi: G.aoi, region: G.region, life: G.life, menu: G.menu, pick: G.pick, load: G.load, night: G.shop === 'night', tut: TUT.saveData() })); } catch (e) { /* storage may be blocked */ } }
   function loadSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.day ? s : null; } catch (e) { return null; } }
   function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage may be blocked */ } }
 
@@ -179,6 +179,7 @@
     chime: () => { tone(1568, 0.5, 'sine', 0.04); tone(2093, 0.6, 'sine', 0.03, 0, 0.12); tone(1760, 0.7, 'sine', 0.025, 0, 0.26); },
     ring: () => { tone(1320, 0.08, 'square', 0.03, 0, 0.05); tone(2640, 0.3, 'triangle', 0.05, 0, 0.12); noise(0.1, 600, 0.4, 0.02); },
     meow: () => CATS.meow(),   // a recorded meow (js/cats.js)
+    hiss: () => { if (muted) return; noise(0.42, 3600, 0.55); noise(0.3, 5200, 0.3, 0.04); noise(0.06, 1400, 0.4); },   // a cat that has had enough, with a swipe
     // the staff door: latch, a hinge creak while it swings, a locked rattle; the shop front's double sliding doors
     latch: () => { tone(1100, 0.025, 'square', 0.035); noise(0.03, 2600, 0.35, 0.01); },
     creak: () => { tone(170, 0.32, 'sawtooth', 0.016, 250, 0.06); tone(240, 0.22, 'sawtooth', 0.012, 190, 0.34); tone(205, 0.16, 'sawtooth', 0.01, 230, 0.52); },
@@ -205,8 +206,57 @@
   function go(i) {
     i = clamp(i, 0, STATIONS.length - 1);
     if (i === G.st) return;
-    G.st = i; G.rmMenu = null; SFX.whoosh();
+    G.st = i; G.rmMenu = null; G.pantry = null; G.swapPick = null; SFX.whoosh();
+    if (STATIONS[i].id === 'kitchen') { G.kcam = KL.X0 + KL.CAM.home; G.devSkip = true; }   // the kitchen opens on home (everything a bowl needs)
     STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === i));
+    slide();
+  }
+  // Station jumps slide the camera there in 0.2s, easing out (panning with the wheel or while carrying eases as before).
+  function slide() { G.camTw = { from: G.cam, to: camTarget(), t: 0, dur: 0.2 }; }
+  const inKitchen = () => !G.where && STATIONS[G.st].id === 'kitchen';
+  // A kitchen station's camera spot (the station buttons along the top); from the serving room, walk in first.
+  function goKitchen(id) {
+    const ki = STATIONS.findIndex(s => s.id === 'kitchen');
+    if (G.st !== ki) go(ki);
+    G.kcam = KL.X0 + KL.CAM[id]; G.devSkip = false; SFX.tap(); slide();
+  }
+  /* The camera spots, left to right: the serving room's two halves, then the kitchen's PASS, home and BOILER views.
+     Q / A / left arrow and E / D / right arrow step one spot (walking into the kitchen lands on home; leaving it from the
+     pass end walks back out to the serving room). */
+  const SPOTS = () => [{ st: 0, cam: STATIONS[0].cam }, { st: 0, cam: STATIONS[0].camMax }, ...KL.SPOTS.map(id => ({ st: 1, cam: KL.X0 + KL.CAM[id], id }))];
+  function spotIndex() {
+    const sp = SPOTS(), c = camTarget(); let best = 0;
+    sp.forEach((o, i) => { if (o.st === G.st && (sp[best].st !== G.st || Math.abs(o.cam - c) < Math.abs(sp[best].cam - c))) best = i; });
+    return best;
+  }
+  function stepSpot(dir) {
+    const sp = SPOTS(), i = spotIndex();
+    let j = clamp(i + dir, 0, sp.length - 1);
+    if (j === i) return;
+    if (sp[i].st === 0 && sp[j].st === 1) j = sp.findIndex(o => o.id === 'home');   // into the kitchen: home
+    const o = sp[j];
+    G.pantry = null; G.swapPick = null;
+    if (o.st !== G.st) { go(o.st); if (o.st === 0) G.scam = o.cam; slide(); return; }
+    if (o.st === 0) G.scam = o.cam; else { G.kcam = o.cam; G.devSkip = false; }
+    SFX.tap(); slide();
+  }
+  // A kitchen camera (world x) that shows rect r, and r2 too when both fit on one screen (else r). (Aoi's lessons)
+  function kcamShow(r, r2) {
+    const s = STATIONS.find(o => o.id === 'kitchen');
+    if (!r || r.screen) return clamp(G.kcam, s.cam, s.camMax);
+    const both = r2 && !r2.screen && Math.max(r.x + r.w, r2.x + r2.w) - Math.min(r.x, r2.x) <= VW - 40;
+    const x0 = both ? Math.min(r.x, r2.x) : r.x, x1 = both ? Math.max(r.x + r.w, r2.x + r2.w) : r.x + r.w;
+    const cur = clamp(G.kcam, s.cam, s.camMax);
+    if (x0 >= cur + 20 && x1 <= cur + VW - 20) return cur;   // already in view: the camera stays put
+    return clamp(Math.round((x0 + x1) / 2 - VW / 2), s.cam, s.camMax);
+  }
+  // The round edge buttons: the kitchen's left one (back to the serving room) only shows at the pass end, so it never
+  // sits over the topping rack or the stove.
+  function edgeOn(side) {
+    const ni = G.st + side;
+    if (ni < 0 || ni >= STATIONS.length) return false;
+    if (STATIONS[G.st].id === 'kitchen' && side < 0) return camTarget() <= STATIONS[G.st].cam + 40;
+    return true;
   }
   // Where the camera is heading: a station's fixed spot, or the kitchen page's pan position.
   const wide = s => s.camMax !== undefined;   // a station you pan along
@@ -226,6 +276,10 @@
   const iceRect = { x: K(KL.ICE.cx) - KL.ICE.rx - 6, y: KL.ICE.cy - 30, w: 2 * KL.ICE.rx + 12, h: 76 };
   const tareRect = i => { const t = KL.tare(i); return { x: K(t.cx) - 22, y: t.y - 30, w: 44, h: 86 }; };
   const potRect = i => { const p = KL.pot(i); return { x: K(p.cx) - p.rx - 4, y: p.cy - 50, w: 2 * p.rx + 8, h: 112 }; };
+  const pantryRect = { x: K(KL.PANTRY.x) - 2, y: KL.PANTRY.y - 2, w: KL.PANTRY.w + 4, h: KL.PANTRY.h + 18 };
+  const swapping = (kind, slot) => G.swaps.some(s => s.kind === kind && s.slot === slot);
+  const burnerOf = type => burners().findIndex((k, i) => k === type && !swapping('broth', i));   // -1: not on a burner (or being swapped)
+  const onLine = id => rackTops().some((t, k) => t === id && !swapping('top', k));
   const noodleRect = { x: K(KL.NOODLE.x), y: KL.NOODLE.y, w: KL.NOODLE.w, h: KL.NOODLE.h };
   const lockedSay = node => { const n = nodeFor(node); say('Unlocks on the ' + ROAD_NAME + ' at ' + (n ? n.place + ', level ' + n.level : 'a later stop') + '.'); };
   const passRect = { x: K(KL.PASS.x), y: KL.PASS.y, w: KL.PASS.w, h: KL.PASS.h };
@@ -260,8 +314,9 @@
       if (!tareOn(type)) return lockedSay(TARES[type].node);
       return G.stock[tareKey(type)] > 0 ? { kind: 'tare', type } : say('The ' + TARES[type].name.toLowerCase() + ' crock is empty. Kitsune-ya sells more after closing.');
     } }));
-    BROTH_SLOTS.forEach((type, i) => s.push({ r: potRect(i), start: () => {
-      if (!type) return say('This pot is empty for now.');
+    burners().forEach((type, i) => s.push({ r: potRect(i), start: () => {
+      if (swapping('broth', i)) return say('Swapping that pot from the pantry. Just a moment.');
+      if (!type) return say('This burner is empty. The pantry by the rack has more broths.');
       if (!brothOn(type)) return lockedSay(BROTHS[type].node);
       return G.stock[brothKey(type)] > 0 ? { kind: 'broth', type } : say('The ' + BROTHS[type].name.toLowerCase() + ' pot is empty. Kitsune-ya sells more after closing.');
     } }));
@@ -271,7 +326,10 @@
       if (b.t < cookTime()) return say('Still cooking. They will be ready in a moment.');
       return { kind: 'basket', j };
     } }));
-    rackTops().forEach((id, k) => s.push({ r: binRect(k), binId: id, start: () => !topOn(id) ? lockedSay(TOP_NODE[id]) : G.stock[id] > 0 ? { kind: 'top', id } : say('Out of ' + TOP_NAME[id].toLowerCase() + '. Kitsune-ya sells more after closing.') }));
+    rackTops().forEach((id, k) => {
+      if (swapping('top', k)) return s.push({ r: binRect(k), start: () => say('Swapping that bin from the pantry. Just a moment.') });
+      if (id) s.push({ r: binRect(k), binId: id, start: () => !topOn(id) ? lockedSay(TOP_NODE[id]) : G.stock[id] > 0 ? { kind: 'top', id } : say('Out of ' + TOP_NAME[id].toLowerCase() + '. Kitsune-ya sells more after closing.') });
+    });
     // the chili oil bottle: makes a bowl's broth spicy
     s.push({ r: oilRect, start: () => !chiliOilOn() ? lockedSay('spicy') : G.stock[CHILI_OIL] > 0 ? { kind: 'oil' } : say('Out of chili oil. Kitsune-ya sells more.') });
     // the ice bath (cold ramen): chilled nests come out like a READY basket; with none chilled, a click chills one
@@ -306,6 +364,10 @@
       t.push({ r: passRect, ok: canPass, drop: toPass });
       for (let i = 0; i < SL.NSTALL; i++) if (stallOpen(i)) t.push({ r: dropRect(i), ok: () => { const gu = G.stalls[i].guest; return gu && gu.state === 'wait' && d.bowl.s >= 3; }, drop: () => serve(i, d) });
       t.push({ r: trashRect, ok: () => true, drop: () => { takeBowl(d); SFX.drop(); pop('BINNED', K(KL.TRASH.x) + 23, KL.TRASH.y - 10, '#c9d1dd'); } });
+      if (gearOn('bell') && !d.pass && inKitchen()) {   // the Pass Bell: anywhere on the pass side of the bowls, or the left screen edge
+        const x1 = Math.max(K(KL.MAT.x) - 6, G.cam + 72);
+        t.push({ r: { x: K(0) - VW, y: KL.TOP, w: x1 - (K(0) - VW), h: KL.BOTTOM - KL.TOP }, ok: canPass, drop: toPass, bell: true });
+      }
     }
     return t;
   }
@@ -495,31 +557,66 @@
     return order[0];
   }
   const activeIndex = () => (hasActive() ? G.activeBowl : autoBowl(null));
-  const targetBowl = d => (hasActive() ? G.activeBowl : autoBowl(d));
+  // Bowl k as it will be once everything already flying to it has landed (so quick clicks never pile onto one bowl).
+  function shadow(k) {
+    const b = G.bowls[k], o = { ...b, items: b.items.slice() };
+    for (const f of G.flying) {
+      if (f.k !== k || f.done) continue;
+      const d = f.d;
+      if (d.kind === 'tare') { o.s = Math.max(o.s, 1); o.tare = o.tare || d.type; }
+      else if (d.kind === 'broth') { o.s = Math.max(o.s, 2); o.broth = o.broth || d.type; }
+      else if (d.kind === 'basket' || d.kind === 'cold') o.s = Math.max(o.s, 3);
+      else if (d.kind === 'oil') o.spicy = true;
+      else if (d.kind === 'top') o.items.push(d.id);
+    }
+    return o;
+  }
+  const acceptsLater = (k, d) => accepts(shadow(k), d);
+  /* Where a click sends something: the active bowl; for the base steps (tare, broth, noodles, chili oil), when the
+     active bowl already has that step, the next bowl along that can take it (so one trip preps every bowl on the mat).
+     With no bowl chosen yet: the bowl furthest along that can take it. */
+  const ROUTE = ['tare', 'broth', 'basket', 'cold', 'oil'];
+  function targetBowl(d) {
+    const n = G.bowls.length;
+    if (!hasActive()) {
+      const order = G.bowls.map((b, k) => k).sort((a, c) => shadow(c).s - shadow(a).s || a - c);
+      const ok = order.find(k => acceptsLater(k, d)); return ok !== undefined ? ok : order[0];
+    }
+    const a = G.activeBowl;
+    if (!ROUTE.includes(d.kind) || acceptsLater(a, d)) return a;
+    for (let i = 1; i < n; i++) { const k = (a + i) % n; if (acceptsLater(k, d)) return k; }
+    return a;
+  }
+  const bowlOnScreen = k => { const r = bowlRect(k); return inKitchen() && r.x >= G.cam && r.x + r.w <= G.cam + VW; };
   function fromPos(d) {   // where a clicked item starts its flight (world coordinates)
     if (d.kind === 'top') { const b = KL.bin(Math.max(0, binOf(d.id))); return [K(b.x + b.w / 2), b.y + b.h / 2]; }
     if (d.kind === 'cold') return [K(KL.ICE.cx), KL.ICE.cy - 6];
     if (d.kind === 'oil') return [K(KL.OIL.cx), KL.OIL.by - 50];
     if (d.kind === 'tare') { const t = KL.tare(TARE_SLOTS.indexOf(d.type)); return [K(t.cx), t.y - 6]; }
-    if (d.kind === 'broth') { const p = KL.pot(BROTH_SLOTS.indexOf(d.type)); return [K(p.cx), p.cy - 24]; }
+    if (d.kind === 'broth') { const p = KL.pot(Math.max(0, burners().indexOf(d.type))); return [K(p.cx), p.cy - 24]; }
     if (d.kind === 'basket') return [K(KL.basketX[d.j]), KL.BOIL.cy - 30];
     return [K(KL.NOODLE.x + KL.NOODLE.w / 2), KL.NOODLE.y + KL.NOODLE.h / 2];
   }
   const stockOk = d => d.kind === 'top' ? G.stock[d.id] > 0 : d.kind === 'tare' ? G.stock[tareKey(d.type)] > 0 : d.kind === 'broth' ? G.stock[brothKey(d.type)] > 0 : d.kind === 'cold' ? G.ice > 0 : d.kind === 'oil' ? G.stock[CHILI_OIL] > 0 : true;
   // Click a source: one item (or a recipe's double portion of a topping; Shift for just one) flies into the active bowl.
   function clickAdd(d, single) {
-    if (d.kind === 'nest') {   // the noodle tray: a nest into the first empty basket
-      const j = G.baskets.findIndex((b, i) => b.t < 0 && !G.flying.some(f => f.d.kind === 'nest' && f.j === i));
-      if (j < 0) return say('Every basket is busy. Tip the READY noodles into a bowl first.');
-      G.flying.push({ d, j, from: fromPos(d), to: [K(KL.basketX[j]), KL.BOIL.cy - 10], t: 0, dur: 0.3 }); SFX.pick();
+    if (d.kind === 'nest') {   // the noodle tray: one nest per order still waiting for noodles (up to the free baskets; Shift: just one)
+      const free = G.baskets.map((b, i) => i).filter(i => G.baskets[i].t < 0 && !G.flying.some(f => f.d.kind === 'nest' && f.j === i));
+      if (!free.length) return say('Every basket is busy. Tip the READY noodles into a bowl first.');
+      const cooking = G.baskets.filter(b => b.t >= 0).length + G.flying.filter(f => f.d.kind === 'nest' || f.d.kind === 'basket').length + G.ice;
+      const done = G.bowls.filter(b => b.s >= 3).length + G.pass.length;
+      const want = single ? 1 : clamp(G.slips.length - done - cooking, 1, Math.max(1, Math.min(free.length, G.stock.noodle)));
+      free.slice(0, want).forEach((j, q) => G.flying.push({ d: { kind: 'nest' }, j, from: fromPos(d), to: [K(KL.basketX[j]), KL.BOIL.cy - 10], t: -q * 0.12, dur: 0.3 }));
+      SFX.pick();
       return;
     }
     if (d.kind === 'chill') return chillReady();   // the ice bath with nothing in it: chill the oldest READY basket
     const k = targetBowl(d), b = G.bowls[k];
-    if (!accepts(b, d)) return addTo(b, k, d);   // not possible: addTo explains why (and changes nothing)
+    if (!acceptsLater(k, d)) return accepts(b, d) ? say('That is already on its way to the bowl.') : addTo(b, k, d);   // not possible: addTo explains why (and changes nothing)
+    if (hasActive() && k !== G.activeBowl && (d.kind === 'tare' || d.kind === 'broth')) G.activeBowl = k;   // moving on to the next bowl to prep
     let n = 1;
     if (d.kind === 'top' && !single) {   // a double portion in one click, when the order (or every recipe on this base) asks for two
-      const want = wantOf(b, d.id), have = b.items.filter(x => x === d.id).length;
+      const want = wantOf(b, d.id), have = shadow(k).items.filter(x => x === d.id).length;
       if (want === 2) n = Math.max(1, 2 - have);
     }
     if (d.kind === 'basket') { d.t0 = G.baskets[d.j].t; G.baskets[d.j].t = -1; }   // the basket tips out now; the noodles are in the air
@@ -528,6 +625,7 @@
   }
   function land(f) {
     const d = f.d;
+    if (d.kind === 'swapfly') return;   // (just the look of a swap: the pantry item flying to its bin or burner)
     if (d.kind === 'nest') return nestInto(f.j);
     if (d.kind === 'chillfly') { G.baskets[d.j].t = d.t0; return chill(d.j); }
     const b = G.bowls[f.k];
@@ -536,22 +634,117 @@
     if (d.kind === 'basket') G.baskets[d.j].t = d.t0;   // (addTo empties it again as the noodles land)
     addTo(b, f.k, d);
     if (d.kind === 'top' && b.itemT) b.itemT[b.items.length - 1] = G.t - 0.3;   // it arrived by air: just the little bounce
+    if (!bowlOnScreen(f.k)) G.miniPop = G.t;   // the bowl's picture in the corner gives a little hop
   }
   function updateFlying(dt) {
     for (const fl of G.flying) { fl.t += dt; if (fl.t >= fl.dur && !fl.done) { fl.done = true; land(fl); } }
     G.flying = G.flying.filter(fl => !fl.done);
   }
   function drawFlying(g) {
+    // (an end off screen is pulled in to the screen edge, towards it: an item for an off-screen bowl flies to the edge in
+    // the bowl's direction and fades out there; one from off screen, like the Noodle Runner's, comes in from the edge)
+    const lo = G.cam + 18, hi = G.cam + VW - 18;
     for (const fl of G.flying) {
       if (fl.t < 0) continue;
-      const p = Math.min(1, fl.t / fl.dur), x = Math.round(fl.from[0] + (fl.to[0] - fl.from[0]) * p), y = Math.round(fl.from[1] + (fl.to[1] - fl.from[1]) * p - Math.sin(p * Math.PI) * 60), d = fl.d;
-      if (d.kind === 'top') ART.top(g, d.id, x, y, 0.9);
+      const fx = clamp(fl.from[0], lo, hi), tx = clamp(fl.to[0], lo, hi), off = tx !== fl.to[0];
+      const p = Math.min(1, fl.t / fl.dur), x = Math.round(fx + (tx - fx) * p), y = Math.round(fl.from[1] + (fl.to[1] - fl.from[1]) * p - Math.sin(p * Math.PI) * 60), d = fl.d;
+      g.globalAlpha = off && p > 0.65 ? Math.max(0, (1 - p) / 0.35) : 1;
+      if (d.kind === 'swapfly') { if (d.broth) { const b = BROTHS[d.id]; PX.ell(g, x, y, 8, 5, PX.OUTLINE); PX.ell(g, x, y, 7, 4, b.c); PX.rect(g, x - 3, y - 2, 3, 1, b.light); } else ART.top(g, d.id, x, y, 0.8); }
+      else if (d.kind === 'top') ART.top(g, d.id, x, y, 0.9);
       else if (d.kind === 'tare') { PX.ell(g, x, y, 5, 4, PX.OUTLINE); PX.ell(g, x, y, 4, 3, TARES[d.type].c); }
       else if (d.kind === 'broth') { const c = BROTHS[d.type].c; PX.ell(g, x, y, 6, 4, PX.OUTLINE); PX.ell(g, x, y, 5, 3, c); PX.rect(g, x - 7, y + 4, 2, 2, c); PX.rect(g, x + 6, y + 3, 2, 2, c); }
       else if (d.kind === 'oil') { PX.ell(g, x, y, 5, 4, PX.OUTLINE); PX.ell(g, x, y, 4, 3, '#d8402a'); PX.rect(g, x - 1, y - 2, 2, 1, '#ff9a6a'); }
       else if (d.kind === 'cold') { ART.top(g, 'noodle', x, y, 0.8); PX.rect(g, x - 9, y - 6, 4, 4, '#e8fbff'); PX.rect(g, x + 6, y - 2, 3, 3, '#c8eefc'); }
       else ART.top(g, 'noodle', x, y, 0.8);
     }
+    g.globalAlpha = 1;
+  }
+
+  /* ---------- trips saved: the Pass Bell and the Noodle Runner (road upgrades), and a softer ding ---------- */
+  function sendToPass(k) {
+    const b = G.bowls[k];
+    if (!b || b.s < 3) return say('Only a finished bowl goes to the pass.');
+    if (G.pass.length >= MAX_PASS) return say('The tray is full. Serve a few bowls first.');
+    G.bowls[k] = newBowl(); if (G.activeBowl === k) G.activeBowl = null;
+    b.age = 0; G.pass.push(b); SFX.drop(); SFX.bell(); pop('ORDER UP', K(KL.PASS.x) + 80, KL.PASS.y + 150, '#b6e37a');
+  }
+  // Space (with the Pass Bell): the active bowl if it is finished, else the finished bowl that matches its order, else any
+  function bellBowl() {
+    let k = hasActive() && G.bowls[G.activeBowl].s >= 3 ? G.activeBowl : -1;
+    if (k < 0) k = G.bowls.findIndex(b => { if (b.s < 3) return false; const sl = slipFor(b); return !!sl && !orderDiff(b, sl.order).length; });
+    if (k < 0) k = G.bowls.findIndex(b => b.s >= 3);
+    if (k < 0) return say('No finished bowl to send to the pass yet.');
+    sendToPass(k);
+  }
+  // The Noodle Runner: a READY basket goes by itself into the active bowl (or another) once it has tare and broth.
+  // (Not into a cold ramen's bowl: those noodles go through the ice bath first.)
+  function runner() {
+    if (!gearOn('runner') || TUT.guiding()) return;
+    for (let j = 0; j < G.baskets.length; j++) {
+      const bk = G.baskets[j];
+      if (bk.t < cookTime() || (G.drag && G.drag.kind === 'basket' && G.drag.j === j)) continue;
+      const d = { kind: 'basket', j }, a = hasActive() ? G.activeBowl : null, ks = G.bowls.map((_, k) => k);
+      const k = (a === null ? ks : [a, ...ks.filter(x => x !== a)]).find(k => { const sh = shadow(k); return sh.s === 2 && accepts(sh, d) && !baseRecipes(sh).every(r => MENU[r].cold); });
+      if (k === undefined) continue;
+      d.t0 = bk.t; bk.t = -1;
+      G.flying.push({ d, k, from: fromPos(d), to: [K(KL.bowlX[k]), KL.BOWL_Y - 4], t: 0, dur: 0.45 }); SFX.pick();
+      return;   // one at a time
+    }
+  }
+  const softDing = () => { tone(1320, 0.14, 'sine', 0.04); tone(1760, 0.22, 'sine', 0.03, 0, 0.09); };
+  // a broth on the stove running low (3 or fewer ladles): remembered when it dipped, for its alert
+  function lowBroth() {
+    const L = G.lowSeen = G.lowSeen || {};
+    for (const k of burners()) { if (!k || !brothOn(k)) continue; const n = G.stock[brothKey(k)] || 0; if (n <= 3 && L[k] === undefined) L[k] = G.t; else if (n > 3) delete L[k]; }
+  }
+
+  /* ---------- off-screen alerts: small arrow tags in the tab-bar band, pointing at what needs you ----------
+     Noodles ready (to the boiler), a new order (a guest calling, back in the serving room), a bowl waiting at the pass,
+     a broth running low (to the stove). Each shows only while its place is off screen; a click jumps there. (Ready
+     noodles never overcook, so the noodles tag pulses at one gentle pace.) */
+  const LOW_ALERT = 10;
+  function alertsNow() {
+    const out = [];
+    if (G.mode !== 'play' || G.where || G.ui || TUT.guiding()) return out;
+    const inK = inKitchen(), off = (x0, x1) => !inK || x0 < G.cam || x1 > G.cam + VW, side = wx => (!inK ? 1 : wx < G.cam ? -1 : 1);
+    if (G.baskets.some((b, j) => b.t >= cookTime() && !(G.drag && G.drag.kind === 'basket' && G.drag.j === j)) && off(K(KL.BOIL.cx - KL.BOIL.rx), K(KL.BOIL.cx + KL.BOIL.rx)))
+      out.push({ id: 'noodles', side: side(K(KL.BOIL.cx)), text: 'Noodles ready', go: () => goKitchen('boiler') });
+    if (!inK) return out;
+    const call = G.stalls.findIndex(st => st.guest && st.guest.state === 'call');
+    if (call >= 0) out.push({ id: 'order', side: -1, text: 'New order', go: () => { G.scam = clamp(SL.X0 + SL.stallCX(call) - VW / 2, STATIONS[0].cam, STATIONS[0].camMax); go(0); slide(); } });
+    if (G.pass.length && off(K(KL.PASS.x), K(KL.PASS.x + KL.PASS.w))) out.push({ id: 'pass', side: -1, text: 'Order up', go: () => goKitchen('pass') });
+    const low = burners().find(k => k && G.lowSeen && G.lowSeen[k] !== undefined && G.t - G.lowSeen[k] < LOW_ALERT);
+    const p0 = K(KL.pot(0).cx - 34), p1 = K(KL.pot(BURNERS - 1).cx + 34);
+    if (low && off(p0, p1)) out.push({ id: 'broth', side: side((p0 + p1) / 2), text: BROTHS[low].short.charAt(0) + BROTHS[low].short.slice(1).toLowerCase() + ' broth low', go: () => goKitchen('home') });
+    return out;
+  }
+  function showAlerts() {
+    const al = alertsNow(), key = al.map(a => a.id + a.side + a.text).join('|');
+    G.alertList = al;
+    if (key === G.alertKey) return;
+    G.alertKey = key;
+    for (const sd of [-1, 1]) $(sd < 0 ? 'alerts-l' : 'alerts-r').innerHTML = al.filter(a => a.side === sd).map(a =>
+      '<button type="button" class="alert a-' + a.id + '" data-a="' + a.id + '" title="Go there">' + (sd < 0 ? '<i class="al-arrow l"></i>' : '') + a.text + (sd > 0 ? '<i class="al-arrow r"></i>' : '') + '</button>').join('');
+  }
+  $('bar').addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b || G.ui) return; const a = (G.alertList || []).find(o => o.id === b.dataset.a); if (a) { SFX.tap(); G.pantry = null; G.swapPick = null; a.go(); } });
+
+  /* ---------- the dev counter (?dev=1): camera moves per bowl served ----------
+     A move is the camera settling more than 120px from where it last settled, inside the kitchen (walking between the
+     serving room and the kitchen counts as a trip instead). Shown at the top left, and printed on the day's receipt. */
+  const DEV = params.has('dev') && params.get('dev') !== '0';
+  function devCam() {
+    if (G.camTw || Math.abs(G.cam - camTarget()) > 1) return;   // still moving
+    const c = Math.round(G.cam), inK = v => v >= KL.X0 - 1;
+    if (G.devLast === undefined) { G.devLast = c; return; }
+    if (Math.abs(c - G.devLast) < 120) return;
+    if (inK(c) && inK(G.devLast)) G.stats.camMoves = (G.stats.camMoves || 0) + 1;
+    else if (inK(c) !== inK(G.devLast)) G.stats.trips = (G.stats.trips || 0) + 1;
+    G.devLast = c;
+  }
+  function drawDev(g) {
+    if (!DEV || G.mode !== 'play') return;
+    const s = G.stats, n = s.camMoves || 0, txt = 'DEV  CAM MOVES ' + n + '  BOWLS ' + s.served + '  PER BOWL ' + (s.served ? (n / s.served).toFixed(2) : '-') + '  TRIPS ' + (s.trips || 0);
+    PX.setFont(1); const w = PX.textW(txt) + 8; PX.rect(g, 6, 46, w, 12, 'rgba(20,10,20,0.75)'); PX.text(g, txt, 10, 48, '#b6e37a'); PX.setFont(2);
   }
   // Little icons over a bowl for the special steps still to do (no words): an oil cruet, a torch, a knife; and while a
   // hold step runs, a bar with its sweet spot.
@@ -645,6 +838,181 @@
     if (TUT.guiding()) { SFX.tap(); return say(d.kind === 'nest' ? 'Drag a nest from the tray into an empty basket.' : d.kind === 'basket' ? 'Drag the basket over to the bowl.' : 'Drag it into the bowl, chef.'); }
     clickAdd(d, single);
   }
+
+  /* ---------- the line (data.js: G.load): what is on the rack and the burners today, and the pantry ----------
+     Before opening (the morning, or the prep time after 04:00) the "Prep the line" panel chooses it; left on auto it is
+     refilled for the menu each day. Mid-shift, the pantry shelf by the rack swaps one thing in (about two seconds). */
+  const canPrep = () => G.mode === 'play' && (G.shop === 'morning' || (G.shop === 'night' && !lateOpen()));
+  function refreshLoad() { G.load = fixLoad(G.load); G.swaps = []; G.swapPick = null; KITCHEN.refresh(); }   // (auto: refilled for today's menu)
+  // What an order needs that is not on the line right now (printed in red on its slip): toppings, then the broth.
+  function slipMiss(order) {
+    if (!order || !MENU[order.type]) return [];
+    const out = TOPS.filter(id => (order.tops[id] || 0) > 0 && !onLine(id)).map(id => TOP_SHORT[id]);
+    const b = MENU[order.type].broth; if (burnerOf(b) < 0) out.push(BROTHS[b].short);
+    return out;
+  }
+  // Everything the open orders need that is waiting in the pantry (ids; a broth as 'broth.<kind>').
+  function pantryNeeds() {
+    const s = new Set();
+    for (const o of G.slips) {
+      if (!o.order || !MENU[o.order.type]) continue;
+      for (const id in o.order.tops) if (o.order.tops[id] > 0 && !onLine(id) && topOn(id)) s.add(id);
+      const b = MENU[o.order.type].broth; if (burnerOf(b) < 0 && brothOn(b)) s.add(brothKey(b));
+    }
+    return s;
+  }
+  // The pantry's contents: unlocked toppings off the rack, then unlocked broths off the burners (not ones on their way in).
+  function pantryItems() {
+    const coming = id => G.swaps.some(s => s.to === id);
+    return [...TOPS.filter(id => topOn(id) && !rackTops().includes(id) && !coming(id)).map(id => ({ kind: 'top', id })),
+      ...BROTH_SLOTS.filter(k => brothOn(k) && !burners().includes(k) && !coming(k)).map(id => ({ kind: 'broth', id }))];
+  }
+  const PAN = { cols: 4, cw: 66, ch: 44 };
+  function openPantry() {
+    const need = pantryNeeds(), items = pantryItems().sort((a, b) => need.has(b.kind === 'top' ? b.id : brothKey(b.id)) - need.has(a.kind === 'top' ? a.id : brothKey(a.id)));
+    if (!items.length) return say('Everything you have is already on the line. Kitsune-ya sells new things as the road unlocks them.');
+    const rows = Math.ceil(items.length / PAN.cols), w = PAN.cols * PAN.cw + 12, h = 30 + rows * PAN.ch + 6;
+    const px = K(KL.PANTRY.x) - G.cam, x = px + KL.PANTRY.w + 10 + w <= VW - 8 ? px + KL.PANTRY.w + 10 : px - w - 10;
+    G.pantry = { items, need, x: clamp(Math.round(x), 8, VW - w - 8), y: clamp(KL.PANTRY.y - 60, KL.TOP + 4, KL.BOTTOM - h - 4), w, h };
+    G.drag = null; G.dragBowl = null; G.swapPick = null; SFX.paper();
+  }
+  const pantryCell = (m, p) => { if (!p) return -1; const c = Math.floor((p.x - m.x - 6) / PAN.cw), r = Math.floor((p.y - m.y - 30) / PAN.ch), i = r * PAN.cols + c; return c >= 0 && c < PAN.cols && r >= 0 && p.y >= m.y + 30 && i < m.items.length ? i : -1; };
+  // A pantry item chosen: straight into an empty bin (or a burner with no broth of its own yet), else pick which to swap out.
+  function pickPantry(it) {
+    G.pantry = null;
+    const slots = it.kind === 'top' ? rackTops() : burners();
+    const free = slots.findIndex((v, k) => (!v || (it.kind === 'broth' && !brothOn(v))) && !swapping(it.kind, k));
+    if (free >= 0) return startSwap(it.kind, free, it.id);
+    G.swapPick = it; SFX.tap();
+  }
+  const SWAP_TIME = 2;
+  function startSwap(kind, slot, id) {
+    if (swapping(kind, slot)) return say('That one is already being swapped.');
+    const from = (kind === 'top' ? rackTops() : burners())[slot];
+    G.swaps.push({ kind, slot, from, to: id, t: 0, dur: SWAP_TIME }); G.swapPick = null;
+    const to = kind === 'top' ? KL.bin(slot) : null, p = kind === 'broth' ? KL.pot(slot) : null;
+    G.flying.push({ d: { kind: 'swapfly', id, broth: kind === 'broth' }, from: [K(KL.PANTRY.x + KL.PANTRY.w / 2), KL.PANTRY.y + 40], to: to ? [K(to.x + to.w / 2), to.y + 20] : [K(p.cx), p.cy - 8], t: 0, dur: 0.5 });
+    SFX.pick(); noise(0.12, 600, 0.12, 0.1);
+  }
+  function updateSwaps(dt) {
+    for (const s of G.swaps) {
+      s.t += dt;
+      if (s.t < s.dur || s.done) continue;
+      s.done = true; (s.kind === 'top' ? G.load.tops : G.load.broths)[s.slot] = s.to;
+      const at = s.kind === 'top' ? (b => [K(b.x + b.w / 2), b.y - 4])(KL.bin(s.slot)) : [K(KL.pot(s.slot).cx), KL.pot(s.slot).cy - 30];
+      pop(s.kind === 'top' ? TOP_SHORT[s.to] : BROTHS[s.to].short, at[0], at[1], '#b6e37a'); SFX.ding();
+      KITCHEN.refresh();   // (the menu board lists the extras on the rack)
+    }
+    G.swaps = G.swaps.filter(s => !s.done);
+  }
+  // Swap mode: the bins (or burners) a picked pantry item could replace.
+  const swapTargets = it => it.kind === 'top' ? rackTops().map((_, k) => k).filter(k => !swapping('top', k)).map(k => ({ r: binRect(k), slot: k }))
+    : burners().map((_, i) => i).filter(i => !swapping('broth', i)).map(i => ({ r: potRect(i), slot: i }));
+  function drawPantryMenu(g) {
+    const m = G.pantry; if (!m) return;
+    const R = PX.rect, hov = pantryCell(m, G.mouse);
+    R(g, m.x + 3, m.y + 3, m.w, m.h, 'rgba(40,20,10,0.3)');
+    R(g, m.x - 1, m.y - 1, m.w + 2, m.h + 2, PX.OUTLINE); R(g, m.x, m.y, m.w, m.h, '#fbf6ea'); R(g, m.x, m.y, m.w, 2, '#e8dcc0');
+    PX.setFont(1); PX.textC(g, 'SWAP IN FROM THE PANTRY', m.x + m.w / 2, m.y + 8, '#8a2a1a');
+    R(g, m.x + 8, m.y + 22, m.w - 16, 1, '#d8c4a0');
+    m.items.forEach((it, i) => {
+      const cx = m.x + 6 + (i % PAN.cols) * PAN.cw, cy = m.y + 30 + Math.floor(i / PAN.cols) * PAN.ch, need = m.need.has(it.kind === 'top' ? it.id : brothKey(it.id));
+      if (i === hov) R(g, cx + 1, cy, PAN.cw - 2, PAN.ch - 2, 'rgba(201,164,104,0.35)');
+      if (need) { R(g, cx + 1, cy, PAN.cw - 2, 1, '#c8302a'); R(g, cx + 1, cy + PAN.ch - 3, PAN.cw - 2, 1, '#c8302a'); R(g, cx + 1, cy, 1, PAN.ch - 2, '#c8302a'); R(g, cx + PAN.cw - 2, cy, 1, PAN.ch - 2, '#c8302a'); }
+      if (it.kind === 'top') ART.top(g, it.id, cx + PAN.cw / 2, cy + 15, 0.7);
+      else { const b = BROTHS[it.id]; PX.ell(g, cx + PAN.cw / 2, cy + 15, 13, 7, PX.OUTLINE); PX.ell(g, cx + PAN.cw / 2, cy + 15, 12, 6, PAL.copper); PX.ell(g, cx + PAN.cw / 2, cy + 14, 9, 4, b.c); PX.rect(g, cx + PAN.cw / 2 - 4, cy + 12, 3, 1, b.light); }
+      const name = it.kind === 'top' ? binName(it.id) : BROTHS[it.id].short;
+      PX.textC(g, name, cx + PAN.cw / 2, cy + 30, need ? '#c8302a' : '#4a3226');
+    });
+    PX.setFont(2);
+  }
+
+  /* The "Prep the line" panel (HTML): drag a topping onto a rack slot (or a slot onto another to swap them, or back to
+     the pantry to empty it), the same for the burners. A click picks something up and a second click puts it down. */
+  const PREP = { sel: null, drag: null };
+  const brothImg = k => img(26, 26, g => { const b = BROTHS[k]; PX.ell(g, 13, 14, 12, 8, PX.OUTLINE); PX.ell(g, 13, 14, 11, 7, PAL.copper); PX.ell(g, 13, 13, 8, 4, b.c); PX.rect(g, 9, 11, 3, 1, b.light); });
+  function buildPrep() {
+    const L = G.load, needT = new Set(menuTops(G.menu)), needB = new Set(G.menu.filter(k => MENU[k]).map(k => MENU[k].broth));
+    const sel = PREP.sel, isSel = (kind, id, slot) => !!sel && sel.kind === kind && sel.id === id && sel.slot === slot;
+    const slot = (kind, k, id) => {
+      const real = id && (kind === 'top' ? topOn(id) : brothOn(id)), need = real && (kind === 'top' ? needT : needB).has(id);
+      const inner = !id ? '<span class="pp-name">EMPTY</span>' : !real ? `<span class="pp-ico pp-lock"></span><span class="pp-name">SOON</span>`
+        : `${kind === 'top' ? topImg(id) : brothImg(id)}<span class="pp-name">${kind === 'top' ? binName(id) : BROTHS[id].short}</span>`;
+      return `<button type="button" class="pp-slot${!real ? ' empty' : ''}${need ? ' need' : ''}${isSel(kind, real ? id : null, k) ? ' sel' : ''}" data-kind="${kind}" data-slot="${k}" data-id="${real ? id : ''}" title="${real ? (kind === 'top' ? TOP_NAME[id] : BROTHS[id].name) : 'Empty'}">${kind === 'top' && k < 9 ? `<i class="pp-key">${k + 1}</i>` : ''}${inner}</button>`;
+    };
+    const items = pantryItems(), item = it => { const need = (it.kind === 'top' ? needT : needB).has(it.id);
+      return `<button type="button" class="pp-item${need ? ' need' : ''}${isSel(it.kind, it.id, -1) ? ' sel' : ''}" data-kind="${it.kind}" data-id="${it.id}" title="${it.kind === 'top' ? TOP_NAME[it.id] : BROTHS[it.id].name}${need ? ' (on today\'s menu)' : ''}">${it.kind === 'top' ? topImg(it.id) : brothImg(it.id)}<span class="pp-name">${it.kind === 'top' ? TOP_SHORT[it.id] : BROTHS[it.id].short}</span></button>`; };
+    const missT = [...needT].filter(id => topOn(id) && !L.tops.includes(id)), missB = [...needB].filter(k => brothOn(k) && !L.broths.includes(k));
+    const miss = missT.length + missB.length;
+    $('prep-body').innerHTML = `<h2>Prep the line</h2>
+      <p class="note">Choose what is out in the kitchen today: drag toppings onto the rack and broths onto the burners (or click one, then a slot). Everything else waits in the pantry by the rack.</p>
+      <div class="pp-cols">
+        <div class="pp-line">
+          <h4>Topping rack <small class="mn-count">${L.tops.filter(Boolean).length} / ${RACK}</small></h4>
+          <div class="pp-rack">${L.tops.map((id, k) => slot('top', k, id)).join('')}</div>
+          <h4>Burners <small class="mn-count">${L.broths.filter(k => k && brothOn(k)).length} / ${BURNERS}</small></h4>
+          <div class="pp-burners">${L.broths.map((id, k) => slot('broth', k, id)).join('')}</div>
+        </div>
+        <div class="pp-pantry" data-drop="pantry">
+          <h4>Pantry</h4>
+          <div class="pp-items">${items.length ? items.map(item).join('') : '<p class="note">Empty: everything is on the line.</p>'}</div>
+        </div>
+      </div>
+      <p class="note pp-foot${miss ? ' warn' : ''}">${miss ? `${miss} thing${miss > 1 ? 's' : ''} on today's menu ${miss > 1 ? 'are' : 'is'} in the pantry (red). Orders that need ${miss > 1 ? 'them' : 'it'} show it in red; swap ${miss > 1 ? 'them' : 'it'} in from the pantry shelf mid-shift.` : 'Everything on today\'s menu is on the line.'}${L.auto ? ' Filled in for today\'s menu.' : ''}</p>`;
+  }
+  function prepPut(src, kind, k) {   // put src ({ kind, id, slot }) into slot k of that kind
+    if (!src || src.kind !== kind) { SFX.bad(); return say(kind === 'top' ? 'Only toppings go on the rack.' : 'Only broths go on the burners.'); }
+    const arr = kind === 'top' ? G.load.tops : G.load.broths;
+    if (src.slot >= 0) [arr[src.slot], arr[k]] = [arr[k], arr[src.slot]]; else arr[k] = src.id;
+    G.load.auto = false; PREP.sel = null; SFX.drop(); KITCHEN.refresh(); buildPrep();
+  }
+  function prepEmpty(src) {   // a slot's topping or broth back to the pantry
+    (src.kind === 'top' ? G.load.tops : G.load.broths)[src.slot] = null;
+    G.load.auto = false; PREP.sel = null; SFX.paper(); KITCHEN.refresh(); buildPrep();
+  }
+  const prepSrc = el => ({ kind: el.dataset.kind, id: el.dataset.id || null, slot: el.classList.contains('pp-slot') ? +el.dataset.slot : -1 });
+  function prepClick(el) {
+    const s = prepSrc(el), sel = PREP.sel;
+    if (sel && sel.kind === s.kind && sel.id === s.id && sel.slot === s.slot) { PREP.sel = null; SFX.tap(); return buildPrep(); }   // the same again: put it back
+    if (sel && s.slot >= 0) return prepPut(sel, s.kind, s.slot);                         // something held, a slot clicked: it goes there
+    if (sel && sel.slot >= 0 && s.slot < 0 && s.kind === sel.kind) return prepPut(s, sel.kind, sel.slot);   // a slot held, a pantry item clicked: that item replaces it
+    if (!s.id) { SFX.tap(); return; }
+    PREP.sel = s; SFX.tap(); buildPrep();
+  }
+  function openPrep() {
+    if (!canPrep()) return say('The line is set before opening. Mid-shift, the pantry swaps one thing in at a time.');
+    PREP.sel = null; G.pantry = null; G.swapPick = null; openUI('prep');
+  }
+  $('prep-body').addEventListener('pointerdown', e => {
+    const el = e.target.closest('.pp-slot, .pp-item'); if (!el) return;
+    e.preventDefault();
+    PREP.drag = { el, src: prepSrc(el), x: e.clientX, y: e.clientY, moved: false, ghost: null };
+    try { el.setPointerCapture(e.pointerId); } catch (err) { /* not supported */ }
+  });
+  $('prep-body').addEventListener('pointermove', e => {
+    const d = PREP.drag; if (!d) return;
+    if (!d.moved && d.src.id && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) {
+      d.moved = true; d.ghost = d.el.cloneNode(true); d.ghost.classList.add('pp-ghost'); d.ghost.classList.remove('sel');
+      const r = d.el.getBoundingClientRect(); d.ghost.style.width = r.width + 'px'; d.ghost.style.height = r.height + 'px'; d.ox = e.clientX - r.left; d.oy = e.clientY - r.top;
+      document.body.appendChild(d.ghost); d.el.classList.add('pp-lift'); SFX.pick();
+    }
+    if (d.ghost) { d.ghost.style.left = (e.clientX - d.ox) + 'px'; d.ghost.style.top = (e.clientY - d.oy) + 'px'; }
+  });
+  const prepUp = e => {
+    const d = PREP.drag; if (!d) return; PREP.drag = null;
+    if (d.ghost) { d.ghost.remove(); d.el.classList.remove('pp-lift'); }
+    if (!d.moved) return prepClick(d.el);
+    const under = document.elementFromPoint(e.clientX, e.clientY), slot = under && under.closest('#prep .pp-slot'), pantry = under && under.closest('#prep .pp-pantry');
+    if (slot) return prepPut(d.src, slot.dataset.kind, +slot.dataset.slot);
+    if (pantry && d.src.slot >= 0) return prepEmpty(d.src);
+    buildPrep();
+  };
+  $('prep-body').addEventListener('pointerup', prepUp);
+  $('prep-body').addEventListener('pointercancel', () => { const d = PREP.drag; PREP.drag = null; if (d && d.ghost) { d.ghost.remove(); d.el.classList.remove('pp-lift'); } });
+  $('prep-reset').onclick = () => { G.load = defaultLoad(); PREP.sel = null; SFX.tap(); KITCHEN.refresh(); buildPrep(); };
+  $('kprep').onclick = () => { if (!G.ui && G.mode === 'play') openPrep(); };
+  document.querySelectorAll('#kst [data-k]').forEach(b => { b.onclick = () => { if (G.ui || G.mode !== 'play' || G.where) return; G.pantry = null; goKitchen(b.dataset.k); }; });
+  $('minibowl').onclick = () => { if (!G.ui && G.mode === 'play') goKitchen('home'); };
 
   /* ---------- what a bowl is: which ramen it makes, and how it differs from that recipe or an order ---------- */
   const recipesFor = (tare, broth) => Object.keys(MENU).filter(k => MENU[k].tare === tare && MENU[k].broth === broth && menuOn(k));
@@ -740,7 +1108,7 @@
   function fixMenu() {
     const known = Object.keys(MENU).filter(menuOn);
     G.menu = (G.menu || []).filter((k, i, a) => MENU[k] && menuOn(k) && a.indexOf(k) === i).slice(0, menuSlots());
-    while (G.menu.length > 1 && menuTops(G.menu).length > RACK) G.menu.pop();   // (older saves) the toppings must fit the rack
+    while (G.menu.length > 1 && menuTops(G.menu).length > MENU_TOPS) G.menu.pop();   // (older saves) no more toppings than the old rack held
     if (!G.menu.length) G.menu = [known.includes('miso') ? 'miso' : known[0]];
     if (!G.menu.includes(G.pick)) G.pick = G.menu[0];
   }
@@ -755,7 +1123,9 @@
     for (let i = 0; i < n; i++) { r -= w[i]; if (r <= 0) return G.menu[i]; }
     return G.menu[n - 1];
   }
-  function menuChanged() { fixMenu(); KITCHEN.refresh(); }   // the kitchen's menu board is part of its cached wall
+  // the kitchen's menu board is part of its cached wall; a changed menu puts the line back on auto (refilled for it now,
+  // if the shop is not open; mid-shift the pantry swaps things in)
+  function menuChanged() { fixMenu(); if (G.load) G.load.auto = true; if (G.load && G.shop !== 'open' && !lateOpen()) refreshLoad(); KITCHEN.refresh(); }
   function makeOrder(gt, type) {
     const t = gt.taste;
     type = type || (t.pref && G.menu.includes(t.pref) && orderable(t.pref) && Math.random() < 0.6 ? t.pref : menuPick());
@@ -1100,24 +1470,25 @@
     const row = (k, i) => { const m = MENU[k], pk = k === G.pick;
       return `<li class="mn-row${pk ? ' pick' : ''}"><span class="mn-num">${i + 1}</span>${fig(k)}<span class="mn-dish"><b style="color:${m.c}">${m.name}</b><small>${tops(m)}</small></span><span class="price">${m.price}G</span>
         ${btn('pick', k, '&#9733;', pk ? 'The chef\'s pick' : 'Make this the chef\'s pick', false)}${btn('up', k, '&#9650;', 'Move up', i === 0)}${btn('down', k, '&#9660;', 'Move down', i === G.menu.length - 1)}${btn('del', k, 'Remove', last ? 'The menu needs at least one dish' : 'Take it off the menu', last)}</li>`; };
-    // a dish fits only if the topping rack can hold every topping the menu would then need
-    const rackFull = k => menuTops(G.menu.concat(k)).length > RACK;
+    // a dish fits only if the menu would need no more than MENU_TOPS different toppings (the line holds RACK of them;
+    // the rest wait in the pantry)
+    const rackFull = k => menuTops(G.menu.concat(k)).length > MENU_TOPS;
     const spare = k => { const m = MENU[k], noRoom = !full && rackFull(k);
-      return `<li class="mn-row spare">${fig(k)}<span class="mn-dish"><b style="color:${m.c}">${m.name}</b><small>${tops(m)}</small></span><span class="price">${m.price}G</span>${btn('add', k, 'Add', full ? 'The menu is full: remove a dish first' : noRoom ? 'The topping rack is full (' + RACK + ' bins): remove a dish first' : 'Put it on the menu', full || noRoom)}</li>`; };
+      return `<li class="mn-row spare">${fig(k)}<span class="mn-dish"><b style="color:${m.c}">${m.name}</b><small>${tops(m)}</small></span><span class="price">${m.price}G</span>${btn('add', k, 'Add', full ? 'The menu is full: remove a dish first' : noRoom ? 'Too many different toppings (' + MENU_TOPS + ' at most): remove a dish first' : 'Put it on the menu', full || noRoom)}</li>`; };
     $('menu-body').innerHTML = `<h2>Menu <small class="mn-count${full ? ' full' : ''}">${G.menu.length} / ${slots}</small></h2>
       <p class="note">The shop sells these. Dishes near the top are ordered a little more often; the &#9733; dish is what you recommend.</p>
       <ol class="mn-list">${G.menu.map(row).join('')}</ol>
       <h4>Recipes you know${known.length ? '' : ': all on the menu'}</h4>
       ${known.length ? `<ul class="mn-list">${known.map(spare).join('')}</ul>` : ''}
       ${locked ? `<p class="note">${locked} more recipe${locked > 1 ? 's' : ''} to discover on the ${ROAD_NAME}.${slots < MENU_BASE + 2 ? ' Menu board upgrades there add slots.' : ''}</p>` : ''}
-      <h4>Extra toppings <small class="mn-count">rack ${menuTops(G.menu).length} / ${RACK}</small></h4>
-      <p class="note">A guest who asks for more of a topping pays for each extra portion. What a recipe already has is in its price.</p>
-      <div class="tops extras">${rackTops().filter(topOn).map(id => `<span>${topImg(id)}${TOP_NAME[id]} <b class="price">+${extraPrice(id)}G</b></span>`).join('')}</div>`;
+      <h4>Extra toppings <small class="mn-count">menu uses ${menuTops(G.menu).length} &middot; rack ${RACK}</small></h4>
+      <p class="note">A guest who asks for more of a topping pays for each extra portion (only for toppings on the rack). What a recipe already has is in its price.${menuTops(G.menu).length > RACK ? ' The menu needs more toppings than the rack holds: the rest wait in the pantry.' : ''}</p>
+      <div class="tops extras">${rackList().filter(topOn).map(id => `<span>${topImg(id)}${TOP_NAME[id]} <b class="price">+${extraPrice(id)}G</b></span>`).join('')}</div>`;
   }
   $('menu-body').addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
     const k = b.dataset.k, i = G.menu.indexOf(k), act = b.dataset.act;
-    if (act === 'add' && i < 0 && G.menu.length < menuSlots() && menuTops(G.menu.concat(k)).length <= RACK) G.menu.push(k);
+    if (act === 'add' && i < 0 && G.menu.length < menuSlots() && menuTops(G.menu.concat(k)).length <= MENU_TOPS) G.menu.push(k);
     else if (act === 'del' && i >= 0 && G.menu.length > 1) G.menu.splice(i, 1);
     else if (act === 'up' && i > 0) [G.menu[i - 1], G.menu[i]] = [G.menu[i], G.menu[i - 1]];
     else if (act === 'down' && i >= 0 && i < G.menu.length - 1) [G.menu[i + 1], G.menu[i]] = [G.menu[i], G.menu[i + 1]];
@@ -1164,15 +1535,16 @@
   }
   function openUI(id, how) {
     if (BOOKS[id]) return openBook(id, how);
-    if (id === 'menu') buildMenu(); else if (id === 'road') { unlockReached(); JOURNEY.open(); }
+    if (id === 'menu') buildMenu(); else if (id === 'road') { unlockReached(); JOURNEY.open(); } else if (id === 'prep') buildPrep();
     $(id).classList.add('show'); G.ui = id; G.drag = null; G.dragBowl = null; SFX.tap();
   }
   function closeUI() {
     if (BOOKS[G.ui]) return closeBook(G.ui);
-    if (G.ui === 'menu' || G.ui === 'road') { if (G.ui === 'road') JOURNEY.close(); $(G.ui).classList.remove('show'); G.ui = null; SFX.tap(); }
+    if (G.ui === 'menu' || G.ui === 'road' || G.ui === 'prep') { if (G.ui === 'road') JOURNEY.close(); if (G.ui === 'prep') PREP.sel = null; $(G.ui).classList.remove('show'); G.ui = null; SFX.tap(); }
   }
   $('menu-close').onclick = closeUI;
-  for (const id of ['menu', 'road']) $(id).addEventListener('pointerdown', e => { if (e.target.id === id) closeUI(); });
+  $('prep-close').onclick = closeUI;
+  for (const id of ['menu', 'road', 'prep']) $(id).addEventListener('pointerdown', e => { if (e.target.id === id) closeUI(); });
   $('btn-menu').onclick = () => { if (!G.ui) openUI('menu'); };
   $('btn-book').onclick = () => { if (!G.ui) openUI('book'); };
   $('btn-guests').onclick = () => { if (!G.ui) openUI('guests'); };
@@ -1191,7 +1563,7 @@
     // 'morning': the start of the next morning (09:00, sign still CLOSED). 'night': 21:00, closing time.
     if (cheatBuf.endsWith('morning')) {
       if (muteBefore !== null && muted !== muteBefore) $('mute').click();   // undo the M that started the word
-      if (G.shop !== 'morning') { finishDay(); G.day++; G.shop = 'morning'; G.signWas = 'morning'; G.signT = G.t; G.waiting = 0; saveGame(G.day); }
+      if (G.shop !== 'morning') { finishDay(); G.day++; G.shop = 'morning'; G.signWas = 'morning'; G.signT = G.t; G.waiting = 0; refreshLoad(); saveGame(G.day); }
       G.time = 0; updateClock(0); SFX.bell(); toast('Cheat: Day ' + G.day + ', 09:00. Flip the sign when you are ready to open.'); cheatBuf = ''; return true;
     }
     if (cheatBuf.endsWith('night')) {
@@ -1293,7 +1665,7 @@
     let note = n.kind === 'upgrade' ? n.name + ' on sale at Kitsune-ya' : n.kind === 'recipe' ? '' : n.place + (n.gold ? ' (+' + n.gold + 'G)' : '');
     if (n.kind === 'recipe') {   // a new recipe goes straight onto the menu if there is a free slot; otherwise the player picks
       fixMenu();
-      if (G.menu.length < menuSlots() && !G.menu.includes(n.menu) && menuTops(G.menu.concat(n.menu)).length <= RACK) { G.menu.push(n.menu); note = n.name + ' is on the menu'; }
+      if (G.menu.length < menuSlots() && !G.menu.includes(n.menu) && menuTops(G.menu.concat(n.menu)).length <= MENU_TOPS) { G.menu.push(n.menu); note = n.name + ' is on the menu'; }
       else note = n.name + ' learned (the menu is full: swap it in at the menu board)';
       menuChanged();
     }
@@ -1331,7 +1703,7 @@
     try { localStorage.setItem('cozyramen.questMin', min ? '1' : '0'); } catch (e) { /* storage blocked: fine */ }
   }
   try { if (localStorage.getItem('cozyramen.questMin') === '1') setQuestMin(true); } catch (e) { /* storage blocked: start open */ }
-  $('quest-head').addEventListener('click', () => { setQuestMin(!$('quest').classList.contains('min')); SFX.tap(); });
+  $('quest-head').addEventListener('click', () => { const q = $('quest'); if (q.classList.contains('kit')) q.classList.toggle('peek'); else setQuestMin(!q.classList.contains('min')); SFX.tap(); });   // (in the kitchen it is folded into the tab-bar band: a tap peeks)
   $('quest').addEventListener('animationend', () => $('quest').classList.remove('ping'));
   const questText = q => q.k === 'served' ? `Serve ${q.n} guests` : q.k === 'sold' ? `Serve ${q.n} ${MENU[q.type].name}` : q.k === 'perfect' ? `Serve ${q.n} perfect bowls` : `Earn ${q.n}G today`;
   function updateQuest() {
@@ -1351,7 +1723,7 @@
     $('quest-fill').style.width = Math.round(100 * (q.done ? 1 : have / q.n)) + '%';
     $('quest').classList.toggle('done', q.done);
   }
-  CATS.init({ muted: () => muted, vol: () => SETTINGS.sfx / 10 });   // the cats' meows follow the sound settings
+  CATS.init({ muted: () => muted, vol: () => SETTINGS.sfx / 10, hiss: SFX.hiss });   // the cats' meows follow the sound settings
   NIGHTSHOP.init({
     sfx: SFX, say, toast, img: IMG.aoi,
     save: () => saveGame(G.shop === 'night' ? G.day + 1 : G.day),
@@ -1386,19 +1758,24 @@
       sign: () => signRect, door: () => doorRect, seat: i => seatRect(i), drop: i => dropRect(i), coins: coinRect,
       ticket: i => SERVING.ticketRect(i),
       edge: side => ({ x: side < 0 ? 4 : VW - 44, y: VH / 2 - 24, w: 40, h: 44, screen: true }),   // the edge buttons (screen)
-      tare: type => tareRect(Math.max(0, TARE_SLOTS.indexOf(type))), pot: type => potRect(Math.max(0, BROTH_SLOTS.indexOf(type))),
+      tare: type => tareRect(Math.max(0, TARE_SLOTS.indexOf(type))), pot: type => potRect(Math.max(0, burners().indexOf(type))),
       noodle: () => noodleRect, basket: j => basketRect(j), bin: id => (binOf(id) >= 0 ? binRect(binOf(id)) : null), binAt: k => binRect(k),
       bowl: k => bowlRect(k), pass: () => passRect, tray: i => pickSlot(i), book: () => bookRect,
-      slip: gu => { const s = G.slips.find(o => o.guest === gu); return s && s.x !== undefined ? { x: s.x - 2, y: KL.SLIP_Y - 10, w: ART.SLIP_W + 4, h: ART.slipH(s.order) + 14, screen: true } : null; }   // an order slip on the kitchen rail (screen)
+      slip: gu => { const s = G.slips.find(o => o.guest === gu); return s && s.x !== undefined ? { ...slipBox(s), screen: true } : null; }   // an order slip on the kitchen rail (screen)
     },
     // the guided bowl begins: back to the serving room, a clean kitchen, and enough of each staple for the bowl (Aoi brought some)
     prep: () => {
       go(0); G.scam = STATIONS[0].cam; G.drag = null; G.dragBowl = null; G.rmMenu = null;
-      G.bowls = [newBowl(), newBowl()]; G.baskets.forEach(b => { b.t = -1; }); G.pass = []; G.activeBowl = null;
+      G.bowls = [newBowl(), newBowl()]; G.baskets.forEach(b => { b.t = -1; }); G.pass = []; G.activeBowl = null; G.pantry = null; G.swapPick = null;
       for (const id of ['noodle', tareKey('miso'), brothKey('pork'), 'chashu', 'egg', 'scallion']) G.stock[id] = Math.max(G.stock[id] || 0, 2);
+      // the guided bowl's miso, pork broth and toppings are on the line
+      if (burners().indexOf('pork') < 0 || ['chashu', 'egg', 'scallion'].some(id => !rackTops().includes(id))) { G.load.auto = true; refreshLoad(); }
     },
     after: () => { G.spawnT = rand(4, 8); },
     PHASE,
+    // the kitchen camera for a lesson step: shows what to pick up (and where it goes, when both fit on one screen);
+    // while something is being carried, it slides over to where it goes
+    kcam: (src, dst) => (G.drag && G.drag.press && G.drag.press.moved && dst ? kcamShow(dst) : kcamShow(src, dst)),
     domRect: sel => {   // an HTML control's box, in canvas coordinates (the HUD: Aoi points at it from below)
       const el = document.querySelector(sel); if (!el) return null;
       const r = canvas.getBoundingClientRect(), b = el.getBoundingClientRect(); if (!r.width) return null;
@@ -1410,8 +1787,9 @@
       NIGHTSHOP.closePanels(); G.where = null; G.receipt = null; if (G.ui === 'receipt') G.ui = null;
       G.stalls.forEach(st => { st.guest = null; st.left = 0; st.paid = false; st.bowl = null; st.blind = 1; st.holdUp = 0; });
       G.walkers = []; G.waiting = 0; G.slips = []; G.pass = []; G.flying = []; G.bowls = [newBowl(), newBowl()]; G.baskets.forEach(b => { b.t = -1; });
-      G.drag = null; G.dragBowl = null; G.rmMenu = null; G.activeBowl = null; G.ticketZoom = -1; G.tutGu = null; G.hold = null;
+      G.drag = null; G.dragBowl = null; G.rmMenu = null; G.activeBowl = null; G.ticketZoom = -1; G.tutGu = null; G.hold = null; G.pantry = null; G.swapPick = null;
       G.day = day; G.time = 0; G.shop = 'morning'; G.signWas = 'night'; G.signT = G.t; G.dayDone = false; G.lastCall = false; G.stats = newStats(); G.quest = null;
+      refreshLoad();
       G.tut.handover = false; G.tut.done = true; G.tut.step = null; delete G.tut.day0;   // (Aoi's last lines play over the morning; the save already counts as handed over)
       go(0); G.scam = STATIONS[0].cam; G.cam = camTarget(); updateClock(0);
       saveGame(day);
@@ -1423,6 +1801,7 @@
   function setShop(state) { G.signWas = G.shop; G.shop = state; G.signT = G.t; SFX.clack(); }
   function openShop() {
     if (G.shop === 'night') { finishDay(); G.day++; G.time = 0; }      // skipping the prep time (04:00-09:00) to the next opening
+    refreshLoad();   // the line for today: refilled for the menu (unless the player set it), the pantry has the rest
     saveGame(G.day);
     setShop('open'); G.stats = newStats(); G.dayDone = false; G.lastCall = false; G.spawnT = TUT.guiding() ? 1.5 : rand(4, 10); SFX.bell();   // the first guest of the day, a few seconds after opening
     if (!TUT.guiding()) toast('Day ' + G.day + ': the shop is open! Guests will start arriving.');
@@ -1495,7 +1874,7 @@
     if (G.shop !== 'morning' && !TUT.freeze()) G.time += dt;   // the clock waits at 09:00 until you open (and while Aoi walks you through your first bowl)
     if (G.shop === 'open' && G.time >= PHASE) closeShop();
     else if (G.shop === 'night' && G.time >= PHASE * 2 && !G.dayDone) G.time = PHASE * 2 - 0.01;   // last guests still being served: the morning waits for them
-    else if (G.shop === 'night' && G.time >= PHASE * 2) { G.time = 0; G.day++; G.shop = 'morning'; G.signWas = 'morning'; saveGame(G.day); toast('Good morning! Flip the sign when you are ready to open.'); }
+    else if (G.shop === 'night' && G.time >= PHASE * 2) { G.time = 0; G.day++; G.shop = 'morning'; G.signWas = 'morning'; refreshLoad(); saveGame(G.day); toast('Good morning! Flip the sign when you are ready to open.'); }
     else if (G.shop === 'open' && !wasEvening && isNight() && !TUT.handover()) toast('Evening falls. Here comes the dinner rush!');
     // 04:00 (or any time after it, if the clock jumped): the sign flips to CLOSED and nobody new comes in, but guests
     // already seated stay until they have their bowl. The day's receipt prints once the last of them has gone home.
@@ -1536,26 +1915,42 @@
     if (G.ui === 'receipt') { updateReceipt(dt); return; }
     if (G.lvQueue && G.lvQueue.length && !G.ui && !G.paused && G.mode === 'play' && !G.where && !G.drag && !G.hold) showLevelUp(G.lvQueue.shift());
     if (G.ui === 'levelup') return;
-    if (G.paused || G.ui === 'menu' || G.ui === 'book' || G.ui === 'road' || G.ui === 'guests' || G.ui === 'pause') return;
+    if (G.paused || G.ui === 'menu' || G.ui === 'book' || G.ui === 'road' || G.ui === 'guests' || G.ui === 'pause' || G.ui === 'prep') return;
     updateClock(G.where === 'store' ? dt * 0.25 : dt);   // time runs slower while you browse Aoi's shelves
     NIGHTSHOP.update(dt);
     if (G.where) { tickJobs(dt); for (const p of G.pops) p.life -= dt; G.pops = G.pops.filter(p => p.life > 0); if (G.flashT > 0) G.flashT -= dt; return; }
     updateGuests(dt);
     // camera + edge panning
     if (G.pan) panBy(G.pan * PAN_SPEED * dt);
+    // carrying something near a screen edge pans the room that way, faster the closer to the edge (Aoi's lessons move
+    // the camera themselves)
+    const carried = G.drag && !(G.drag.press && !G.drag.press.moved) && G.drag.kind !== 'slip' && G.drag.kind !== 'receipt';
+    if (carried && G.mouse && !G.ui && !TUT.guiding() && wide(STATIONS[G.st])) {
+      const Z = 72, mx = G.mouse.x, k = mx < Z ? -(1 - mx / Z) : mx > VW - Z ? (mx - (VW - Z)) / Z : 0;
+      if (k) panBy(Math.sign(k) * (0.3 + 0.7 * Math.min(1, Math.abs(k))) * PAN_SPEED * dt);
+    }
+    G.canPrep = canPrep() && !TUT.guiding(); G.pantryNeed = G.shop === 'morning' ? 0 : pantryNeeds().size;   // (for the pantry shelf's drawing)
     const target = camTarget();
-    G.cam += (target - G.cam) * Math.min(1, dt * (G.pan ? 14 : 7));
-    if (Math.abs(target - G.cam) < 1) G.cam = target;
+    if (G.camTw && Math.abs(G.camTw.to - target) > 0.5) G.camTw = null;   // (the wheel or a carried item moved it on: ease as usual)
+    if (G.camTw) {   // a station jump: 0.2s, easing out
+      const tw = G.camTw; tw.t += dt; const k = Math.min(1, tw.t / tw.dur), e = 1 - (1 - k) ** 3;
+      G.cam = tw.from + (tw.to - tw.from) * e; if (k >= 1) { G.cam = tw.to; G.camTw = null; }
+    } else {
+      G.cam += (target - G.cam) * Math.min(1, dt * (G.pan ? 14 : 12));
+      if (Math.abs(target - G.cam) < 1) G.cam = target;
+    }
+    devCam();
     const paper = G.drag && (G.drag.kind === 'slip' || G.drag.kind === 'receipt');
-    const m = G.mouse, side = m && !G.ui && !paper ? (m.x < EDGE && G.st > 0 ? -1 : m.x > VW - EDGE && G.st < STATIONS.length - 1 ? 1 : 0) : 0;
+    const m = G.mouse, side = m && !G.ui && !paper && !carried ? (m.x < EDGE && edgeOn(-1) ? -1 : m.x > VW - EDGE && edgeOn(1) ? 1 : 0) : 0;
     G.edge = 0;          // hovering an edge only highlights it; a click (or the tabs, or A / D) changes station
     const wm = world(m), busy = side && !G.drag && (clicks().some(c => inR(wm, c.r)) || sources().some(s => inR(wm, s.r)));
     G.edgeSide = edgeBtnAt(m) || (busy ? 0 : side);
     if (G.mouse) { const vx = G.lastMX === undefined ? 0 : (G.mouse.x - G.lastMX) / Math.max(dt, 0.001); G.mvx = (G.mvx || 0) * 0.88 + vx * 0.12; G.lastMX = G.mouse.x; }
     updateReceipt(dt);
     // kitchen
-    updateFlying(dt); updateHold(dt); G.activeShown = activeIndex();
-    for (const b of G.baskets) if (b.t >= 0) { const was = b.t < cookTime(); b.t += dt; if (was && b.t >= cookTime()) SFX.ding(); }
+    updateFlying(dt); updateHold(dt); updateSwaps(dt); G.activeShown = activeIndex();
+    for (const b of G.baskets) if (b.t >= 0) { const was = b.t < cookTime(); b.t += dt; if (was && b.t >= cookTime()) { softDing(); G.readyT = G.t; } }
+    runner(); lowBroth();
     for (const b of G.bowls) { b.age += dt; if (b.broth && b.fill < 1) b.fill = Math.min(1, b.fill + dt * 2.5); }
     for (const b of G.pass) b.age += dt;
     for (const s of G.slips) s.age += dt;
@@ -1596,6 +1991,7 @@
     c.push({ r: SERVING.catRect(), fn: SERVING.petCat, quiet: true });   // Casper on the counter: tap to pet
     c.push({ r: SERVING.toyRect(), fn: SERVING.kickToy, quiet: true });  // and his ball: tap to roll it
     c.push({ r: bookRect, fn: () => openUI('book', 'counter') });
+    c.push({ r: pantryRect, fn: () => (canPrep() && !TUT.guiding() ? openPrep() : TUT.guiding() ? say('The pantry can wait, chef. Let us finish this bowl first.') : openPantry()) });   // the pantry shelf: prep the line before opening, swap things in mid-shift
     c.push({ r: signRect, fn: flipSign });
     // the pass is a doorway: walk through it to the serving room (bowls waiting in it are still picked up as usual)
     const wm = world(G.mouse);
@@ -1616,7 +2012,7 @@
     }
     return c;
   }
-  canvas.addEventListener('pointermove', e => { G.mouse = toScreen(e);
+  canvas.addEventListener('pointermove', e => { G.mouse = toScreen(e); G.mouseClient = { x: e.clientX, y: e.clientY };
     const pr = G.drag && G.drag.press;
     if (pr && !pr.moved && !pr.held && Math.hypot(G.mouse.x - pr.x, G.mouse.y - pr.y) > 6) { pr.moved = true; G.dragBowl = G.drag.bowl || null; SFX.pick(); } if (G.mode === 'title' || G.ui === 'pause') TITLE.move(G.mouse); else if (G.where) NIGHTSHOP.move(G.mouse); });
   canvas.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && !G.drag) G.mouse = null; });
@@ -1627,6 +2023,16 @@
       const p0 = toScreen(e), m = G.rmMenu, r = rmRow(m, p0); G.mouse = p0;
       if (r >= 0) removeTopping(m.k, m.ids[r]); else SFX.tap();
       G.rmMenu = null; return;
+    }
+    if (G.pantry && G.mode === 'play' && !G.ui) {   // the pantry popup: pick what to swap in, or click away to close it
+      const p0 = toScreen(e), m = G.pantry, i = pantryCell(m, p0); G.mouse = p0;
+      if (i >= 0) pickPantry(m.items[i]); else { G.pantry = null; SFX.tap(); }
+      return;
+    }
+    if (G.swapPick && G.mode === 'play' && !G.ui && !G.where) {   // a pantry item in hand: which bin (or burner) it replaces
+      const p0 = toScreen(e), w0 = world(p0), t = swapTargets(G.swapPick).find(o => inR(w0, o.r)); G.mouse = p0;
+      if (t) startSwap(G.swapPick.kind, t.slot, G.swapPick.id); else { G.swapPick = null; SFX.tap(); }
+      return;
     }
     if (G.mode === 'title' || G.ui === 'pause') return TITLE.down(toScreen(e));
     if (G.ui === 'dialog') { pickDefault(); return; }   // a tap outside the dialog box takes its default choice, if it has one
@@ -1658,9 +2064,15 @@
       if (d) { d.press = { x: p.x, y: p.y, t0: G.t, moved: false }; G.drag = d; G.dragBowl = null; }   // a drag once it moves (then the bowl leaves its spot); a click if it does not
       return;
     }
-    if (p.x < EDGE && G.st > 0) return go(G.st - 1);
-    if (p.x > VW - EDGE && G.st < STATIONS.length - 1) return go(G.st + 1);
+    if (p.x < EDGE && edgeOn(-1)) return go(G.st - 1);
+    if (p.x > VW - EDGE && edgeOn(1)) return go(G.st + 1);
   });
+  // The small picture of the active bowl in the HUD (shown while the bowl is off screen) takes drops too.
+  const ADDS = ['tare', 'broth', 'basket', 'top', 'cold', 'oil'];
+  function overMini(cx, cy) {
+    const el = $('minibowl'); if (!el || !el.classList.contains('show')) return false;
+    const r = el.getBoundingClientRect(); return cx >= r.left && cx < r.right && cy >= r.top && cy < r.bottom;
+  }
   canvas.addEventListener('pointerup', e => {
     if (G.where) return NIGHTSHOP.up(toScreen(e));
     if (!G.drag) return;
@@ -1671,6 +2083,7 @@
       if (d.press.held) return finishHold();
       return clickSource(d, e.shiftKey);
     }
+    if (ADDS.includes(d.kind) && overMini(e.clientX, e.clientY)) { const k = targetBowl(d); return addTo(G.bowls[k], k, d); }   // dropped on the active bowl's picture
     const w = world(toScreen(e));
     const t = targets(d).find(t => inR(w, t.r));
     if (t) t.drop();
@@ -1702,22 +2115,19 @@
     if (G.paused) { if (e.key === 'Enter') $('modal-btn').click(); return; }
     if (G.where && NIGHTSHOP.key(e)) { e.preventDefault(); return; }
     if (TUT.key(e.key)) { e.preventDefault(); return; }   // Enter / Space: Aoi's next line
-    const k = e.key.toLowerCase(), left = k === 'a' || k === 'arrowleft', right = k === 'd' || k === 'arrowright';
+    const k = e.key.toLowerCase(), left = k === 'a' || k === 'q' || k === 'arrowleft', right = k === 'd' || k === 'e' || k === 'arrowright';
     if (k.length === 1 && cheat(k)) return;
     if (TUT.guiding() && !G.where && (/^Digit[0-9]$/.test(e.code) || k === 'tab')) { e.preventDefault(); return; }   // (the guided bowl goes one highlighted thing at a time)
     if (G.where) { if (k === 'escape') openPause(TUT.guiding() ? 'skiptut' : undefined); else if (k === 'm') { muteBefore = muted; $('mute').click(); } return; }
-    if (left || right) {
-      const side = right ? 1 : -1;
-      if (!e.repeat && atPanEnd(side) && G.st + side >= 0 && G.st + side < STATIONS.length) { e.preventDefault(); go(G.st + side); }   // at the end of a room: walk on
-      else { e.preventDefault(); held[left ? 'l' : 'r'] = true; G.pan = (held.r ? 1 : 0) - (held.l ? 1 : 0); }                         // otherwise pan while held
-    }
+    if (left || right) { e.preventDefault(); if (!e.repeat) stepSpot(right ? 1 : -1); }   // the previous / next camera spot (0.2s slide)
+    else if (k === ' ' && inKitchen() && gearOn('bell')) { e.preventDefault(); bellBowl(); }   // the Pass Bell: the finished bowl goes to the pass
     else if (STATIONS[G.st].id === 'kitchen' && /^Digit[1-9]$/.test(e.code)) {   // the topping in bin 1-9, into the active bowl (Shift: just one)
       const id = rackTops()[+e.code.slice(5) - 1], src = id && sources().find(o => o.binId === id);
       if (src) { const d = src.start(); if (d) clickAdd(d, e.shiftKey); }
     }
     else if (STATIONS[G.st].id === 'kitchen' && k === 'tab') { e.preventDefault(); G.activeBowl = (activeIndex() + 1) % G.bowls.length; SFX.tap(); }
     else if (k === '1' || k === '2') go(+k - 1);
-    else if (k === 'escape') { if (G.rmMenu) G.rmMenu = null; else if (G.drag) { G.drag = null; G.dragBowl = null; } else if (TUT.guiding()) openPause('skiptut'); else openPause(); }   // (during the guided bowl: skip it, after a confirm)
+    else if (k === 'escape') { if (G.rmMenu) G.rmMenu = null; else if (G.pantry || G.swapPick) { G.pantry = null; G.swapPick = null; SFX.tap(); } else if (G.drag) { G.drag = null; G.dragBowl = null; } else if (TUT.guiding()) openPause('skiptut'); else openPause(); }   // (during the guided bowl: skip it, after a confirm)
     else if (k === 'm') { muteBefore = muted; $('mute').click(); }
   });
   // held A / D keys (for panning the kitchen page)
@@ -1753,7 +2163,8 @@
       <li><b>Toppings.</b> Click the toppings on the order slip (or press their bin numbers 1-9; Shift adds just one), then drag the bowl into the pass. Some recipes have a special touch: click the chili oil bottle after the broth for spicy ramen; hold on the bowl to pour an oil, grind sesame or torch the meat; click it to slice a mandrake root; right-click it to take a topping off; serve butter before it melts; rinse the noodles for cold ramen in the ice bath.</li>
       <li><b>Serve.</b> Walk into the serving room carrying the tray, and drag the bowl onto the guest's spot at the counter. Their ticket shows the ramen and every change to it. Extra toppings a guest asks for are added to their bill.</li>
     </ol>
-    <p>Use the tabs at the bottom or the edge arrows to move between Serving and the Kitchen. In the kitchen, hold A / D (or scroll the mouse wheel) to look left and right, even while carrying something. Nobody is in a hurry.</p>`;
+    <p>Use the tabs at the bottom (or Q / E, A / D and the arrow keys) to move between Serving and the Kitchen. In the kitchen everything a bowl needs is on one screen, the line: the rack, the bowls, the tare crocks and the broth pots. The pass is to the left and the noodle boiler to the right: the buttons along the top (or Q / E) jump there, and carrying something to the edge of the screen pans that way. Clicks always go to the glowing bowl, even from the boiler: when a bowl already has its tare or broth, the next bowl gets it. A click on the noodle tray starts a basket for each order still waiting. While the bowls are off screen, their picture sits at the top (drop things on it, or tap it to go back), and small arrows along the bottom point out ready noodles, new orders and bowls at the pass.</p>
+    <p><b>The line.</b> The rack holds 12 toppings and the stove 4 broths; the rest wait in the pantry by the rack. Before opening, tap the pantry (or PREP) to choose what is out; left alone, it is filled for today's menu. If an order needs something from the pantry, its slip says so in red: tap the pantry to swap it in (it takes a couple of seconds). Nobody is in a hurry.</p>`;
   function modal(html, btn) {
     G.paused = true; G.ui = 'modal';
     $('modal-body').innerHTML = html; $('modal-btn').textContent = btn;
@@ -1774,6 +2185,7 @@
     if (G.where) return NIGHTSHOP.hint();
     if (G.drag) return DRAG_HINT[G.drag.kind];
     const id = STATIONS[G.st].id, best = Math.max(...G.bowls.map(b => b.s));
+    if (id === 'kitchen' && canPrep() && !G.slips.length) return 'Before opening: tap the PANTRY shelf (or PREP up top) to choose what is on the rack and the burners. Then flip the sign in Serving.';
     if (G.shop === 'morning') return id === 'serving' ? 'Tap the CLOSED sign on the counter to open the shop.' : 'The shop is closed. Head to Serving and flip the sign to open.';
     if (G.shop === 'night' && id === 'serving' && !G.stalls.some(s => s.guest)) return NIGHTSHOP.storeOpen() ? (lateOpen() ? 'Late hours: the odd walk-in until 04:00. Kitsune-ya across the street opens at 04:00.' : 'Closed: prep time until 09:00. Kitsune-ya across the street is open: out through the staff door on the far left. Or tap the sign to skip the prep time.') : (lateOpen() ? 'Late hours: the odd walk-in until 04:00. Kitsune-ya across the street opens at 04:00.' : 'Closed: prep time until 09:00. Or tap the sign to skip the prep time.');
     if (id === 'serving') {
@@ -1783,6 +2195,8 @@
       return 'All calm. Guests will call when they are ready to order.';
     }
     if (!G.slips.length && best === 0) return 'No orders yet. Restock at Kitsune-ya after closing, or read the recipe book.';
+    { const need = [...pantryNeeds()]; if (need.length && !G.swaps.length) { const n = need[0].startsWith('broth.') ? BROTHS[need[0].slice(6)].name : TOP_NAME[need[0]];
+      return n + ' is in the pantry (red on the slip). Tap the PANTRY shelf at the end of the rack to swap it in.'; } }
     const ab = G.bowls[activeIndex()], fx = (ab && ab.fx) || {};
     if (fx.ember === 'pending') return 'Hold on the bowl to pour the ember pepper oil. Let go at the right number of swirls.';
     if (fx.mayu === 'pending') return 'Hold on the bowl to pour one swirl of black garlic oil.';
@@ -1814,15 +2228,36 @@
     setText('badge-kitchen', G.slips.length ? String(G.slips.length) : '');
     setText('badge-serving', calling ? '!' : G.pass.length ? String(G.pass.length) : '');
     const binTip = G.hoverBin && !G.drag && G.flashT <= 0 ? TOP_NAME[G.hoverBin] + (topOn(G.hoverBin) ? ': ' + G.stock[G.hoverBin] + ' left' : ' (locked)') : '';   // a bin's full name while it is hovered
-    setText('hint', TUT.guiding() ? '' : binTip || (hintsOn() ? hint() : G.flashT > 0 ? G.flash : ''));   // hints are optional (on for a new save's first 3 days); warnings always show briefly; quiet while Aoi guides
+    const swapTip = G.swapPick && G.flashT <= 0 ? 'Pick ' + (G.swapPick.kind === 'top' ? 'a bin to swap out for ' + TOP_NAME[G.swapPick.id].toLowerCase() : 'a burner for the ' + BROTHS[G.swapPick.id].name.toLowerCase()) + ' (Esc to cancel).'
+      : G.pantry && G.flashT <= 0 ? 'Pick what to bring out of the pantry. Red: an order needs it.' : '';   // (always shown: the player is mid-action)
+    setText('hint', TUT.guiding() ? '' : swapTip || binTip || (hintsOn() ? hint() : G.flashT > 0 ? G.flash : ''));   // hints are optional (on for a new save's first 3 days); warnings always show briefly; quiet while Aoi guides
     $('hint').classList.toggle('warn', G.flashT > 0);
     $('bubbles').style.visibility = !G.where && STATIONS[G.st].id === 'serving' && settled() && G.ui !== 'dialog' ? 'visible' : 'hidden';
     $('tab-street').classList.toggle('gone', !NIGHTSHOP.streetOpen());
     $('tab-street').classList.toggle('on', !!G.where);
     STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', !G.where && k === G.st));
     $('nshop').classList.toggle('hide', G.ui === 'pause' || G.mode !== 'play');
-    $('quest').classList.toggle('hide', G.mode !== 'play' || !TUT.questShown() || !!G.where || G.ui === 'dialog');   // out of the way of the night street and Aoi's dialogue box
+    $('quest').classList.toggle('hide', G.mode !== 'play' || !TUT.questShown() || !!G.where || NIGHTSHOP.fading() || inKitchen() || G.ui === 'dialog');   // only in the serving room: out of the way of the kitchen, the night street and Aoi's dialogue box
     { const at = TUT.aoiTop(); $('quest').style.bottom = at == null ? '' : `calc(${Math.ceil((540 - at) / 2) + 4} * var(--u))`; }   // Aoi in the bottom-right corner: the card steps up above her bubble
+    // the kitchen: station buttons (and PREP before opening) in the HUD band, the quest card folded into the tab-bar band
+    // so it never covers the boiler, and the active bowl's picture while that bowl is off screen
+    const kit = G.mode === 'play' && inKitchen() && G.ui !== 'dialog';
+    document.body.classList.toggle('kit', kit);
+    $('quest').classList.toggle('kit', kit); if (!kit) $('quest').classList.remove('peek'); $('bar').classList.toggle('kit', kit && !$('quest').classList.contains('hide'));
+    if (kit) {
+      const c0 = camTarget() - KL.X0, cur = KL.SPOTS.reduce((a, id) => (Math.abs(KL.CAM[id] - c0) < Math.abs(KL.CAM[a] - c0) ? id : a));   // the camera spot nearest the camera
+      document.querySelectorAll('#kst [data-k]').forEach(b => b.classList.toggle('on', b.dataset.k === cur));
+    }
+    $('kprep').classList.toggle('gone', !(kit && G.canPrep));
+    const ak = activeIndex(), abr = bowlRect(ak), mini = kit && !!G.bowls[ak] && !(G.canPrep && !G.bowls[ak].s) && (abr.x < G.cam || abr.x + abr.w > G.cam + VW);   // (not over the PREP button before opening)
+    $('minibowl').classList.toggle('show', mini);
+    if (mini) {
+      const mg = $('minibowl-c').getContext('2d'); mg.imageSmoothingEnabled = false; mg.clearRect(0, 0, 64, 30);
+      ART.smallBowl(mg, 32, 14, G.bowls[ak], G.t);
+      $('minibowl').classList.toggle('drop', !!(G.drag && ADDS.includes(G.drag.kind) && G.mouseClient && overMini(G.mouseClient.x, G.mouseClient.y)));
+      $('minibowl').classList.toggle('pop', G.t - (G.miniPop || -9) < 0.3);   // something just landed in it
+    }
+    showAlerts();
     for (let i = 0; i < SL.NSTALL; i++) {
       const el = $('bubble-' + i);
       el.style.left = `calc(${(SL.X0 + SL.stallCX(i) - G.cam) / 2}px * var(--s))`;
@@ -1894,7 +2329,7 @@
       PX.rect(g, x + 6, y + 7, w - 12, S.h - 14, PX.OUTLINE); PX.rect(g, x + 7, y + 8, w - 14, S.h - 16, inl); PX.rect(g, x + 7, y + 8, w - 14, 1, PX.shade(inl, 0.6));
       PX.textC(g, open ? 'OPEN' : 'CLOSED', cx, y + 16, open ? '#a6e07a' : '#ff9a86');
     }
-    if ((G.shop === 'morning' || (G.shop === 'night' && !lateOpen())) && p >= 1) {   // (no label while late walk-ins keep it OPEN)
+    if ((G.shop === 'morning' || (G.shop === 'night' && !lateOpen())) && p >= 1 && cx > G.cam - 120 && cx < G.cam + VW + 120) {   // (no label while late walk-ins keep it OPEN; none once the sign is well off screen, e.g. from the kitchen)
       const bob = Math.round(Math.sin(G.t * 4) * 1.5);
       const txt = G.shop === 'night' ? 'Tap: skip prep time' : 'TAP TO OPEN', half = PX.textW(txt) / 2 + 14;
       SCENE.label(g, txt, Math.max(cx, Math.round(G.cam) + half + 4), S.y + S.h + 5 + bob, '#7a2f1a');   // (kept inside the screen)
@@ -1910,8 +2345,16 @@
   }
   function slipAt(p) {
     if (!p || slipsAlpha() <= 0.5 || G.ui) return null;
-    for (let i = G.slips.length - 1; i >= 0; i--) { const s = G.slips[i]; if (s.x !== undefined && inR(p, { x: s.x - 2, y: KL.SLIP_Y - 10, w: ART.SLIP_W + 4, h: ART.slipH(s.order) + 14 })) return s; }
+    for (let i = G.slips.length - 1; i >= 0; i--) { const s = G.slips[i]; if (s.x !== undefined && inR(p, slipBox(s))) return s; }
     return null;
+  }
+  const slipBox = s => ({ x: s.x - 2, y: KL.SLIP_Y - 10, w: ART.SLIP_W + 4, h: ART.slipH(s.order, slipMiss(s.order)) + 14 });
+  // No orders: a small blank tag clipped to the rail where the first slip would hang (it covers nothing in the room).
+  function emptyRail(g) {
+    const x = 256, y = KL.SLIP_Y + 2, w = ART.SLIP_W, h = 22, R = PX.rect;
+    R(g, x + 2, y + 2, w, h, 'rgba(60,40,30,0.2)'); R(g, x - 1, y - 1, w + 2, h + 2, PX.OUTLINE); R(g, x, y, w, h, '#f1e8d4');
+    R(g, x + w / 2 - 9, y - 8, 18, 12, PX.OUTLINE); R(g, x + w / 2 - 8, y - 7, 16, 10, '#aab4c4'); R(g, x + w / 2 - 8, y - 7, 16, 2, '#dfe6ee');
+    PX.setFont(1); PX.textC(g, 'NO ORDERS YET', x + w / 2, y + 9, '#9a8a78'); PX.setFont(2);
   }
 
   /* ---------- end-of-day receipt: prints at closing, fling it away to toss it ---------- */
@@ -1922,6 +2365,7 @@
     for (const type of soldTypes.length ? soldTypes : ['miso']) L.push({ l: MENU[type].short.split(' ')[0] + ' X' + s.sold[type], r: s.rev[type] + 'G' });
     L.push({ l: 'TIPS', r: s.tips + 'G' }, { hr: 1 }, { l: 'PROFIT', r: (s.sales + s.tips) + 'G', col: '#2f7a3a' }, { hr: 1 });
     L.push({ l: 'BOWLS SOLD', r: String(s.served) }, { l: 'PERFECT', r: String(s.perfect) }, { l: 'TURNED AWAY', r: String(s.declined) }, { hr: 1 });
+    if (DEV) L.push({ l: 'CAM MOVES', r: String(s.camMoves || 0), col: '#2f6a8a' }, { l: 'PER BOWL', r: s.served ? ((s.camMoves || 0) / s.served).toFixed(2) : '-', col: '#2f6a8a' }, { hr: 1 });   // the dev counter
     L.push({ c: 'THANK YOU!', col: '#8a2a1a' }, { c: 'Fling away to toss', col: '#a8987a' });
     const hx = Math.round(VW / 2 - RW / 2), hy = Math.max(36, Math.round(VH / 2 - (16 + L.length * 22 + 8) / 2));
     G.receipt = { lines: L, x: hx, y: hy, hx, hy, h: 16 + L.length * 22 + 8, t0: G.t, fly: null, px: hx, py: hy, vx: 0, vy: 0 };   // prints once it becomes the active popup
@@ -1991,8 +2435,8 @@
   function edgeBtnAt(p) {
     if (!p || G.ui || G.where) return 0;
     const inBtn = x => p.x >= x - 4 && p.x < x + 36 && p.y >= VH / 2 - 24 && p.y < VH / 2 + 20;
-    if (G.st > 0 && inBtn(8)) return -1;
-    if (G.st < STATIONS.length - 1 && inBtn(VW - 40)) return 1;
+    if (edgeOn(-1) && inBtn(8)) return -1;
+    if (edgeOn(1) && inBtn(VW - 40)) return 1;
     return 0;
   }
   function edgeButton(g, x, y, hot, dir) {
@@ -2036,9 +2480,13 @@
     ctx.restore(); drawCarried(ctx); if (cam < SL.X0 + SL.W) SERVING.overlay(ctx, G, cam); ctx.save(); ctx.translate(-cam, 0);
     drawCues(ctx); drawFlying(ctx);
     if (G.rmMenu) { ctx.save(); ctx.translate(cam, 0); drawRemove(ctx); ctx.restore(); }
-    if (G.drag && !(G.drag.press && !G.drag.press.moved)) {
+    if (G.pantry) { ctx.save(); ctx.translate(cam, 0); drawPantryMenu(ctx); ctx.restore(); }
+    if (G.swapPick) {   // a pantry item in hand: every bin (or burner) it could replace pulses
       const pulse = 0.5 + 0.5 * Math.sin(G.t * 8);
-      for (const t of targets(G.drag)) if (t.ok()) SCENE.brackets(ctx, t.r, inR(w, t.r) ? '#ffffff' : PX.mix('#ffd76a', '#fff6d0', pulse), inR(w, t.r));
+      for (const t of swapTargets(G.swapPick)) SCENE.brackets(ctx, t.r, inR(w, t.r) ? '#ffffff' : PX.mix('#ff9a86', '#fff6d0', pulse), inR(w, t.r));
+    } else if (G.drag && !(G.drag.press && !G.drag.press.moved)) {
+      const pulse = 0.5 + 0.5 * Math.sin(G.t * 8);
+      for (const t of targets(G.drag)) if (t.ok() && !t.bell) SCENE.brackets(ctx, t.r, inR(w, t.r) ? '#ffffff' : PX.mix('#ffd76a', '#fff6d0', pulse), inR(w, t.r));
     } else if (G.hover) SCENE.brackets(ctx, G.hover);
     for (const p of G.parts) SCENE.part(ctx, p);
     for (const p of G.pops) { ctx.globalAlpha = Math.min(1, p.life * 2.5); PX.textC(ctx, p.str, p.x, Math.round(p.y), p.c, PX.OUTLINE); }
@@ -2049,16 +2497,16 @@
     const a = slipsAlpha();
     if (a > 0.01) {
       ctx.globalAlpha = a;
-      if (!G.slips.length) PX.textC(ctx, 'NO ORDERS YET', 560, 70, '#b7ab90');
+      if (!G.slips.length) emptyRail(ctx);
       G.slips.forEach(s => {
         if (s.x === undefined) s.x = freeSlipX(s);
-        const held = G.drag && G.drag.kind === 'slip' && G.drag.slip === s;
+        const held = G.drag && G.drag.kind === 'slip' && G.drag.slip === s, miss = slipMiss(s.order);
         const drop = Math.round((1 - Math.min(1, s.age / 0.3)) * -60), since = G.t - (s.settle === undefined ? -9 : s.settle);
         let sway = s.age < 1 ? Math.round(Math.sin(s.age * 14) * (1 - s.age) * 4) : 0;
         if (since < 0.8) sway += Math.round(Math.sin(since * 16) * (1 - since / 0.8) * 3);
         const x = held && G.mouse ? slipClamp(G.mouse.x - G.drag.ox) : s.x;
-        if (held) PX.rect(ctx, x + 7, KL.SLIP_Y + 4, ART.SLIP_W, ART.slipH(s.order), 'rgba(30,15,10,0.25)');
-        ART.slip(ctx, x + sway, KL.SLIP_Y + drop - (held ? 6 : 0), { num: s.num, stall: s.guest.stall, order: s.order });
+        if (held) PX.rect(ctx, x + 7, KL.SLIP_Y + 4, ART.SLIP_W, ART.slipH(s.order, miss), 'rgba(30,15,10,0.25)');
+        ART.slip(ctx, x + sway, KL.SLIP_Y + drop - (held ? 6 : 0), { num: s.num, stall: s.guest.stall, order: s.order, miss });
       });
       ctx.globalAlpha = 1;
     }
@@ -2067,13 +2515,14 @@
     // edge arrows
     for (const side of [-1, 1]) {
       const ni = G.st + side;
-      if (ni < 0 || ni >= STATIONS.length || G.ui) continue;
+      if (!edgeOn(side) || G.ui) continue;
       // a round walnut-and-brass button; the station name shows on a tag only while the edge is hovered
       const hot = G.edgeSide === side;
       edgeButton(ctx, side < 0 ? 8 : VW - 40, VH / 2 - 20, hot, side);
       if (hot) { const name = STATIONS[ni].name.toUpperCase(), w = PX.textW(name) + 12; SCENE.label(ctx, name, side < 0 ? 48 + w / 2 : VW - 48 - w / 2, VH / 2 - 7); }
     }
     drawTip(ctx);
+    drawDev(ctx);
     TUT.draw(ctx);         // Aoi, her highlight and her notes
     NIGHTSHOP.draw(ctx);   // only the fade, while heading out to the street
   }
@@ -2126,6 +2575,7 @@
   function newGame(guided) {
     clearSave(); NIGHTSHOP.closePanels(); Object.assign(G, fresh());
     G.tut = TUT.newState(!!guided); G.aoiMet = true;   // (Aoi handed you the stall: you have met)
+    G.load = defaultLoad(); KITCHEN.refresh();
     startPlay(guided ? null : 'Welcome to Cozy Ramen! Tap the CLOSED sign on the counter to open.');
   }
   function continueGame() {
@@ -2154,6 +2604,7 @@
     if ('tare' in st) { st[tareKey('miso')] = st.tare; delete st.tare; }
     if ('broth' in st) { st[brothKey('pork')] = st.broth; delete st.broth; }
     for (const id in st) if (id in G.stock) G.stock[id] = st[id];
+    G.load = fixLoad(s.load); KITCHEN.refresh();   // the line (saves from before it: filled in for the menu)
     // Aoi's tutorial: saves from before it never see it (every note counts as pinned); a guided bowl left unfinished starts over this morning
     G.tut = s.tut ? TUT.load(s.tut) : TUT.oldState();
     if (!G.tut.done) G.tut.armDay = Math.min(G.tut.armDay || G.day, G.day);
@@ -2185,14 +2636,21 @@
     }
   });
 
-  if (params.has('shot')) window.COZY_TEST = { grade, identify, orderDiff, makeOrder, gainXP };   // screenshot/test pages only: rules to check from outside
+  if (params.has('shot')) window.COZY_TEST = { grade, identify, orderDiff, makeOrder, gainXP, kcamShow, tareRect, potRect, bowlRect, basketRect, noodleRect, passRect, binRect, dropRect, trayPos, pantryRect };   // screenshot/test pages only: rules to check from outside
   // ?shot=kitchen|toppings|serving|dialog|night|drag sets up a scene for screenshots
+  // the kitchen: kitchen (the opening view: toppings + tare), kitchenpass / kitchentoppings / kitchentare / kitchenhearth
+  // (each station's camera spot), kitchenall (everything unlocked, a long menu), loadout (the Prep the line panel),
+  // swap (an order needing pantry things, the pantry popup open), swapping (a swap under way), kitchenmini (the bowls off
+  // screen: their picture in the HUD)
+  const LONG_MENU = ['miso', 'shoyu', 'tonkotsu', 'hakata', 'butter', 'tantan', 'hiyashi', 'fox'];
   function shot(kind) {
     $('modal').classList.remove('show'); G.paused = false; G.ui = null; G.shop = 'open'; G.mode = 'play'; document.body.classList.remove('title');
     document.body.classList.add('shot');   // (screenshot pages: no CSS fades, so a capture shows the finished state)
     if (kind === 'night' || kind === 'nightkitchen') G.time = PHASE * 1.3;
     if (kind.startsWith('evening')) G.time = PHASE * 0.93;
-    if (kind === 'kitchenall') { G.owned = STOPS.filter(n => n.kind !== 'start').map(n => n.id); KITCHEN.refresh(); }   // ?shot=kitchenall: every pot and crock unlocked   // ?shot=evening: still open, lamps lit
+    const all = ['kitchenall', 'loadout', 'swap', 'swapping'].includes(kind) || kind.startsWith('kitchen') && kind !== 'kitchen';
+    if (all) { G.owned = STOPS.filter(n => n.kind !== 'start').map(n => n.id); G.gear = GEAR.slice(); G.menu = LONG_MENU.slice(); G.pick = 'miso'; fixMenu(); }   // every pot and crock unlocked, a long menu
+    G.load = defaultLoad(); KITCHEN.refresh();
     if (kind.includes('rain')) { G.wx = { day: G.day, from: -1, to: -1 }; G.forceRain = 1; G.rain = 1; }
     updateClock(0);
     const full = { ...newBowl(), s: 3, tare: true, broth: true, fill: 1, noodles: 'perfect', items: ['chashu', 'egg', 'nori', 'scallion', 'menma', 'chili'], age: 1 };
@@ -2208,8 +2666,13 @@
     G.bowls[1] = { ...newBowl(), s: 2, tare: true, broth: true, fill: 1, age: 1 };
     G.baskets[0].t = 9; G.baskets[2].t = 2;
     G.waiting = 1;
-    const at = Math.max(0, STATIONS.findIndex(s => s.id === ({ kitchenall: 'kitchen', evening: 'serving', eveningrain: 'serving', servingleft: 'serving', servingleftdoor: 'serving', servingright: 'serving', dialog: 'serving', night: 'serving', drag: 'kitchen', toppings: 'kitchen', nightkitchen: 'kitchen', rainkitchen: 'kitchen' }[kind] || kind)));
-    G.kcam = kind === 'kitchen' || kind === 'kitchenall' || kind === 'nightkitchen' ? STATIONS[1].camMax : STATIONS[1].cam;
+    if (kind === 'swap' || kind === 'swapping') {   // an order for the Moonlight bowl: its spirit dashi and some toppings wait in the pantry
+      const s0 = G.slips[0]; s0.order = s0.guest.order = billed('fox', MENU.fox.tops);
+    }
+    const kitchenShot = kind.startsWith('kitchen') || ['loadout', 'swap', 'swapping', 'drag', 'toppings', 'nightkitchen', 'rainkitchen', 'testday'].includes(kind);
+    const at = Math.max(0, STATIONS.findIndex(s => s.id === (kitchenShot ? 'kitchen' : ({ evening: 'serving', eveningrain: 'serving', servingleft: 'serving', servingleftdoor: 'serving', servingright: 'serving', dialog: 'serving', night: 'serving' }[kind] || kind))));
+    const spot = { kitchenpass: 'pass', kitchenboiler: 'boiler', kitchenhearth: 'boiler', nightkitchen: 'boiler', kitchenmini: 'boiler', kitchenalerts: 'boiler' }[kind] || 'home';   // (kitchentoppings, kitchentare, drag, swap...: home)
+    G.kcam = KL.X0 + KL.CAM[spot];
     G.scam = kind.startsWith('servingright') ? STATIONS[0].camMax : STATIONS[0].cam;   // ?shot=servingright: the far (kitchen) end
     if (kind === 'servingleftdoor') G.staffDoor = G.staffT = 0.5;   // ?shot=servingleft: the far end of the serving room
     G.st = at; G.cam = camTarget(); STATIONS.forEach((s, k) => $('tab-' + s.id).classList.toggle('on', k === at));
@@ -2225,6 +2688,27 @@
       openBook('guests', null, true);
     }
     if (kind === 'menu') openUI('menu');   // ?shot=menu: the menu editor
+    if (kind === 'loadout') {   // the morning, before opening: the Prep the line panel
+      G.stalls.forEach(st => { st.guest = null; }); G.slips = []; G.pass = []; G.bowls = G.bowls.map(() => newBowl()); G.shop = 'morning'; G.time = 0; updateClock(0);
+      G.load.tops[11] = null; G.load.auto = false; openPrep();
+    }
+    if (kind === 'kitchenmorning') {   // before opening: the PREP button, the pantry glowing
+      G.stalls.forEach(st => { st.guest = null; }); G.slips = []; G.pass = []; G.bowls = G.bowls.map(() => newBowl()); G.baskets.forEach(b => { b.t = -1; }); G.shop = 'morning'; G.time = 0; updateClock(0);
+    }
+    if (kind === 'swap') openPantry();
+    if (kind === 'swapping') { const k = G.load.tops.findIndex(id => id === 'egg'); startSwap('top', Math.max(0, k), 'aburaage'); startSwap('broth', Math.max(0, G.load.broths.indexOf('dashi')), 'dragon'); G.flying = []; for (const s of G.swaps) s.t = 0.3; }
+    if (kind === 'kitchenmini') G.activeBowl = 0;
+    if (kind === 'testday') {   // the camera-move bot's day: a clean open shop, four guests waiting on plain bowls, the kitchen at home
+      G.slips = []; G.pass = []; G.flying = []; G.bowls = [newBowl(), newBowl()]; G.baskets.forEach(b => { b.t = -1; }); G.activeBowl = null;
+      ['miso', 'shoyu', 'miso', 'shoyu'].forEach((type, i) => {
+        const st = G.stalls[i]; st.bowl = null; const gu = st.guest; gu.state = 'wait'; gu.t = 5; gu.q = undefined;
+        gu.order = billed(type, MENU[type].tops); gu.num = G.nextNum++; G.slips.push({ num: gu.num, guest: gu, order: gu.order, age: 1 });
+      });
+      G.spawnT = 1e9; G.stats = newStats(); G.devLast = undefined; G.kcam = KL.X0 + KL.CAM.home; G.cam = G.kcam;
+    }
+    if (kind === 'kitchenalerts') {   // the alert arrows, from home: noodles ready (the boiler is off to the right), a guest calling and bowls at the pass (left)
+      G.stalls[3].guest.state = 'call'; G.stock[brothKey(burners()[0])] = 2; G.baskets[1].t = 99; G.kcam = KL.X0 + KL.CAM.home; G.cam = G.kcam;
+    }
     if (kind === 'levelup') { G.level = 3; showLevelUp({ from: 2, to: 3, stops: ['spicy', 'quick'], notes: [] }); }
     if (kind === 'receipt') { G.stats = { ...G.stats, served: 9, perfect: 6, tips: 14, sales: 118, sold: { miso: 5, shoyu: 4 } }; makeReceipt(); }
     if (kind === 'tut') {   // ?shot=tut: a fresh save's first morning, Aoi walking in
